@@ -1,139 +1,201 @@
-// Simulación de una misión completa sin navegador: npx tsx scripts/simular.ts
+// Simula una misión completa sin navegador, con una tripulación que juega "razonablemente".
+//   npx tsx scripts/simular.ts [tripulantes=6] [preset=equilibrado] [politica=buena|pasiva] [trayectoria] [perfil]
+// Sirve para comprobar la lógica y el equilibrio del juego.
+import { C } from '../shared/ciencia.js'
+import { TAREAS_ENSAMBLAJE, formatoMET, masaTotal, type Role, type RoomState } from '../shared/types.js'
+import { tripulacion } from '../server/base.js'
 import {
   accion,
-  confirmarPaso,
+  aplicarPreset,
+  avanzar,
+  cambiarZona,
   crearSala,
   elegirAlternativa,
+  elegirPerfil,
   elegirRol,
-  horaDeMision,
+  elegirTrayectoria,
+  fijarEscala,
+  hacerTarea,
   iniciarMision,
-  irAyudar,
   lanzar,
+  marcarListo,
   nuevoJugador,
-  pedirAyuda,
   proponerUbicacion,
-  avanzar,
   votar,
 } from '../server/game.js'
 import { responderBot } from '../server/bot.js'
-import { ASSEMBLY_STEPS, type Role } from '../shared/types.js'
 
-const assert = (cond: unknown, msg: string) => {
+const N = Math.min(6, Math.max(2, Number(process.argv[2] ?? 6)))
+const PRESET = process.argv[3] ?? 'equilibrado'
+const POLITICA = process.argv[4] ?? 'buena'
+const TRAYECTORIA = process.argv[5] ?? 'estandar'
+const PERFIL = process.argv[6] ?? 'estandar'
+
+const exigir = (cond: unknown, msg: string) => {
   if (!cond) {
     console.error('FALLO:', msg)
     process.exit(1)
   }
 }
-const ok = (msg: string) => console.log('  ok', msg)
+const sinError = (e: string | null, msg: string) => exigir(e === null, `${msg}: ${e}`)
 
-const room = crearSala('TEST01', 'u1', 'comandante')
-const tripulantes: [string, string, Role][] = [
-  ['u1', 'Luna', 'comandante'],
-  ['u2', 'Marco', 'sistemas'],
-  ['u3', 'Sofía', 'medico'],
-  ['u4', 'Diego', 'logistica'],
-  ['u5', 'Ana', 'cientifico'],
-  ['u6', 'Raúl', 'piloto'],
-]
-for (const [id, nombre, rol] of tripulantes) {
-  room.jugadores.push(nuevoJugador(id, nombre))
-  assert(elegirRol(room, id, rol) === null, `rol ${rol}`)
+const room: RoomState = crearSala('SIMULA', 'u0', 'comandante')
+const orden: Role[] = ['comandante', 'sistemas', 'medico', 'logistica', 'cientifico', 'piloto']
+const nombres = ['Luna', 'Marco', 'Sofía', 'Diego', 'Ana', 'Raúl']
+for (let i = 0; i < N; i++) {
+  room.jugadores.push(nuevoJugador(`u${i}`, nombres[i]))
+  sinError(elegirRol(room, `u${i}`, orden[i]), 'rol')
 }
-assert(elegirRol(room, 'u2', 'comandante') !== null, 'no se puede duplicar rol')
-ok('lobby: 6 roles únicos')
+const de = (rol: Role) => room.jugadores.find((j) => j.rol === rol) ?? room.jugadores[0]
+const cmd = de('comandante')
 
-assert(iniciarMision(room, 'u2') !== null, 'solo el host inicia')
-assert(iniciarMision(room, 'u1') === null, 'host inicia')
-assert(room.fase === 'contexto', 'fase contexto')
-assert(lanzar(room, 'u2') !== null, 'solo comandante lanza')
-assert(lanzar(room, 'u1') === null, 'comandante lanza')
-assert(room.fase === 'lanzamiento' && room.recursos.agua === 500, 'recursos cargados')
-ok(`lanzamiento: combustible ${room.mision.combustible}%`)
+let real = 1_800_000_000_000
+let visto = real
+const tic = () => {
+  real += 1000
+  avanzar(room, real, visto)
+  visto = real
+}
 
-// tránsito instantáneo
-room.transito = { inicio: Date.now() - 999_999, duracion: 1000 }
-avanzar(room, Date.now())
-assert(room.fase === 'ensamblaje', 'llegada a ensamblaje')
-
-// paso 0: piloto propone, comandante aprueba
-assert(proponerUbicacion(room, 'u6', 'jezero') === null, 'piloto propone')
-assert(room.propuestas[0].estado === 'pendiente', 'propuesta pendiente')
-assert(votar(room, 'u3', room.propuestas[0].id, true) !== null, 'medico no decide en modo comandante')
-assert(votar(room, 'u1', room.propuestas[0].id, true) === null, 'comandante aprueba')
-assert(room.ensamblaje.paso === 1 && room.recursos.agua === 650, 'sitio aplicado (+150 agua)')
-ok('ensamblaje: ubicación por propuesta')
-
-// paso 1: logística + piloto
-assert(confirmarPaso(room, 'u1', 1) !== null, 'comandante no confirma paso 1')
-confirmarPaso(room, 'u4', 1)
-assert(room.ensamblaje.paso === 1, 'falta piloto')
-confirmarPaso(room, 'u6', 1)
-assert(room.ensamblaje.paso === 2, 'paso 1 completo')
-confirmarPaso(room, 'u2', 2)
-confirmarPaso(room, 'u1', 2)
-confirmarPaso(room, 'u2', 3)
-assert(room.fase === 'base', 'fase base')
-assert(room.sistemas.every((s) => s.online || s.id === 'invernadero'), 'módulos encendidos')
-ok(`ensamblaje: ${ASSEMBLY_STEPS.length} pasos completados`)
-
-// acciones directas
-assert(accion(room, 'u1', 'reparar', { modulo: 'habitat' }) !== null, 'comandante no repara')
-assert(accion(room, 'u2', 'reparar', { modulo: 'habitat' }) === null, 'sistemas repara')
-assert(room.recursos.repuestos === 23, 'repuestos descontados')
-for (let i = 0; i < 6; i++) accion(room, 'u5', 'huerto', {})
-assert(room.huerto.establecido, 'huerto establecido')
-assert(accion(room, 'u5', 'experimento', {}) === null, 'experimento')
-assert(room.mision.experimentos === 1, 'experimento contado')
-ok('acciones directas: reparar, huerto, experimento')
-
-// propuesta de ración (logística propone, comandante aprueba)
-assert(accion(room, 'u4', 'racionar', { nivel: 'ahorro' }) === null, 'logística propone ración')
-const prop = room.propuestas.find((p) => p.tipo === 'racionar')!
-assert(prop.estado === 'pendiente', 'pendiente')
-votar(room, 'u1', prop.id, true)
-assert(room.racion === 'ahorro', 'ración aplicada')
-assert(accion(room, 'u4', 'reciclaje', {}) === null, 'propone reciclaje')
-votar(room, 'u1', room.propuestas.find((p) => p.tipo === 'reciclaje')!.id, false)
-assert(!room.reciclajeActivo, 'reciclaje rechazado')
-ok('propuestas: aprobar y rechazar')
-
-// ayuda
-pedirAyuda(room, 'u2', 'medico', 'mareos')
-assert(irAyudar(room, 'u4', 'u2') !== null, 'logística no puede atender pedido al médico')
-assert(irAyudar(room, 'u3', 'u2') === null, 'médico ayuda')
-assert(room.jugadores[1].ayuda === null, 'ayuda resuelta')
-ok('ayuda entre integrantes')
-
-// bot
-const bot = responderBot(room, room.jugadores[3], '¿cuánta agua queda?')
-assert(bot.includes('Agua:'), 'bot responde agua')
-ok(`bot: "${bot.slice(0, 70)}…"`)
-
-// simular horas hasta el final, resolviendo emergencias con la primera alternativa
-let emergenciasVistas = 0
-let horas = 0
-while (!room.resultado && horas < 400) {
-  horaDeMision(room)
-  horas++
-  const em = room.emergencias.find((e) => e.estado === 'activa')
-  if (em) {
-    emergenciasVistas++
-    const rol = em.rolesResponsables[0]
-    const quien = room.jugadores.find((j) => j.rol === rol)!
-    const err = elegirAlternativa(room, quien.id, em.id, em.alternativas[0].id)
-    assert(err === null, `elegir alternativa: ${err}`)
-    const pend = room.propuestas.find((p) => p.estado === 'pendiente' && p.tipo === 'emergencia')
-    if (pend) votar(room, 'u1', pend.id, true)
-    assert(em.estado === 'resuelta', `emergencia resuelta (${em.tipo})`)
+tic()
+sinError(iniciarMision(room, 'u0'), 'iniciar')
+sinError(elegirPerfil(room, cmd.id, PERFIL as never), 'perfil')
+sinError(elegirTrayectoria(room, cmd.id, TRAYECTORIA as never), 'trayectoria')
+sinError(aplicarPreset(room, PRESET), 'preset')
+console.log(`Tripulación ${N} · preset ${PRESET} · política ${POLITICA} · trayectoria ${TRAYECTORIA} (${room.mision.diasTransito} d) · ${room.mision.solesObjetivo} soles`)
+console.log(`Carga ${room.masa} t de ${room.capacidad} t:`, JSON.stringify(room.cargamento))
+if (room.masa > room.capacidad) {
+  // Recorta lo menos vital hasta que quepa, como haría una tripulación.
+  const recortes: [keyof typeof room.cargamento, number][] = [['blindaje', 0], ['huerto', 0], ['oxigeno', 1], ['paneles', 3], ['baterias', 1], ['repuestos', 8]]
+  for (const [id, minimo] of recortes) {
+    while (room.masa > room.capacidad && room.cargamento[id] > minimo) {
+      room.cargamento[id] -= 1
+      room.masa = masaTotal(room.cargamento)
+    }
   }
-  // mantenimiento básico de sistemas y experimentos
-  const peor = [...room.sistemas].filter((s) => s.id !== 'invernadero' || s.online).sort((a, b) => a.integridad - b.integridad)[0]
-  if (peor && (peor.integridad < 50 || !peor.online) && room.recursos.repuestos >= 2) accion(room, 'u2', 'reparar', { modulo: peor.id })
-  if (room.mision.experimentos < 3 && room.recursos.energia > 40) accion(room, 'u5', 'experimento', {})
+  console.log(`  recortada a ${room.masa} t:`, JSON.stringify(room.cargamento))
 }
-assert(room.resultado, 'la misión termina')
-console.log(`  fin tras ${horas} h: ${room.resultado!.victoria ? 'VICTORIA' : 'DERROTA'} — ${room.resultado!.motivo}`)
-console.log(`  emergencias: ${emergenciasVistas}, agua ${Math.round(room.recursos.agua)}, O2 ${Math.round(room.recursos.oxigeno)}, comida ${Math.round(room.recursos.alimentos)}, energía ${Math.round(room.recursos.energia)}`)
-console.log('  salud:', room.jugadores.map((j) => `${j.nombre} ${Math.round(j.salud)}`).join(', '))
-assert(emergenciasVistas > 0, 'hubo emergencias')
-console.log('SIMULACIÓN OK')
+for (const j of room.jugadores) sinError(marcarListo(room, j.id, true), 'listo')
+exigir(lanzar(room, de('sistemas').id) !== null, 'solo el comandante lanza')
+sinError(lanzar(room, cmd.id), 'lanzar')
+
+const cuenta: Record<string, number> = {}
+let segundos = 0
+let faseAnterior = ''
+let solImpreso = 0
+const buena = POLITICA === 'buena'
+
+function resumen(titulo: string) {
+  const r = room.rec
+  const c = room.cabina
+  const e = room.energia
+  const v = tripulacion(room).map((j) => `${j.nombre[0]}:${Math.round(j.vit.salud)}/${Math.round(j.vit.fc)}lpm/${Math.round(j.vit.dosis)}mSv/c${Math.round(j.vit.condicion)}/f${Math.round(j.vit.fatiga)}`)
+  console.log(
+    `[${titulo}] ${formatoMET(room.t)} · real ${Math.round(segundos / 60)} min · O2 ${c.ppO2.toFixed(1)} kPa · CO2 ${(c.ppCO2 * 7.5).toFixed(1)} mmHg · ${c.temp.toFixed(0)} °C` +
+      ` · agua ${Math.round(r.agua)}+${Math.round(r.aguaResidual)} kg · O2 tanq ${Math.round(r.o2)} · comida ${Math.round(r.comida)} · rep ${r.repuestos} · bat ${Math.round(e.bateria)}/${e.capacidad} (${e.generacion}/${e.consumo} kW) · auton ${JSON.stringify(room.autonomia)}`,
+  )
+  console.log(`      ${v.join('  ')}`)
+}
+
+function atenderEmergencias() {
+  const em = room.emergencias.find((x) => x.estado === 'activa')
+  if (!em) return
+  cuenta[em.tipo] = (cuenta[em.tipo] ?? 0) + (em.datos._contada ? 0 : 1)
+  em.datos._contada = true
+  if (!buena) return // la tripulación pasiva deja vencer todo
+  const quien = room.jugadores.find((j) => j.rol && em.rolesResponsables.includes(j.rol)) ?? cmd
+  // Elige la primera alternativa viable (la más protectora).
+  let alt = em.alternativas[0].id
+  if (em.tipo === 'fallo' && room.rec.repuestos < 2) alt = em.alternativas[1].id
+  const err = elegirAlternativa(room, quien.id, em.id, alt)
+  if (err && !/Ya hay una alternativa/.test(err)) exigir(false, `emergencia ${em.tipo}: ${err}`)
+  for (const p of room.propuestas.filter((x) => x.estado === 'pendiente')) votar(room, cmd.id, p.id, true)
+}
+
+function mantenimiento() {
+  if (!buena) return
+  const s = de('sistemas')
+  const superficie = room.tAterrizaje > 0
+  for (const x of room.sistemas) {
+    if (!x.instalado || x.integridad >= 55 || room.rec.repuestos < 2) continue
+    const exterior = superficie && (x.id === 'energia' || x.id === 'isru')
+    if (exterior && cambiarZona(room, s.id, 'exterior') !== null) continue
+    accion(room, s.id, 'reparar', { sistema: x.id })
+    if (exterior) cambiarZona(room, s.id, 'nave')
+  }
+  if (room.cabina.fuga > 0) accion(room, s.id, 'sellar', {})
+  const m = de('medico')
+  for (const j of tripulacion(room)) if ((j.dolencia || j.vit.salud < 60) && room.rec.botiquines > 0) accion(room, m.id, 'tratar', { jugadorId: j.id })
+  for (const p of room.propuestas.filter((x) => x.estado === 'pendiente')) votar(room, cmd.id, p.id, true)
+}
+
+function base() {
+  if (!buena) return
+  const cie = de('cientifico')
+  const m = room.mision
+  if (room.fase === 'base' && m.muestrasAnalizadas + cie.muestras < m.muestrasObjetivo && room.ambiente.hora > 9 && room.ambiente.hora < 15 && cie.vit.fatiga < 60) {
+    if (cambiarZona(room, cie.id, 'exterior') === null) {
+      for (let k = 1; k <= 8 && cie.muestras < 3; k++) accion(room, cie.id, 'muestra', { sitio: `muestra${k}` })
+      cambiarZona(room, cie.id, 'nave')
+    }
+  }
+  if (cie.muestras > 0) accion(room, cie.id, 'analizar', {})
+  if (room.cargamento.huerto && !room.huerto.establecido) accion(room, cie.id, 'huerto', {})
+  if (room.energia.polvo > 0.08 && room.ambiente.hora > 9 && room.ambiente.hora < 16) {
+    const p = de('piloto')
+    if (cambiarZona(room, p.id, 'exterior') === null) {
+      accion(room, p.id, 'limpiar', {})
+      cambiarZona(room, p.id, 'nave')
+    }
+  }
+}
+
+function ensamblar() {
+  for (const t of TAREAS_ENSAMBLAJE.filter((x) => x.paso === room.ensamblaje.paso && !room.ensamblaje.hechas[x.id])) {
+    const quien = room.jugadores.find((j) => j.rol && t.roles.includes(j.rol)) ?? cmd
+    if (t.zona === 'exterior') sinError(cambiarZona(room, quien.id, 'exterior'), `salir (${t.id})`)
+    sinError(hacerTarea(room, quien.id, t.id), `tarea ${t.id}`)
+    if (t.zona === 'exterior') cambiarZona(room, quien.id, 'nave')
+  }
+}
+
+while (!room.resultado && segundos < 6 * 3600) {
+  tic()
+  segundos += 1
+  if (room.fase !== faseAnterior) {
+    resumen(`→ ${room.fase}`)
+    faseAnterior = room.fase
+    if (room.fase === 'transito') sinError(fijarEscala(room, cmd.id, 86400), 'escala tránsito')
+    if (room.fase === 'base') sinError(fijarEscala(room, cmd.id, 3600), 'escala base')
+    if (room.fase === 'ensamblaje') sinError(fijarEscala(room, cmd.id, 600), 'escala ensamblaje')
+  }
+  atenderEmergencias()
+  if (room.fase === 'llegada' && room.subfase === 'orbita' && !room.propuestas.some((p) => p.estado === 'pendiente')) {
+    sinError(proponerUbicacion(room, de('piloto').id, 'gale'), 'ubicación')
+    for (const p of room.propuestas.filter((x) => x.estado === 'pendiente')) votar(room, cmd.id, p.id, true)
+  }
+  if (room.fase === 'ensamblaje' && segundos % 5 === 0) ensamblar()
+  if (segundos % 3 === 0) {
+    mantenimiento()
+    base()
+  }
+  if (room.fase === 'transito' && Math.floor(room.t / 86400) % 50 === 0 && Math.floor(room.t / 86400) !== solImpreso) {
+    solImpreso = Math.floor(room.t / 86400)
+    resumen(`día ${solImpreso}`)
+  }
+  if (room.fase === 'base' && room.ambiente.sol % 5 === 0 && room.ambiente.sol !== solImpreso) {
+    solImpreso = room.ambiente.sol
+    resumen(`sol ${solImpreso}`)
+  }
+}
+
+resumen('FIN')
+exigir(room.resultado, 'la misión debe terminar')
+console.log(`\n${room.resultado!.titulo}: ${room.resultado!.motivo}`)
+console.log(`Tiempo real de juego a máxima escala: ${Math.round(segundos / 60)} min. Emergencias:`, JSON.stringify(cuenta))
+console.log(`Equipos: ${room.sistemas.filter((s) => s.instalado).map((s) => `${s.id} ${Math.round(s.integridad)}`).join(', ')}`)
+console.log(`Huerto: ${room.huerto.establecido ? `sí, ${room.huerto.cosechas} cosechas` : 'no'} · muestras ${room.mision.muestrasAnalizadas}/${room.mision.muestrasObjetivo} · límite de dosis ${C.LIMITE_CARRERA_MSV} mSv`)
+console.log('Últimos registros:')
+for (const l of room.registro.slice(-12)) console.log(`   ${l.tipo === 'alerta' ? '!' : ' '} ${l.texto}`)
+console.log('\nAsistente:', responderBot(room, cmd, '¿cómo vamos?').slice(0, 200))
+console.log('SIMULACIÓN TERMINADA')

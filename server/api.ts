@@ -2,34 +2,46 @@
 // como el servidor local de desarrollo.
 //
 // Modelo de ejecución (pensado para funciones sin proceso permanente):
-// - El estado de cada sala vive en el almacén (Vercel Blob) y se guarda con cada acción.
+// - El estado de cada sala vive en el almacén (Vercel Blob). Se guarda con cada acción y,
+//   mientras alguien juega, cada 45 segundos.
 // - Cada instancia mantiene una copia en memoria para no leer el almacén en cada consulta, y la
 //   revalida cada pocos segundos por si otra instancia escribió.
-// - El paso del tiempo no se guarda: `avanzar` lo recalcula de forma determinista.
-// - Los clientes consultan el estado cada segundo (`estado`) en lugar de usar sockets.
+// - El paso del tiempo entre guardados se recalcula de forma determinista (`avanzar`).
+// - Los clientes consultan el estado dos veces por segundo (`estado`) en lugar de usar sockets.
+//   En esa misma consulta envían dónde está su personaje y reciben dónde están los demás.
 import crypto from 'node:crypto'
-import type { DecisionMode, Role, RoomState } from '../shared/types.js'
+import type { Actividad, DecisionMode, PerfilId, Role, RoomState, Traje, TrayectoriaId, Zona } from '../shared/types.js'
 import { almacen } from './almacen.js'
 import { responderBot } from './bot.js'
 import {
   accion,
   ajustarCargamento,
+  aplicarPreset,
   avanzar,
-  confirmarPaso,
+  cambiarZona,
   crearSala,
   elegirAlternativa,
+  elegirPerfil,
   elegirRol,
+  elegirTraje,
+  elegirTrayectoria,
+  fijarActividad,
+  fijarEscala,
+  hacerTarea,
   iniciarMision,
   irAyudar,
   jugador,
   lanzar,
-  log,
+  marcarListo,
   nuevoJugador,
+  pausar,
   pedirAyuda,
   proponerUbicacion,
+  usarRefugio,
   votar,
 } from './game.js'
-import { fijarAhora } from './reloj.js'
+import { log } from './base.js'
+import { fijarAhora, fijarMovidos } from './reloj.js'
 
 export interface Respuesta {
   status: number
@@ -48,8 +60,10 @@ interface CuentaGuardada {
 }
 
 const REVALIDAR_MS = 4000 // cada cuánto se comprueba si otra instancia cambió la sala
+const GUARDAR_MS = 45_000 // punto de guardado periódico mientras alguien juega
 const DESCONECTADO_MS = 12_000 // sin consultas durante este tiempo = desconectado
 const FANTASMA_LOBBY_MS = 30_000 // en el lobby, quien no consulta en este tiempo libera su rol
+const MOVIMIENTO_MS = 30_000 // se considera despierto a quien se movió hace menos de esto
 const MAX_JUGADORES = 6
 
 const ok = (cuerpo: unknown): Respuesta => ({ status: 200, json: JSON.stringify(cuerpo) })
@@ -115,23 +129,46 @@ async function ingresar(usuario: string, clave: string): Promise<Respuesta> {
 interface Entrada {
   room: RoomState
   etiqueta: string
+  /** Última vez que se comprobó contra el almacén. */
   verificado: number
+  /** Última vez (reloj real) que la sala avanzó. Se guarda junto con la sala. */
+  visto: number
+  guardado: number
 }
 interface Presencia {
   desde: number
   ultimo: Map<string, number>
+  /** Posición de cada personaje: [x, z, giro, animación]. */
+  pos: Map<string, number[]>
+  movido: Map<string, number>
 }
 const salas = new Map<string, Entrada>()
 const presencias = new Map<string, Presencia>()
 const colas = new Map<string, Promise<void>>()
 
-const rutaSala = (codigo: string) => `salas/${codigo}.json`
+const rutaSala = (codigo: string) => `salas2/${codigo}.json`
 const huella = (texto: string) => crypto.createHash('sha1').update(texto).digest('hex').slice(0, 16)
-const respuestaSala = (texto: string): Respuesta => ({
-  status: 200,
-  json: `{"sala":${texto},"h":"${huella(texto)}","ahora":${Date.now()}}`,
-})
+const documento = (visto: number, texto: string) => `{"visto":${visto},"sala":${texto}}`
 const SIN_SALA = { sinSala: true }
+
+function presenciaDe(codigo: string): Presencia {
+  let p = presencias.get(codigo)
+  if (!p) presencias.set(codigo, (p = { desde: Date.now(), ultimo: new Map(), pos: new Map(), movido: new Map() }))
+  return p
+}
+
+/** Posiciones de los demás personajes vistos hace poco. */
+function posiciones(codigo: string, yo: string, t: number): string {
+  const p = presenciaDe(codigo)
+  const salida: Record<string, number[]> = {}
+  for (const [id, pos] of p.pos) if (id !== yo && t - (p.ultimo.get(id) ?? 0) < 6000) salida[id] = pos
+  return JSON.stringify(salida)
+}
+
+const respuestaSala = (e: Entrada, texto: string, codigo: string, yo: string, t: number): Respuesta => ({
+  status: 200,
+  json: `{"sala":${texto},"h":"${huella(texto)}","ahora":${t - e.room.desfase},"pos":${posiciones(codigo, yo, t)}}`,
+})
 
 /** Ejecuta las operaciones de una misma sala de una en una dentro de esta instancia. */
 function enCola<T>(codigo: string, tarea: () => Promise<T>): Promise<T> {
@@ -166,22 +203,26 @@ async function obtener(codigo: string, versionCliente: number): Promise<Entrada 
     return e
   }
   if (r === 'igual') return null
-  const nueva: Entrada = { room: JSON.parse(r.texto) as RoomState, etiqueta: r.etiqueta, verificado: t }
+  const doc = JSON.parse(r.texto) as { visto: number; sala: RoomState }
+  const nueva: Entrada = { room: doc.sala, etiqueta: r.etiqueta, verificado: t, visto: doc.visto, guardado: doc.visto }
   salas.set(codigo, nueva)
   return nueva
 }
 
-function presenciaDe(codigo: string): Presencia {
-  let p = presencias.get(codigo)
-  if (!p) presencias.set(codigo, (p = { desde: Date.now(), ultimo: new Map() }))
-  return p
-}
-
 /** Marca al usuario como visto y recalcula quién está conectado según las consultas recientes. */
-function actualizarPresencia(codigo: string, room: RoomState, usuarioId: string, t: number) {
+function actualizarPresencia(codigo: string, room: RoomState, usuarioId: string, t: number, pos?: unknown) {
   const p = presenciaDe(codigo)
   p.ultimo.set(usuarioId, t)
+  if (Array.isArray(pos) && pos.length >= 3 && pos.length <= 5 && pos.every((v) => typeof v === 'number' && Number.isFinite(v))) {
+    const nueva = (pos as number[]).map((v) => Math.round(v * 100) / 100)
+    const previa = p.pos.get(usuarioId)
+    if (!previa || Math.abs(previa[0] - nueva[0]) + Math.abs(previa[1] - nueva[1]) > 0.05) p.movido.set(usuarioId, t)
+    p.pos.set(usuarioId, nueva)
+  }
   for (const j of room.jugadores) j.conectado = t - (p.ultimo.get(j.id) ?? p.desde) < DESCONECTADO_MS
+  const despiertos = new Set<string>()
+  for (const [id, cuando] of p.movido) if (t - cuando < MOVIMIENTO_MS) despiertos.add(id)
+  fijarMovidos(despiertos)
 }
 
 /** En el lobby, quien cerró la pestaña deja de ocupar su rol. */
@@ -192,6 +233,24 @@ function podarLobby(codigo: string, room: RoomState, t: number) {
   if (room.jugadores.length !== antes && !room.jugadores.some((j) => j.id === room.hostId) && room.jugadores[0]) {
     room.hostId = room.jugadores[0].id
   }
+}
+
+async function guardar(codigo: string, e: Entrada, texto: string, t: number): Promise<boolean> {
+  let r: string
+  try {
+    r = await almacen().escribir(rutaSala(codigo), documento(e.visto, texto), e.etiqueta)
+  } catch (err) {
+    salas.delete(codigo) // la copia en memoria ya no coincide con lo guardado
+    throw err
+  }
+  if (r === 'conflicto') {
+    salas.delete(codigo)
+    return false
+  }
+  e.etiqueta = r
+  e.verificado = Date.now()
+  e.guardado = t
+  return true
 }
 
 type Mutacion = (room: RoomState, t: number) => string | null
@@ -213,42 +272,39 @@ function mutar(
       const t = Date.now()
       actualizarPresencia(codigo, room, usuario.id, t)
       if (room.fase === 'lobby') podarLobby(codigo, room, t)
-      avanzar(room, t)
+      avanzar(room, t, e.visto)
+      e.visto = t
       if (soloMiembros && !jugador(room, usuario.id)) return fallo(403, 'No formas parte de esa sala.', SIN_SALA)
-      const error = fn(room, t)
+      const error = fn(room, t - room.desfase)
       if (error) return fallo(400, error)
       room.version += 1
       const texto = JSON.stringify(room)
-      let r: string
-      try {
-        r = await almacen().escribir(rutaSala(codigo), texto, e.etiqueta)
-      } catch (err) {
-        salas.delete(codigo) // la copia en memoria ya no coincide con lo guardado
-        throw err
-      }
-      if (r === 'conflicto') {
-        salas.delete(codigo)
-        continue
-      }
-      e.etiqueta = r
-      e.verificado = Date.now()
-      return respuestaSala(texto)
+      if (await guardar(codigo, e, texto, t)) return respuestaSala(e, texto, codigo, usuario.id, t)
     }
     return fallo(409, 'La sala está muy ocupada. Intenta de nuevo.')
   })
 }
 
-function consultar(codigo: string, usuario: Usuario, versionCliente: number, huellaCliente: string): Promise<Respuesta> {
+function consultar(codigo: string, usuario: Usuario, versionCliente: number, huellaCliente: string, pos: unknown): Promise<Respuesta> {
   return enCola(codigo, async () => {
     const e = await obtener(codigo, versionCliente)
     if (!e) return fallo(404, 'Esa sala ya no existe.', SIN_SALA)
-    if (!jugador(e.room, usuario.id)) return fallo(403, 'No formas parte de esa sala.', SIN_SALA)
+    const room = e.room
+    if (!jugador(room, usuario.id)) return fallo(403, 'No formas parte de esa sala.', SIN_SALA)
     const t = Date.now()
-    actualizarPresencia(codigo, e.room, usuario.id, t)
-    avanzar(e.room, t)
-    const texto = JSON.stringify(e.room)
-    if (huella(texto) === huellaCliente) return ok({ igual: true, ahora: t })
-    return respuestaSala(texto)
+    actualizarPresencia(codigo, room, usuario.id, t, pos)
+    avanzar(room, t, e.visto)
+    e.visto = t
+    // Punto de guardado: si la instancia se recicla, se pierde como mucho este intervalo.
+    if (t - e.guardado > GUARDAR_MS && !['lobby', 'contexto', 'fin'].includes(room.fase)) {
+      room.version += 1
+      await guardar(codigo, e, JSON.stringify(room), t)
+    }
+    const texto = JSON.stringify(room)
+    if (huella(texto) === huellaCliente) {
+      return { status: 200, json: `{"igual":true,"ahora":${t - room.desfase},"pos":${posiciones(codigo, usuario.id, t)}}` }
+    }
+    return respuestaSala(e, texto, codigo, usuario.id, t)
   })
 }
 
@@ -260,14 +316,15 @@ async function crear(usuario: Usuario, modo: DecisionMode): Promise<Respuesta> {
     fijarAhora(t)
     const room = crearSala(codigo, usuario.id, modo)
     room.jugadores.push(nuevoJugador(usuario.id, usuario.nombre))
-    log(room, `${usuario.nombre} creó la sala.`, 'info')
+    log(room, `${usuario.nombre} creó la sala.`)
     room.version = 1
     const texto = JSON.stringify(room)
-    const r = await almacen().escribir(rutaSala(codigo), texto, null)
+    const r = await almacen().escribir(rutaSala(codigo), documento(t, texto), null)
     if (r === 'conflicto') continue
-    salas.set(codigo, { room, etiqueta: r, verificado: t })
+    const e: Entrada = { room, etiqueta: r, verificado: t, visto: t, guardado: t }
+    salas.set(codigo, e)
     presenciaDe(codigo).ultimo.set(usuario.id, t)
-    return respuestaSala(texto)
+    return respuestaSala(e, texto, codigo, usuario.id, t)
   }
   return fallo(503, 'No se pudo crear la sala. Intenta de nuevo.')
 }
@@ -286,7 +343,7 @@ function unirse(codigo: string, usuario: Usuario): Promise<Respuesta> {
       if (room.fase !== 'lobby') return 'Esa misión ya empezó y no formas parte de ella.'
       if (room.jugadores.length >= MAX_JUGADORES) return `La sala está llena (${MAX_JUGADORES} tripulantes).`
       room.jugadores.push(nuevoJugador(usuario.id, usuario.nombre))
-      log(room, `${usuario.nombre} se unió a la sala.`, 'info')
+      log(room, `${usuario.nombre} se unió a la sala.`)
       return null
     },
     { soloMiembros: false, noExiste: 'No existe una sala con ese código.' },
@@ -298,7 +355,9 @@ function salir(codigo: string, usuario: Usuario): Promise<Respuesta> {
     const e = await obtener(codigo, 0)
     if (!e || !jugador(e.room, usuario.id)) return ok(SIN_SALA)
     const room = e.room
-    presenciaDe(codigo).ultimo.set(usuario.id, 0)
+    const p = presenciaDe(codigo)
+    p.ultimo.set(usuario.id, 0)
+    p.pos.delete(usuario.id)
     if (room.fase !== 'lobby') return ok(SIN_SALA) // en misión conserva su puesto y puede volver con el código
     room.jugadores = room.jugadores.filter((j) => j.id !== usuario.id)
     if (room.jugadores.length === 0) {
@@ -309,9 +368,7 @@ function salir(codigo: string, usuario: Usuario): Promise<Respuesta> {
     }
     if (room.hostId === usuario.id) room.hostId = room.jugadores[0].id
     room.version += 1
-    const r = await almacen().escribir(rutaSala(codigo), JSON.stringify(room), e.etiqueta)
-    if (r === 'conflicto') salas.delete(codigo)
-    else e.etiqueta = r
+    await guardar(codigo, e, JSON.stringify(room), Date.now())
     return ok(SIN_SALA)
   })
 }
@@ -324,14 +381,16 @@ function preguntarBot(codigo: string, usuario: Usuario, versionCliente: number, 
     if (!j) return fallo(403, 'No formas parte de esa sala.', SIN_SALA)
     const t = Date.now()
     actualizarPresencia(codigo, e.room, usuario.id, t)
-    avanzar(e.room, t)
-    return ok({ respuesta: responderBot(e.room, j, texto), ahora: t })
+    avanzar(e.room, t, e.visto)
+    e.visto = t
+    return ok({ respuesta: responderBot(e.room, j, texto), ahora: t - e.room.desfase })
   })
 }
 
 // ---------- Entrada ----------
 
 const texto = (v: unknown, max = 300) => String(v ?? '').trim().slice(0, max)
+const objeto = (v: unknown) => (v && typeof v === 'object' ? (v as Record<string, unknown>) : {})
 
 async function despachar(c: Record<string, unknown>, autorizacion: string | undefined): Promise<Respuesta> {
   const op = texto(c.op, 30)
@@ -347,6 +406,7 @@ async function despachar(c: Record<string, unknown>, autorizacion: string | unde
   if (!/^[A-Z0-9]{6}$/.test(codigo)) return fallo(400, 'El código de sala tiene 6 letras o números.')
   const v = Number.isFinite(Number(c.v)) ? Number(c.v) : 0
   const yo = usuario.id
+  const m = (fn: Mutacion) => mutar(codigo, usuario, v, fn)
 
   switch (op) {
     case 'unirse':
@@ -354,39 +414,62 @@ async function despachar(c: Record<string, unknown>, autorizacion: string | unde
     case 'salir':
       return salir(codigo, usuario)
     case 'estado':
-      return consultar(codigo, usuario, v, texto(c.h, 40))
+      return consultar(codigo, usuario, v, texto(c.h, 40), c.p)
     case 'bot': {
       const pregunta = texto(c.texto)
       return pregunta ? preguntarBot(codigo, usuario, v, pregunta) : fallo(400, 'Escribe una pregunta.')
     }
+    // Lobby y contextualización
     case 'rol':
-      return mutar(codigo, usuario, v, (room) => elegirRol(room, yo, (c.rol as Role | null) ?? null))
+      return m((room) => elegirRol(room, yo, (c.rol as Role | null) ?? null))
+    case 'traje':
+      return m((room) => elegirTraje(room, yo, objeto(c.traje) as Partial<Traje>))
     case 'iniciar':
-      return mutar(codigo, usuario, v, (room) => iniciarMision(room, yo))
+      return m((room) => iniciarMision(room, yo))
     case 'cargamento':
-      return mutar(codigo, usuario, v, (room) => ajustarCargamento(room, (c.cambios ?? {}) as Record<string, number>))
+      return m((room) => ajustarCargamento(room, objeto(c.cambios) as Record<string, number>))
+    case 'preset':
+      return m((room) => aplicarPreset(room, texto(c.preset, 20)))
+    case 'perfil':
+      return m((room) => elegirPerfil(room, yo, texto(c.perfil, 20) as PerfilId))
+    case 'trayectoria':
+      return m((room) => elegirTrayectoria(room, yo, texto(c.trayectoria, 20) as TrayectoriaId))
+    case 'listo':
+      return m((room) => marcarListo(room, yo, Boolean(c.listo)))
     case 'lanzar':
-      return mutar(codigo, usuario, v, (room) => lanzar(room, yo))
-    case 'confirmar':
-      return mutar(codigo, usuario, v, (room) => confirmarPaso(room, yo, Number(c.paso)))
+      return m((room) => lanzar(room, yo))
+    // Tiempo
+    case 'escala':
+      return m((room) => fijarEscala(room, yo, Number(c.valor)))
+    case 'pausa':
+      return m((room) => pausar(room, yo, Boolean(c.pausa)))
+    // Misión
     case 'ubicacion':
-      return mutar(codigo, usuario, v, (room) => proponerUbicacion(room, yo, texto(c.sitioId, 20)))
+      return m((room) => proponerUbicacion(room, yo, texto(c.sitioId, 20)))
+    case 'tarea':
+      return m((room) => hacerTarea(room, yo, texto(c.tarea, 20)))
+    case 'zona':
+      return m((room) => cambiarZona(room, yo, texto(c.zona, 10) as Zona))
+    case 'actividad':
+      return m((room) => fijarActividad(room, yo, c.actividad ? (texto(c.actividad, 12) as Actividad) : null))
+    case 'refugio':
+      return m((room) => usarRefugio(room, yo, Boolean(c.entrar)))
     case 'accion':
-      return mutar(codigo, usuario, v, (room) => accion(room, yo, texto(c.id, 20), (c.payload ?? {}) as Record<string, unknown>))
+      return m((room) => accion(room, yo, texto(c.id, 20), objeto(c.payload)))
     case 'votar':
-      return mutar(codigo, usuario, v, (room) => votar(room, yo, texto(c.id, 40), Boolean(c.aprueba)))
+      return m((room) => votar(room, yo, texto(c.id, 40), Boolean(c.aprueba)))
     case 'emergencia':
-      return mutar(codigo, usuario, v, (room) => elegirAlternativa(room, yo, texto(c.id, 40), texto(c.altId, 20)))
+      return m((room) => elegirAlternativa(room, yo, texto(c.id, 40), texto(c.altId, 20)))
     case 'ayudaPedir':
-      return mutar(codigo, usuario, v, (room) => pedirAyuda(room, yo, c.paraRol as Role, texto(c.motivo, 120)))
+      return m((room) => pedirAyuda(room, yo, c.paraRol as Role, texto(c.motivo, 120)))
     case 'ayudaIr':
-      return mutar(codigo, usuario, v, (room) => irAyudar(room, yo, texto(c.jugadorId, 60)))
+      return m((room) => irAyudar(room, yo, texto(c.jugadorId, 60)))
     case 'chat': {
       const mensaje = texto(c.texto)
       if (!mensaje) return fallo(400, 'Escribe un mensaje.')
-      return mutar(codigo, usuario, v, (room, t) => {
+      return m((room, t) => {
         room.chat.push({ id: crypto.randomUUID(), de: usuario.nombre, texto: mensaje, t, bot: false })
-        if (room.chat.length > 60) room.chat.splice(0, room.chat.length - 60)
+        if (room.chat.length > 40) room.chat.splice(0, room.chat.length - 40)
         return null
       })
     }
@@ -396,8 +479,7 @@ async function despachar(c: Record<string, unknown>, autorizacion: string | unde
 
 export async function manejar(cuerpo: unknown, autorizacion?: string): Promise<Respuesta> {
   try {
-    const c = cuerpo && typeof cuerpo === 'object' ? (cuerpo as Record<string, unknown>) : {}
-    return await despachar(c, autorizacion)
+    return await despachar(objeto(cuerpo), autorizacion)
   } catch (e) {
     console.error('[api]', e)
     return fallo(500, 'Error interno del servidor.')

@@ -26,3 +26,11 @@ export function semilla(texto: string): number {
   for (let i = 0; i < texto.length; i++) h = Math.imul(h ^ texto.charCodeAt(i), 16777619)
   return (h ^ Date.now()) | 0
 }
+
+// Jugadores que se han movido hace poco. Lo informa la capa de red antes de avanzar la
+// simulación; sirve para no dar por dormido a quien está caminando por la nave de noche.
+let enMovimiento: ReadonlySet<string> = new Set()
+export const movidos = () => enMovimiento
+export const fijarMovidos = (ids: ReadonlySet<string>) => {
+  enMovimiento = ids
+}
