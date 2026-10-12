@@ -34,8 +34,10 @@ interface Store {
   toasts: Toast[]
   botMsgs: ChatMsg[]
   pestana: Pestana
-  /** Estación del mapa cuyo panel está abierto. */
+  /** Estación del mapa cuyo panel está abierto. 'principal' es la página principal de la base. */
   estacion: string | null
+  /** El panel se abrió desde la página principal, sin estar junto a la estación. */
+  remoto: boolean
   /** Estación más cercana con la que se puede interactuar. */
   cerca: string | null
   fuentes: boolean
@@ -47,7 +49,7 @@ interface Store {
   agregarBot: (m: ChatMsg) => void
   toast: (texto: string, tipo?: 'error' | 'info') => void
   setPestana: (p: Pestana) => void
-  abrirEstacion: (id: string | null) => void
+  abrirEstacion: (id: string | null, remoto?: boolean) => void
   setCerca: (id: string | null) => void
   setFuentes: (v: boolean) => void
   alternarPaneles: () => void
@@ -68,6 +70,7 @@ export const useStore = create<Store>((set, get) => ({
   botMsgs: [],
   pestana: 'mision',
   estacion: null,
+  remoto: false,
   cerca: null,
   fuentes: false,
   panelesOcultos: false,
@@ -90,7 +93,7 @@ export const useStore = create<Store>((set, get) => ({
     setTimeout(() => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })), 5000)
   },
   setPestana: (pestana) => set({ pestana }),
-  abrirEstacion: (estacion) => set({ estacion }),
+  abrirEstacion: (estacion, remoto = false) => set({ estacion, remoto: Boolean(estacion) && remoto }),
   setCerca: (cerca) => {
     if (get().cerca !== cerca) set({ cerca })
   },

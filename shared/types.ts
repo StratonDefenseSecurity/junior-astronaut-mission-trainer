@@ -104,6 +104,28 @@ export const TRAYECTORIAS: TrayectoriaInfo[] = [
 ]
 export const TRAYECTORIA_BY_ID = Object.fromEntries(TRAYECTORIAS.map((t) => [t.id, t])) as Record<TrayectoriaId, TrayectoriaInfo>
 
+// ---------- Contextualización ----------
+
+/**
+ * Pasos de la contextualización, en el orden del esquema del equipo: primero se da la
+ * situación, después se asignan los roles, se establece el objetivo y se eligen los suministros.
+ */
+export const PASOS_CONTEXTO = [
+  { id: 'situacion', titulo: 'La situación', corto: 'Situación' },
+  { id: 'roles', titulo: 'Asignación de roles', corto: 'Tu rol' },
+  { id: 'objetivo', titulo: 'Objetivo de la misión', corto: 'Objetivo' },
+  { id: 'suministros', titulo: 'Suministros', corto: 'Suministros' },
+] as const
+
+/**
+ * Cuántos tripulantes cuenta el plan. Antes del lanzamiento son los que están en la sala
+ * (todos elegirán rol); después, quienes tienen rol.
+ */
+export const tripulantesPlan = (room: { fase: Phase; jugadores: { rol: Role | null; conectado: boolean }[] }): number =>
+  room.fase === 'lobby' || room.fase === 'contexto'
+    ? Math.max(1, room.jugadores.filter((j) => j.rol || j.conectado).length)
+    : room.jugadores.filter((j) => j.rol).length
+
 /** Toneladas de carga que admite la nave según la tripulación y la trayectoria. */
 export const capacidadCarga = (tripulantes: number, trayectoria: TrayectoriaId) =>
   Math.round((5 + tripulantes) * TRAYECTORIA_BY_ID[trayectoria].factorCarga * 10) / 10
@@ -223,6 +245,72 @@ export const TAREAS_ENSAMBLAJE: TareaEnsamblaje[] = [
   { id: 'revisionExt', paso: 3, titulo: 'Inspeccionar el casco por fuera', roles: ['sistemas'], estacion: 'antena', zona: 'exterior' },
 ]
 
+// ---------- Página principal de la base ----------
+
+/**
+ * Las opciones de la página principal, tal como las plantea el esquema del equipo: cada una
+ * tiene sus responsables y una sub-interfaz distinta, que es la estación donde se gestiona.
+ */
+export interface OpcionBase {
+  id: 'controlar' | 'distribuir' | 'produccion' | 'equipos' | 'radiacion' | 'huerto'
+  titulo: string
+  descripcion: string
+  roles: Role[]
+  /** Estaciones del hábitat donde está su sub-interfaz. */
+  estaciones: string[]
+}
+export const GESTION_BASE: OpcionBase[] = [
+  {
+    id: 'controlar',
+    titulo: 'Controlar agua, oxígeno, alimentos y energía',
+    descripcion: 'Cuánto queda de cada cosa y para cuántos días alcanza.',
+    roles: ['logistica', 'comandante', 'medico'],
+    estaciones: ['almacen', 'energia'],
+  },
+  {
+    id: 'distribuir',
+    titulo: 'Decidir cómo distribuir recursos limitados',
+    descripcion: 'Las raciones de comida y agua, y qué se protege si falta energía.',
+    roles: ['logistica', 'comandante'],
+    estaciones: ['almacen', 'energia'],
+  },
+  {
+    id: 'produccion',
+    titulo: 'Administrar producción y reciclaje',
+    descripcion: 'El generador de oxígeno, el depurador de CO2 y el reciclador de agua.',
+    roles: ['logistica', 'comandante', 'medico'],
+    estaciones: ['soporte'],
+  },
+  {
+    id: 'equipos',
+    titulo: 'Mantener los equipos',
+    descripcion: 'Revisar el desgaste y reparar antes de que fallen. Hay que ir hasta el equipo.',
+    roles: ['sistemas'],
+    estaciones: ['soporte', 'energia', 'esclusa'],
+  },
+  {
+    id: 'radiacion',
+    titulo: 'Proteger a la tripulación de la radiación',
+    descripcion: 'La dosis de cada integrante, la orden de refugio y el plan de ejercicio.',
+    roles: ['medico', 'comandante'],
+    estaciones: ['enfermeria', 'refugio'],
+  },
+  {
+    id: 'huerto',
+    titulo: 'Huerto artificial de la base',
+    descripcion: 'Montarlo, cuidarlo y cosechar. También las muestras del terreno.',
+    roles: ['cientifico'],
+    estaciones: ['laboratorio'],
+  },
+]
+
+/** Lo que le toca a cada rol, según la matriz de responsables del esquema. */
+export const tareasDeRol = (rol: Role): string[] => [
+  ...PASOS_ENSAMBLAJE.filter((p) => p.roles.includes(rol)).map((p) => p.titulo),
+  ...GESTION_BASE.filter((o) => o.roles.includes(rol)).map((o) => o.titulo),
+  ...(rol === 'cientifico' ? ['Recoger y analizar las muestras del terreno'] : []),
+]
+
 // ---------- Estado ----------
 
 export interface Vitales {
@@ -278,8 +366,12 @@ export interface Player {
   /** Segundo de misión en que la dolencia se pasa sola. */
   dolenciaHasta: number
   ayuda: HelpRequest | null
+  /** Paso de la contextualización en el que va (ver PASOS_CONTEXTO). */
+  paso: number
   /** Listo para el lanzamiento. */
   listo: boolean
+  /** Tareas y trabajos que ha completado: su progreso a la vista de los demás. */
+  aportes: number
   /** Muestras que carga sin analizar. */
   muestras: number
 }
@@ -308,6 +400,8 @@ export interface Energia {
   capacidad: number
   generacion: number
   consumo: number
+  /** kWh consumidos desde el despegue. */
+  usada: number
   /** Fracción de potencia perdida por polvo sobre los paneles. */
   polvo: number
   /** Equipos apagados por falta de energía. */

@@ -118,7 +118,8 @@ function Jugador({ sala, yo }: { sala: RoomState; yo: Player }) {
     }
     const st = useStore.getState()
     st.setCerca(quieto ? null : cerca)
-    if (st.estacion) {
+    // La página principal y los paneles abiertos desde ella no dependen de dónde esté el personaje.
+    if (st.estacion && st.estacion !== 'principal' && !st.remoto) {
       const e = ESTACIONES.find((x) => x.id === st.estacion)
       if (!e || e.zona !== local.zona || Math.hypot(e.x - local.x, e.z - local.z) - e.radio > ALCANCE + 1.4) st.abrirEstacion(null)
     }

@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { C } from '@shared/ciencia'
-import { ROLE_BY_ID, formatoHora, formatoMET, type Role, type RoomState } from '@shared/types'
+import { ROLE_BY_ID, TRANSITO_INICIO_S, formatoHora, formatoMET, type Role, type RoomState } from '@shared/types'
 import { ahoraServidor } from '../store'
 
 export type Nivel = 'ok' | 'warn' | 'bad'
@@ -60,6 +60,22 @@ export function relojMision(sala: RoomState): { principal: string; secundario: s
     return { principal: `Día ${dia} · ${formatoHora(sala.ambiente.hora)}`, secundario: `de ${sala.mision.diasTransito} de viaje` }
   }
   return { principal: formatoMET(sala.t), secundario: 'tiempo de misión' }
+}
+
+/** Días y horas que la tripulación lleva en el espacio, desde que alcanzó la órbita hasta aterrizar. */
+export function tiempoEnEspacio(sala: RoomState): string {
+  const fin = sala.tAterrizaje > 0 ? sala.tAterrizaje : sala.t
+  const s = Math.max(0, fin - TRANSITO_INICIO_S)
+  const dias = Math.floor(s / 86400)
+  const horas = Math.floor((s % 86400) / 3600)
+  if (dias > 0) return `${dias} d ${horas} h`
+  return horas > 0 ? `${horas} h ${Math.floor((s % 3600) / 60)} min` : `${Math.floor(s / 60)} min`
+}
+
+/** Energía eléctrica consumida desde el despegue, con una unidad legible. */
+export const energiaUsada = (sala: RoomState): string => {
+  const kwh = sala.energia.usada ?? 0
+  return kwh >= 10_000 ? `${(kwh / 1000).toFixed(1)} MWh` : kwh >= 100 ? `${Math.round(kwh)} kWh` : `${kwh.toFixed(1)} kWh`
 }
 
 export const escalaTexto = (e: number) =>

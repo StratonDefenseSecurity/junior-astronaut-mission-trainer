@@ -4,6 +4,7 @@ import {
   CUENTA_REGRESIVA_S,
   ESCALAS,
   ESCALA_MAXIMA,
+  PASOS_CONTEXTO,
   PERFIL_BY_ID,
   ROLE_BY_ID,
   SISTEMA_BY_ID,
@@ -17,6 +18,7 @@ import {
   masaTotal,
   nombreSistema,
   trajePorDefecto,
+  tripulantesPlan,
   type Actividad,
   type DecisionMode,
   type Emergency,
@@ -34,8 +36,9 @@ import {
   type TrayectoriaId,
   type Zona,
 } from '../shared/types.js'
-import { conRol, conectados, jugador, limitar, log, puedeActuar, rid, rolPresente, sis, tripulacion } from './base.js'
+import { conRol, conectados, jugador, limitar, log, presentes, puedeActuar, rid, rolPresente, sis, tripulacion } from './base.js'
 import { UMBRAL_AVERIA, aplicarAlternativa } from './emergencies.js'
+import { ALTERNATIVAS, cargaRecomendada } from '../shared/plan.js'
 import { ahora, fijarAhora, semilla } from './reloj.js'
 import { enSuperficie, iniciarClimaEspacial } from './sim/ambiente.js'
 import { iniciarDescenso, pasoSimulacion, refrescar } from './sim/paso.js'
@@ -80,7 +83,7 @@ export function crearSala(codigo: string, hostId: string, modoDecision: Decision
     ambiente: { sol: 0, hora: 8, tempExt: 20, presion: 0, tau: 0, uv: 1, flujoSolar: 1361, tormentaPolvo: false, polvoSoles: 0, solCuriosity: 0, radiacion: 0, tormentaSolar: null },
     cabina: { ppO2: C.PPO2_NOMINAL_KPA, ppCO2: 0.3, temp: C.TEMP_CABINA_C, fuga: 0 },
     rec: { agua: 0, aguaResidual: 0, o2: 0, comida: 0, repuestos: 0, botiquines: 0, lioh: 0, liohActivo: 0, propelente: 100 },
-    energia: { bateria: 0, capacidad: 0, generacion: 0, consumo: 0, polvo: 0, cortes: [] },
+    energia: { bateria: 0, capacidad: 0, generacion: 0, consumo: 0, usada: 0, polvo: 0, cortes: [] },
     sistemas: (Object.keys(SISTEMA_BY_ID) as SistemaId[]).map((id) => ({
       id,
       integridad: 100,
@@ -128,7 +131,9 @@ export function nuevoJugador(id: string, nombre: string): Player {
     dolencia: null,
     dolenciaHasta: 0,
     ayuda: null,
+    paso: 0,
     listo: false,
+    aportes: 0,
     muestras: 0,
   }
 }
@@ -140,45 +145,26 @@ function aplicarPerfil(room: RoomState) {
   room.mision.muestrasObjetivo = Math.max(1, p.muestras - bono)
   room.mision.diasTransito = TRAYECTORIA_BY_ID[room.trayectoria].dias
   room.mision.objetivo = `Llegar a Marte, montar la base y mantener viva a la tripulación durante ${p.soles} soles, analizando ${room.mision.muestrasObjetivo} muestras del terreno.`
-  room.capacidad = capacidadCarga(tripulacion(room).length, room.trayectoria)
+  room.capacidad = capacidadCarga(tripulantesPlan(room), room.trayectoria)
 }
 
-/** Carga sugerida para la tripulación y el plan actuales. `margen` 1 = lo justo. */
-export function cargaRecomendada(room: RoomState, margen: number): Loadout {
-  const n = Math.max(1, tripulacion(room).length)
-  const dias = room.mision.diasTransito + (room.mision.solesObjetivo * C.SOL_S) / 86400 + 2
-  // Con reciclaje, el agua se va sobre todo en fabricar oxígeno.
-  const aguaKg = (n * (3.2 * 0.07 + 0.84 * C.OGA_AGUA_POR_O2) * dias + 60 + 20 * n) * margen
-  const comidaKg = n * C.COMIDA_KG_DIA * dias * margen
-  const seguro = margen >= 1.25
-  const justo = margen <= 1.02
-  const carga: Loadout = {
-    agua: Math.ceil(aguaKg / 100),
-    oxigeno: justo ? 1 : seguro ? 3 : 2,
-    alimentos: Math.ceil(comidaKg / 100),
-    lioh: Math.ceil(n * 3 * margen),
-    repuestos: Math.ceil((7 + dias / 25) * margen),
-    paneles: justo ? 4 : seguro ? 6 : 5,
-    baterias: justo ? 1 : 2,
-    reactor: 0,
-    blindaje: justo ? 0 : seguro ? 2 : 1,
-    botiquin: Math.ceil(n * 0.8 * margen),
-    huerto: justo ? 0 : 1,
-    isru: 0,
-  }
-  for (const s of SUPPLIES) carga[s.id] = limitar(carga[s.id], s.min, s.max)
-  return carga
-}
+// ---------- Sala ----------
 
-// ---------- Lobby ----------
-
+/**
+ * El rol se asigna dentro de la contextualización, después de que a cada integrante se le
+ * da la situación que tiene que afrontar. En la sala de espera todavía no hay roles.
+ */
 export function elegirRol(room: RoomState, id: string, rol: Role | null): string | null {
-  if (room.fase !== 'lobby') return 'Solo se puede cambiar de rol en el lobby.'
+  if (room.fase === 'lobby') return 'Los roles se asignan en la contextualización, después de conocer la situación.'
+  if (room.fase !== 'contexto') return 'El rol ya no se puede cambiar: la misión despegó.'
   const j = jugador(room, id)
   if (!j) return 'Jugador no encontrado.'
   if (rol && !ROLE_BY_ID[rol]) return 'Rol inválido.'
   if (rol && room.jugadores.some((o) => o.id !== id && o.rol === rol)) return 'Ese rol ya fue tomado.'
+  if (j.rol === rol) return null
   j.rol = rol
+  j.listo = false
+  if (!rol) j.paso = Math.min(j.paso, 1)
   return null
 }
 
@@ -198,21 +184,41 @@ export function elegirTraje(room: RoomState, id: string, traje: Partial<Traje>):
 export function iniciarMision(room: RoomState, id: string): string | null {
   if (room.fase !== 'lobby') return 'La misión ya empezó.'
   if (id !== room.hostId) return 'Solo quien creó la sala puede iniciar.'
-  if (!rolPresente(room, 'comandante')) return 'Falta un comandante para iniciar.'
-  if (conectados(room).length < 2) return 'Se necesitan al menos 2 jugadores con rol.'
-  if (room.jugadores.some((j) => j.conectado && !j.rol)) return 'Todos los conectados deben elegir rol.'
-  room.jugadores = room.jugadores.filter((j) => j.rol)
+  if (presentes(room).length < 2) return 'Se necesitan al menos 2 tripulantes en la sala.'
+  room.jugadores = presentes(room)
+  for (const j of room.jugadores) {
+    j.rol = null
+    j.paso = 0
+    j.listo = false
+  }
   room.fase = 'contexto'
   aplicarPerfil(room)
   room.cargamento = cargaRecomendada(room, 1.15)
   room.masa = masaTotal(room.cargamento)
-  log(room, 'Contextualización: cada integrante conoce su rol, la misión y elige los suministros.')
+  log(room, 'Contextualización: se presenta la situación; después cada integrante recibe su rol, se fija el objetivo y se eligen los suministros.')
   return null
 }
 
 // ---------- Contextualización ----------
 
 const enContexto = (room: RoomState) => (room.fase === 'contexto' ? null : 'Esto se decide antes del lanzamiento.')
+
+/** Antes del lanzamiento la capacidad sigue a quienes están en la sala. */
+export function ajustarPlan(room: RoomState) {
+  if (room.fase === 'contexto') room.capacidad = capacidadCarga(tripulantesPlan(room), room.trayectoria)
+}
+
+/** Cada integrante avanza por los pasos de la contextualización a su ritmo. */
+export function fijarPaso(room: RoomState, id: string, paso: number): string | null {
+  const error = enContexto(room)
+  if (error) return error
+  const j = jugador(room, id)
+  if (!j) return 'Jugador no encontrado.'
+  if (!Number.isInteger(paso) || paso < 0 || paso >= PASOS_CONTEXTO.length) return 'Paso inválido.'
+  if (paso >= 2 && !j.rol) return 'Primero elige tu rol.'
+  j.paso = paso
+  return null
+}
 
 export function ajustarCargamento(room: RoomState, cambios: Partial<Loadout>): string | null {
   const error = enContexto(room)
@@ -228,9 +234,9 @@ export function ajustarCargamento(room: RoomState, cambios: Partial<Loadout>): s
 export function aplicarPreset(room: RoomState, preset: string): string | null {
   const error = enContexto(room)
   if (error) return error
-  const margen = ({ minimo: 1, equilibrado: 1.15, seguro: 1.3 } as Record<string, number>)[preset]
-  if (!margen) return 'Alternativa inválida.'
-  room.cargamento = cargaRecomendada(room, margen)
+  const alternativa = ALTERNATIVAS.find((x) => x.id === preset)
+  if (!alternativa) return 'Alternativa inválida.'
+  room.cargamento = cargaRecomendada(room, alternativa.margen)
   room.masa = masaTotal(room.cargamento)
   return null
 }
@@ -262,7 +268,9 @@ export function marcarListo(room: RoomState, id: string, listo: boolean): string
   if (error) return error
   const j = jugador(room, id)
   if (!j) return 'Jugador no encontrado.'
+  if (listo && !j.rol) return 'Primero elige tu rol.'
   j.listo = listo
+  if (listo) j.paso = PASOS_CONTEXTO.length - 1
   return null
 }
 
@@ -271,13 +279,22 @@ export function lanzar(room: RoomState, id: string): string | null {
   if (error) return error
   const j = jugador(room, id)
   if (!j || !puedeActuar(room, j, ['comandante'])) return 'Solo el comandante autoriza el lanzamiento.'
-  if (room.masa > room.capacidad) return `La carga pesa ${room.masa.toFixed(1)} t y la nave admite ${room.capacidad.toFixed(1)} t.`
+  if (!room.jugadores.some((o) => o.rol === 'comandante')) return 'Falta un comandante: alguien tiene que asumir ese rol.'
+  const sinRol = presentes(room).filter((o) => !o.rol)
+  if (sinRol.length) return `Faltan por elegir rol: ${sinRol.map((o) => o.nombre).join(', ')}.`
+  const viajan = room.jugadores.filter((o) => o.rol)
+  if (viajan.length < 2) return 'Se necesitan al menos 2 tripulantes con rol.'
+  const capacidad = capacidadCarga(viajan.length, room.trayectoria)
+  if (room.masa > capacidad) return `La carga pesa ${room.masa.toFixed(1)} t y la nave admite ${capacidad.toFixed(1)} t.`
   const faltan = conectados(room).filter((o) => o.id !== id && !o.listo)
   if (faltan.length) return `Faltan por confirmar: ${faltan.map((o) => o.nombre).join(', ')}.`
+  // Quien se fue sin elegir rol no viaja.
+  room.jugadores = viajan
+  room.capacidad = capacidad
 
   const c = room.cargamento
   room.rec = { agua: c.agua * 100, aguaResidual: 0, o2: c.oxigeno * 100, comida: c.alimentos * 100, repuestos: c.repuestos, botiquines: c.botiquin, lioh: c.lioh, liohActivo: 0, propelente: 100 }
-  room.energia = { bateria: c.baterias * C.BATERIA_KWH, capacidad: c.baterias * C.BATERIA_KWH, generacion: 0, consumo: 0, polvo: 0, cortes: [] }
+  room.energia = { bateria: c.baterias * C.BATERIA_KWH, capacidad: c.baterias * C.BATERIA_KWH, generacion: 0, consumo: 0, usada: 0, polvo: 0, cortes: [] }
   room.blindaje = c.blindaje
   sis(room, 'huerto').instalado = c.huerto > 0
   for (const o of room.jugadores) {
@@ -445,6 +462,7 @@ export function hacerTarea(room: RoomState, id: string, tareaId: string): string
   if (j.zona !== tarea.zona) return tarea.zona === 'exterior' ? 'Hay que salir con el traje para hacerla.' : 'Se hace dentro del hábitat.'
 
   room.ensamblaje.hechas[tareaId] = id
+  j.aportes = (j.aportes ?? 0) + 1
   j.vit.fatiga = limitar(j.vit.fatiga + (tarea.zona === 'exterior' ? 6 : 2), 0, 100)
   log(room, `${j.nombre} completó: ${tarea.titulo.toLowerCase()}.`, 'ok')
   if (tareaId === 'soporte') {
@@ -718,6 +736,7 @@ export function accion(room: RoomState, id: string, tipo: string, d: Record<stri
     default:
       return 'Acción desconocida.'
   }
+  j.aportes = (j.aportes ?? 0) + 1
   refrescar(room)
   return null
 }
@@ -739,6 +758,7 @@ export function irAyudar(room: RoomState, id: string, objetivoId: string): strin
   if (!yo || !obj || !obj.ayuda) return 'Esa solicitud ya no existe.'
   if (yo.rol !== obj.ayuda.paraRol && yo.rol !== 'comandante') return 'Esa solicitud era para otro rol.'
   obj.ayuda = null
+  yo.aportes = (yo.aportes ?? 0) + 1
   log(room, `${yo.nombre} acude a ayudar a ${obj.nombre}.`, 'ok')
   return null
 }
@@ -768,6 +788,7 @@ export function elegirAlternativa(room: RoomState, id: string, emId: string, alt
     })
     return null
   }
+  j.aportes = (j.aportes ?? 0) + 1
   resolverEmergencia(room, em, altId)
   refrescar(room)
   return null
@@ -813,6 +834,7 @@ const enMarcha = (room: RoomState) => !['lobby', 'contexto', 'fin'].includes(roo
  */
 export function avanzar(room: RoomState, real: number, ultimoVisto: number) {
   const hueco = Math.max(0, real - ultimoVisto)
+  ajustarPlan(room)
   if (room.pausa || hueco > AUSENCIA_MS) room.desfase += hueco
   const hasta = real - room.desfase
   for (let guarda = 0; guarda < 400; guarda++) {

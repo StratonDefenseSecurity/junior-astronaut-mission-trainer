@@ -15,6 +15,7 @@ import { almacen } from './almacen.js'
 import { responderBot } from './bot.js'
 import {
   accion,
+  ajustarPlan,
   ajustarCargamento,
   aplicarPreset,
   avanzar,
@@ -27,6 +28,7 @@ import {
   elegirTrayectoria,
   fijarActividad,
   fijarEscala,
+  fijarPaso,
   hacerTarea,
   iniciarMision,
   irAyudar,
@@ -340,9 +342,10 @@ function unirse(codigo: string, usuario: Usuario): Promise<Respuesta> {
         j.nombre = usuario.nombre
         return null
       }
-      if (room.fase !== 'lobby') return 'Esa misión ya empezó y no formas parte de ella.'
+      if (room.fase !== 'lobby' && room.fase !== 'contexto') return 'Esa misión ya despegó y no formas parte de ella.'
       if (room.jugadores.length >= MAX_JUGADORES) return `La sala está llena (${MAX_JUGADORES} tripulantes).`
       room.jugadores.push(nuevoJugador(usuario.id, usuario.nombre))
+      ajustarPlan(room)
       log(room, `${usuario.nombre} se unió a la sala.`)
       return null
     },
@@ -358,7 +361,8 @@ function salir(codigo: string, usuario: Usuario): Promise<Respuesta> {
     const p = presenciaDe(codigo)
     p.ultimo.set(usuario.id, 0)
     p.pos.delete(usuario.id)
-    if (room.fase !== 'lobby') return ok(SIN_SALA) // en misión conserva su puesto y puede volver con el código
+    // Tras el despegue conserva su puesto y puede volver con el código; antes, deja la sala.
+    if (room.fase !== 'lobby' && room.fase !== 'contexto') return ok(SIN_SALA)
     room.jugadores = room.jugadores.filter((j) => j.id !== usuario.id)
     if (room.jugadores.length === 0) {
       salas.delete(codigo)
@@ -367,6 +371,7 @@ function salir(codigo: string, usuario: Usuario): Promise<Respuesta> {
       return ok(SIN_SALA)
     }
     if (room.hostId === usuario.id) room.hostId = room.jugadores[0].id
+    ajustarPlan(room)
     room.version += 1
     await guardar(codigo, e, JSON.stringify(room), Date.now())
     return ok(SIN_SALA)
@@ -434,6 +439,8 @@ async function despachar(c: Record<string, unknown>, autorizacion: string | unde
       return m((room) => elegirPerfil(room, yo, texto(c.perfil, 20) as PerfilId))
     case 'trayectoria':
       return m((room) => elegirTrayectoria(room, yo, texto(c.trayectoria, 20) as TrayectoriaId))
+    case 'paso':
+      return m((room) => fijarPaso(room, yo, Number(c.paso)))
     case 'listo':
       return m((room) => marcarListo(room, yo, Boolean(c.listo)))
     case 'lanzar':

@@ -1,9 +1,9 @@
-// Sala de espera: cada jugador elige su rol y personaliza su traje.
+// Sala de espera: se reúne la tripulación y cada uno personaliza su traje. Los roles no se
+// eligen aquí: se asignan en la contextualización, cuando ya conocen la situación.
 import { useRef } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import { ROLES, ROLE_BY_ID, TRAJE_COLORES, TRAJE_VISORES, type Traje } from '@shared/types'
-import { RolTag } from '../hud/comun'
+import { TRAJE_COLORES, TRAJE_VISORES, type Traje } from '@shared/types'
 import { Astronauta } from '../mundo/Astronauta'
 import { api } from '../red'
 import { useStore, useYo } from '../store'
@@ -50,26 +50,28 @@ function Muestras({ titulo, colores, actual, onElegir }: { titulo: string; color
   )
 }
 
+/** El recorrido de la misión, en el orden del esquema del equipo. */
+const RECORRIDO = [
+  { titulo: 'Contextualización', texto: 'Se les da la situación que tienen que afrontar. Después cada uno recibe su rol, se establece el objetivo y eligen los suministros.' },
+  { titulo: 'Lanzamiento', texto: 'El despegue, el combustible y la energía que se gastan, y los días y horas que llevan en el espacio.' },
+  { titulo: 'Llegar a la base y administrar recursos', texto: 'Montar la base y cuidar el agua, el oxígeno, los alimentos, la energía, los equipos y a la tripulación.' },
+  { titulo: 'Emergencias', texto: 'Llega una alerta, se identifica el problema y se decide entre varias alternativas.' },
+]
+
 export function LobbyScreen() {
   const sala = useStore((s) => s.sala)!
   const usuario = useStore((s) => s.usuario)
   const yo = useYo()
   const soyHost = sala.hostId === usuario?.id
-  const conectados = sala.jugadores.filter((j) => j.conectado)
-  const hayComandante = conectados.some((j) => j.rol === 'comandante')
-  const todosConRol = conectados.every((j) => j.rol)
-  const puedeIniciar = soyHost && hayComandante && todosConRol && conectados.length >= 2
-  const aviso = !yo?.rol
-    ? 'Elige un rol. Cada uno tiene responsabilidades y consecuencias distintas.'
-    : !hayComandante
-      ? 'Falta un comandante. Sin él nadie resuelve las decisiones en disputa.'
-      : !todosConRol
-        ? 'Esperando a que todos elijan rol.'
-        : conectados.length < 2
-          ? 'Se necesitan al menos 2 tripulantes. Comparte el código de la sala.'
-          : soyHost
-            ? 'Todo listo. Puedes iniciar la misión.'
-            : 'Todo listo. Quien creó la sala iniciará la misión.'
+  const presentes = sala.jugadores.filter((j) => j.conectado)
+  const puedeIniciar = soyHost && presentes.length >= 2
+  const anfitrion = sala.jugadores.find((j) => j.id === sala.hostId)?.nombre ?? 'Quien creó la sala'
+  const aviso =
+    presentes.length < 2
+      ? 'Se necesitan al menos 2 tripulantes. Comparte el código de la sala.'
+      : soyHost
+        ? 'Ya pueden empezar. Lo primero que verán es la situación que tienen que afrontar.'
+        : `Esperando a que ${anfitrion} empiece la misión.`
 
   return (
     <div className="center-screen alto">
@@ -85,49 +87,43 @@ export function LobbyScreen() {
 
         <div className="lobby">
           <div className="stack">
-            <h3>Elige tu rol</h3>
-            <div className="roles-grid">
-              {ROLES.map((r) => {
-                const dueno = sala.jugadores.find((j) => j.rol === r.id)
-                const esMio = dueno?.id === usuario?.id
-                const tomado = Boolean(dueno) && !esMio
-                return (
-                  <button key={r.id} className={`role-card ${tomado ? 'taken' : ''} ${esMio ? 'mine' : ''}`} disabled={tomado} onClick={() => api.elegirRol(esMio ? null : r.id)}>
-                    <div className="row">
-                      <span className="tag" style={{ color: r.color }}>{r.corto}</span>
-                      <strong className="grow">{r.nombre}</strong>
-                      {dueno && <span className="muted">{esMio ? 'tú' : dueno.nombre}</span>}
-                    </div>
-                    <span className="muted">{r.descripcion}</span>
-                    <span className="consecuencia">{r.consecuencias}</span>
-                  </button>
-                )
-              })}
+            <h3>Tripulación ({presentes.length} de 6)</h3>
+            <div className="crew-lista">
+              {sala.jugadores.map((j) => (
+                <div key={j.id} className={`crew-card ${j.id === usuario?.id ? 'me' : ''} ${j.conectado ? '' : 'offline'}`}>
+                  <div className="row" style={{ gap: 6 }}>
+                    <span className="punto" style={{ background: j.traje.color, borderColor: j.traje.acento }} />
+                    <strong className="grow">{j.nombre}{j.id === usuario?.id ? ' (tú)' : ''}</strong>
+                    <span className="mini muted">{j.id === sala.hostId ? 'anfitrión' : j.conectado ? 'en la sala' : 'ausente'}</span>
+                  </div>
+                </div>
+              ))}
             </div>
+
+            <h3>Cómo será la misión</h3>
+            <ol className="recorrido">
+              {RECORRIDO.map((r, i) => (
+                <li key={r.titulo} className={i === 0 ? 'siguiente' : ''}>
+                  <strong>{r.titulo}</strong>
+                  <span>{r.texto}</span>
+                </li>
+              ))}
+            </ol>
+            <p className="mini muted">Un asistente acompaña toda la misión: consulta el estado real y explica los riesgos de cada decisión.</p>
           </div>
 
           <div className="stack lobby-lado">
             <h3>Tu astronauta</h3>
             {yo && (
               <>
-                <VistaTraje traje={yo.traje} distintivo={yo.rol ? ROLE_BY_ID[yo.rol].color : '#94a3b8'} />
+                <VistaTraje traje={yo.traje} distintivo="#94a3b8" />
                 <Muestras titulo="Traje" colores={TRAJE_COLORES} actual={yo.traje.color} onElegir={(color) => api.elegirTraje({ color })} />
                 <Muestras titulo="Franjas" colores={TRAJE_COLORES} actual={yo.traje.acento} onElegir={(acento) => api.elegirTraje({ acento })} />
                 <Muestras titulo="Visor" colores={TRAJE_VISORES} actual={yo.traje.visor} onElegir={(visor) => api.elegirTraje({ visor })} />
               </>
             )}
-            <h3>Tripulación ({conectados.length})</h3>
-            {sala.jugadores.map((j) => (
-              <div key={j.id} className={`crew-card ${j.id === usuario?.id ? 'me' : ''} ${j.conectado ? '' : 'offline'}`}>
-                <div className="row" style={{ gap: 6 }}>
-                  <span className="punto" style={{ background: j.traje.color, borderColor: j.traje.acento }} />
-                  <strong className="grow">{j.nombre}{j.id === sala.hostId ? ' (anfitrión)' : ''}</strong>
-                  <RolTag rol={j.rol} />
-                </div>
-              </div>
-            ))}
             <div className="assistant">{aviso}</div>
-            <button className="primary" disabled={!puedeIniciar} onClick={() => api.iniciar()}>Iniciar misión</button>
+            <button className="primary" disabled={!puedeIniciar} onClick={() => api.iniciar()}>Empezar la misión</button>
           </div>
         </div>
       </div>

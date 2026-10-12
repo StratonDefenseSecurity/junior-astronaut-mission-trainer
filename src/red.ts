@@ -114,7 +114,7 @@ export const api = {
   crearSala: (modo: 'comandante' | 'votacion') => llamar('crear', { modo, codigo: undefined }),
   unirse: (codigo: string) => llamar('unirse', { codigo }),
   salir: () => llamar('salir'),
-  // Lobby y contextualización
+  // Sala y contextualización
   elegirRol: (rol: string | null) => llamar('rol', { rol }),
   elegirTraje: (traje: Partial<Traje>) => llamar('traje', { traje }),
   iniciar: () => llamar('iniciar'),
@@ -137,6 +137,7 @@ export const api = {
   },
   perfil: (perfil: string) => llamar('perfil', { perfil }),
   trayectoria: (trayectoria: string) => llamar('trayectoria', { trayectoria }),
+  paso: (paso: number) => llamar('paso', { paso }, true),
   listo: (listo: boolean) => llamar('listo', { listo }),
   lanzar: async () => {
     if (cargaTimer !== null) {

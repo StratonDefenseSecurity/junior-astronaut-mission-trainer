@@ -21,6 +21,8 @@ export const tripulacion = (room: RoomState) => room.jugadores.filter((j) => j.r
 export const conRol = (room: RoomState, rol: Role) => room.jugadores.filter((j) => j.rol === rol && j.conectado)
 export const rolPresente = (room: RoomState, rol: Role) => conRol(room, rol).length > 0
 export const conectados = (room: RoomState) => room.jugadores.filter((j) => j.conectado && j.rol)
+/** Quienes están en la sala ahora, tengan rol o no (antes del lanzamiento). */
+export const presentes = (room: RoomState) => room.jugadores.filter((j) => j.conectado)
 export const sis = (room: RoomState, id: SistemaId): SistemaEstado => room.sistemas.find((s) => s.id === id)!
 
 /**

@@ -16,8 +16,10 @@ async function llamar(op, datos = {}, token) {
   return r.json().catch(() => ({}))
 }
 const esperar = (ms) => new Promise((r) => setTimeout(r, ms))
-const A = (await llamar('ingresar', { usuario: uA, clave })).token
-const B = (await llamar('ingresar', { usuario: uB, clave })).token
+const sesionA = await llamar('ingresar', { usuario: uA, clave })
+const sesionB = await llamar('ingresar', { usuario: uB, clave })
+const A = sesionA.token
+const B = sesionB.token
 if (!A || !B) {
   console.error('No se pudo ingresar con esas cuentas.')
   process.exit(1)
@@ -48,6 +50,25 @@ for (let i = 0; i < 900; i++) {
     await accion(B, 'emergencia', { id: em.id, altId: alt })
   }
   for (const p of sala.propuestas.filter((x) => x.estado === 'pendiente')) await accion(A, 'votar', { id: p.id, aprueba: true })
+  if (sala.fase === 'lobby') await accion(A, 'iniciar')
+  if (sala.fase === 'contexto') {
+    // Contextualización: situación, roles, objetivo y suministros, en ese orden.
+    const de = (sesion) => sala.jugadores.find((j) => j.id === sesion.usuario.id)
+    if (!de(sesionA)?.rol) {
+      await accion(A, 'paso', { paso: 1 })
+      await accion(A, 'rol', { rol: 'comandante' })
+    }
+    if (!de(sesionB)?.rol) {
+      await accion(B, 'paso', { paso: 1 })
+      const libre = ['sistemas', 'cientifico', 'piloto', 'logistica', 'medico'].find((r) => !sala.jugadores.some((j) => j.rol === r))
+      await accion(B, 'rol', { rol: libre })
+    }
+    await accion(A, 'paso', { paso: 3 })
+    await accion(A, 'preset', { preset: 'equilibrado' })
+    if (sala.masa > sala.capacidad) await accion(A, 'cargamento', { cambios: { blindaje: 0, huerto: 0 } })
+    await accion(B, 'listo', { listo: true })
+    await accion(A, 'lanzar')
+  }
   if (sala.fase === 'transito') {
     if (sala.escalaDeseada !== 86400) await accion(A, 'escala', { valor: 86400 })
     for (const s of sala.sistemas) if (s.instalado && s.integridad < 50 && sala.rec.repuestos >= 2) await accion(A, 'accion', { id: 'reparar', payload: { sistema: s.id } })

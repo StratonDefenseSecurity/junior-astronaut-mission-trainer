@@ -37,8 +37,13 @@ function consejo(sala: RoomState, yo: Player): string {
 
 export function Mision({ sala, yo }: { sala: RoomState; yo: Player }) {
   const destacadas = estacionesDestacadas(sala, yo)
+  const abrir = useStore((s) => s.abrirEstacion)
+  const cinematica = sala.fase === 'lanzamiento' || (sala.fase === 'llegada' && sala.subfase === 'descenso')
   return (
     <div className="stack">
+      {!cinematica && !sala.resultado && (
+        <button className="primary" onClick={() => abrir('principal')}>Página principal (M)</button>
+      )}
       <div className="assistant">
         <strong>{yo.rol ? ROLE_BY_ID[yo.rol].nombre : 'Tripulante'}:</strong> {consejo(sala, yo)}
       </div>
@@ -81,7 +86,7 @@ export function Mision({ sala, yo }: { sala: RoomState; yo: Player }) {
       <div>
         <h3>Cómo se juega</h3>
         <p className="mini muted">
-          Muévete con W A S D, corre con Mayús y arrastra para girar la cámara. Acércate a una estación y pulsa E para usarla. H oculta los paneles.
+          Muévete con W A S D, corre con Mayús y arrastra para girar la cámara. Acércate a una estación y pulsa E para usarla. M abre la página principal y H oculta los paneles.
         </p>
       </div>
     </div>

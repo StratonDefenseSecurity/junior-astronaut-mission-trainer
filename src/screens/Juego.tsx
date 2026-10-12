@@ -17,6 +17,11 @@ export function JuegoScreen() {
 
   // Al cambiar de escena se cierra el panel que estuviera abierto.
   useEffect(() => abrir(null), [cinematica, yo?.zona, abrir])
+  // Al llegar a la base se presenta la página principal, con las opciones de gestión.
+  const enBase = sala.fase === 'ensamblaje' && !cinematica
+  useEffect(() => {
+    if (enBase) abrir('principal')
+  }, [enBase, abrir])
 
   if (!yo) {
     return (

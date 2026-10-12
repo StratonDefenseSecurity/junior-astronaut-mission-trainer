@@ -52,6 +52,7 @@ export function useTeclado() {
         if (s.estacion) s.abrirEstacion(null)
         else if (s.cerca) s.abrirEstacion(s.cerca)
       } else if (e.code === 'Escape') s.abrirEstacion(null)
+      else if (e.code === 'KeyM' && !e.repeat) s.abrirEstacion(s.estacion === 'principal' ? null : 'principal')
       else if (e.code === 'KeyH' && !e.repeat) s.alternarPaneles()
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault()
     }

@@ -1,7 +1,8 @@
 // Simula una misión completa sin navegador, con una tripulación que juega "razonablemente".
 //   npx tsx scripts/simular.ts [tripulantes=6] [preset=equilibrado] [politica=buena|pasiva] [trayectoria] [perfil]
 // Sirve para comprobar la lógica y el equilibrio del juego.
-import { C } from '../shared/ciencia.js'
+import { C, REMS_RESUMEN } from '../shared/ciencia.js'
+import { CLIMA_MARTE } from '../server/datos/climaMarte.js'
 import { TAREAS_ENSAMBLAJE, formatoMET, masaTotal, type Role, type RoomState } from '../shared/types.js'
 import { tripulacion } from '../server/base.js'
 import {
@@ -15,6 +16,7 @@ import {
   elegirRol,
   elegirTrayectoria,
   fijarEscala,
+  fijarPaso,
   hacerTarea,
   iniciarMision,
   lanzar,
@@ -39,15 +41,25 @@ const exigir = (cond: unknown, msg: string) => {
 }
 const sinError = (e: string | null, msg: string) => exigir(e === null, `${msg}: ${e}`)
 
+// El resumen del clima que se muestra en la contextualización tiene que salir de los datos.
+{
+  const soles = CLIMA_MARTE.soles as number[][]
+  const r = REMS_RESUMEN
+  exigir(
+    soles.length === r.soles &&
+      Math.min(...soles.map((x) => x[0])) === r.tMin &&
+      Math.max(...soles.map((x) => x[1])) === r.tMax &&
+      Math.min(...soles.map((x) => x[2])) === r.pMin &&
+      Math.max(...soles.map((x) => x[2])) === r.pMax,
+    'REMS_RESUMEN no coincide con los datos de Curiosity: actualiza shared/ciencia.ts',
+  )
+}
+
 const room: RoomState = crearSala('SIMULA', 'u0', 'comandante')
 const orden: Role[] = ['comandante', 'sistemas', 'medico', 'logistica', 'cientifico', 'piloto']
 const nombres = ['Luna', 'Marco', 'Sofía', 'Diego', 'Ana', 'Raúl']
-for (let i = 0; i < N; i++) {
-  room.jugadores.push(nuevoJugador(`u${i}`, nombres[i]))
-  sinError(elegirRol(room, `u${i}`, orden[i]), 'rol')
-}
+for (let i = 0; i < N; i++) room.jugadores.push(nuevoJugador(`u${i}`, nombres[i]))
 const de = (rol: Role) => room.jugadores.find((j) => j.rol === rol) ?? room.jugadores[0]
-const cmd = de('comandante')
 
 let real = 1_800_000_000_000
 let visto = real
@@ -58,7 +70,19 @@ const tic = () => {
 }
 
 tic()
+// El orden del esquema: primero la situación, después los roles, el objetivo y los suministros.
+exigir(elegirRol(room, 'u0', 'comandante') !== null, 'en la sala de espera aún no hay roles')
 sinError(iniciarMision(room, 'u0'), 'iniciar')
+exigir(room.jugadores.every((j) => j.paso === 0 && !j.rol), 'la contextualización empieza por la situación, sin roles')
+exigir(fijarPaso(room, 'u1', 2) !== null, 'no se pasa al objetivo sin rol')
+exigir(marcarListo(room, 'u1', true) !== null, 'no se marca listo sin rol')
+for (let i = 0; i < N; i++) {
+  sinError(fijarPaso(room, `u${i}`, 1), 'paso a roles')
+  sinError(elegirRol(room, `u${i}`, orden[i]), 'rol')
+}
+exigir(elegirRol(room, 'u1', 'comandante') !== null, 'un rol no se repite')
+const cmd = de('comandante')
+for (const j of room.jugadores) sinError(fijarPaso(room, j.id, 2), 'paso a objetivo')
 sinError(elegirPerfil(room, cmd.id, PERFIL as never), 'perfil')
 sinError(elegirTrayectoria(room, cmd.id, TRAYECTORIA as never), 'trayectoria')
 sinError(aplicarPreset(room, PRESET), 'preset')

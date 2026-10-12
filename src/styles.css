@@ -118,6 +118,34 @@ button.opcion.activa { border-color: var(--ok); background: rgba(95, 208, 138, 0
 .supply .val { font-family: var(--mono); text-align: right; font-size: 13px; }
 .listos { display: flex; flex-wrap: wrap; gap: 5px; }
 
+/* contextualización por pasos */
+.contexto .entrada { font-size: 15.5px; line-height: 1.5; margin: 0; }
+.pasos { list-style: none; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 0; padding: 0; }
+button.paso { width: 100%; text-align: left; background: rgba(255, 255, 255, 0.04); border-color: var(--border); color: var(--muted); padding: 8px 10px; }
+button.paso b { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: rgba(255, 255, 255, 0.1); font-family: var(--mono); font-size: 11px; margin-right: 6px; }
+button.paso.actual { border-color: var(--accent); color: var(--text); background: rgba(79, 195, 247, 0.14); opacity: 1; }
+button.paso.actual b { background: var(--accent); color: #04121c; }
+button.paso.hecho { color: var(--text); }
+button.paso.hecho b { background: rgba(95, 208, 138, 0.3); }
+.situacion { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; }
+.hecho { border: 1px solid var(--border); border-radius: 12px; padding: 11px 13px; background: rgba(255, 255, 255, 0.03); }
+.hecho > span { display: block; font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.hecho > b { display: block; font-family: var(--mono); font-size: 17px; color: var(--accent); margin: 3px 0 4px; }
+.hecho > p { margin: 0; font-size: 12.5px; line-height: 1.42; }
+.integrantes { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 10px; border-top: 1px solid var(--border); }
+.integrantes .tag.apagado { opacity: 0.5; }
+.objetivo p { font-size: 15px; line-height: 1.45; margin: 4px 0; }
+details.ajuste { border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; }
+details.ajuste summary { cursor: pointer; font-size: 13px; color: var(--accent); }
+details.ajuste[open] summary { margin-bottom: 8px; }
+.contexto .lobby-lado .vista-traje { height: 190px; width: 100%; }
+i.bad { color: var(--bad); font-style: normal; font-size: 11.5px; }
+.recorrido { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 7px; }
+.recorrido li strong { display: block; font-size: 13.5px; }
+.recorrido li span { color: var(--muted); font-size: 12.5px; line-height: 1.4; }
+.recorrido li.siguiente strong { color: var(--accent); }
+.crew-lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px; }
+
 /* ---------- juego ---------- */
 .juego { position: relative; height: 100%; width: 100%; overflow: hidden; }
 .mundo { position: absolute; inset: 0; z-index: 0; touch-action: none; cursor: grab; }
@@ -198,6 +226,14 @@ button.opcion.activa { border-color: var(--ok); background: rgba(95, 208, 138, 0
 .telemetria .fila { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 8px; }
 .telemetria .fila span { display: block; font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
 .telemetria .fila b { font-family: var(--mono); font-size: 18px; }
+.telemetria .fila.gasto { grid-template-columns: repeat(3, 1fr); padding-top: 8px; border-top: 1px solid var(--border); }
+.telemetria .fila.gasto b { font-size: 15px; }
+.opciones-base { display: flex; flex-direction: column; gap: 7px; }
+.opcion-base { border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; background: rgba(255, 255, 255, 0.03); }
+.opcion-base.mia { border-color: rgba(245, 185, 66, 0.6); }
+.opcion-base strong { font-size: 13px; }
+.opcion-base p { margin: 3px 0; }
+.crew-card .progreso { margin-top: 3px; }
 
 .interaccion { position: absolute; left: 50%; bottom: 132px; transform: translateX(-50%); z-index: 8; background: rgba(8, 12, 22, 0.9); border-color: var(--accent); font-size: 14px; padding: 8px 16px; border-radius: 999px; }
 .palanca { position: absolute; left: 24px; bottom: 140px; width: 120px; height: 120px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.35); background: rgba(8, 12, 22, 0.45); z-index: 9; touch-action: none; display: grid; place-items: center; }
@@ -243,6 +279,8 @@ button.opcion.activa { border-color: var(--ok); background: rgba(95, 208, 138, 0
 @media (max-width: 900px) {
   .lobby, .contexto-rejilla { grid-template-columns: 1fr; }
   .opciones.fila, .suministros { grid-template-columns: 1fr; }
+  .situacion { grid-template-columns: 1fr; }
+  .pasos { grid-template-columns: 1fr 1fr; }
   .hud { grid-template-columns: 1fr; grid-template-rows: auto 1fr auto; }
   .der { display: none; }
   .izq { grid-column: 1; max-height: 38vh; overflow: auto; align-self: end; }

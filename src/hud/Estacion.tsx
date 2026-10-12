@@ -1,13 +1,17 @@
 // Panel de cada estación: una sub-interfaz distinta para cada cosa que hay que administrar
-// (aire, energía, suministros, salud, ciencia, equipos). Se abre con E al acercarse.
-import type { ReactNode } from 'react'
+// (aire, energía, suministros, salud, ciencia, equipos). Se abre con E al acercarse, o desde
+// la página principal, que reúne las opciones del esquema del equipo.
+import { createContext, useContext, type ReactNode } from 'react'
 import { C } from '@shared/ciencia'
 import {
+  GESTION_BASE,
+  PASOS_ENSAMBLAJE,
   ROLE_BY_ID,
   SISTEMA_BY_ID,
   SITES,
   TAREAS_ENSAMBLAJE,
   nombreSistema,
+  type OpcionBase,
   type Player,
   type Role,
   type RoomState,
@@ -16,12 +20,19 @@ import {
 import { ESTACION_BY_ID, puede } from '../mundo/mapa'
 import { api } from '../red'
 import { useStore } from '../store'
-import { Barra, Dato, RolTag, diasRestantes, diasTexto, enMarte, mmHg, nivel, pctTraje, roles } from './comun'
+import { Barra, Dato, RolTag, diasRestantes, diasTexto, enMarte, energiaUsada, mmHg, nivel, pctTraje, roles, tiempoEnEspacio, type Nivel } from './comun'
 
 interface P {
   sala: RoomState
   yo: Player
 }
+
+/**
+ * El panel se abrió desde la página principal, sin estar junto a la estación: se puede
+ * consultar y decidir, pero los trabajos manuales piden ir hasta allí.
+ */
+const Remoto = createContext(false)
+const IR_HASTA_AQUI = 'Hay que ir hasta la estación para hacerlo.'
 
 const hayPropuesta = (sala: RoomState, tipo: string, filtro?: (payload: Record<string, unknown>) => boolean) =>
   sala.propuestas.some((p) => p.estado === 'pendiente' && p.tipo === tipo && (!filtro || filtro(p.payload)))
@@ -47,6 +58,7 @@ function Tarea({ sala, yo, estacion }: P & { estacion: string }) {
   if (!tarea) return null
   const hecha = sala.ensamblaje.hechas[tarea.id]
   const mia = puede(sala, yo, tarea.roles)
+  const remoto = useContext(Remoto)
   return (
     <div className={`tarea ${hecha ? 'hecha' : ''}`}>
       <strong>Montaje de la base · paso {tarea.paso}</strong>
@@ -54,7 +66,7 @@ function Tarea({ sala, yo, estacion }: P & { estacion: string }) {
       {hecha ? (
         <span className="mini ok">Hecha por {sala.jugadores.find((j) => j.id === hecha)?.nombre ?? 'la tripulación'}</span>
       ) : mia ? (
-        <button className="primary" onClick={() => api.tarea(tarea.id)}>Hacerlo ahora</button>
+        <button className="primary" disabled={remoto} title={remoto ? IR_HASTA_AQUI : undefined} onClick={() => api.tarea(tarea.id)}>Hacerlo ahora</button>
       ) : (
         <Reservado a={tarea.roles} />
       )}
@@ -64,6 +76,7 @@ function Tarea({ sala, yo, estacion }: P & { estacion: string }) {
 
 /** Estado de un equipo, con sus botones de reparar y de encender o apagar. */
 function Equipo({ sala, yo, id, aqui = true }: P & { id: SistemaId; aqui?: boolean }) {
+  const remoto = useContext(Remoto)
   const s = sala.sistemas.find((x) => x.id === id)!
   if (!s.instalado) return null
   const info = SISTEMA_BY_ID[id]
@@ -85,7 +98,9 @@ function Equipo({ sala, yo, id, aqui = true }: P & { id: SistemaId; aqui?: boole
         <span className="mono mini">{Math.round(s.integridad)}%</span>
       </div>
       <div className="row" style={{ gap: 6, marginTop: 6 }}>
-        {aqui ? (
+        {remoto ? (
+          <span className="mini muted">Se repara yendo hasta el equipo.</span>
+        ) : aqui ? (
           puede(sala, yo, ['sistemas']) ? (
             <button className="small" disabled={s.integridad >= 95 || sala.rec.repuestos < kits} onClick={() => api.accion('reparar', { sistema: id })}>
               Reparar ({kits} kit{kits > 1 ? 's' : ''})
@@ -146,14 +161,16 @@ function Puente({ sala, yo }: P) {
       )}
       <Seccion titulo="Navegación">
         {enMarte(sala) ? (
-          <p className="mini">La nave está en la superficie. Sol {sala.ambiente.sol} de {sala.mision.solesObjetivo}.</p>
+          <p className="mini">La nave está en la superficie. Sol {sala.ambiente.sol} de {sala.mision.solesObjetivo}. El viaje duró {tiempoEnEspacio(sala)} y la misión lleva {energiaUsada(sala)} de energía usados.</p>
         ) : (
           <div className="rejilla">
             <Dato etiqueta="Viaje" valor={`${Math.round(v.progreso * 100)}%`} barra={{ valor: v.progreso * 100 }} />
             <Dato etiqueta="Velocidad" valor={`${v.velocidad} km/s`} />
             <Dato etiqueta="Distancia al Sol" valor={`${v.distSol} UA`} />
             <Dato etiqueta="Retardo de señal" valor={`${Math.floor(v.retardo / 60)} min ${v.retardo % 60} s`} />
-            <Dato etiqueta="Propelente" valor={`${Math.round(sala.rec.propelente)}%`} tono={nivel(sala.rec.propelente < 10, sala.rec.propelente < 30)} />
+            <Dato etiqueta="Combustible" valor={`${Math.round(sala.rec.propelente)}%`} tono={nivel(sala.rec.propelente < 10, sala.rec.propelente < 30)} />
+            <Dato etiqueta="En el espacio" valor={tiempoEnEspacio(sala)} />
+            <Dato etiqueta="Energía usada" valor={energiaUsada(sala)} />
             <Dato etiqueta="Luz solar" valor={`${sala.ambiente.flujoSolar} W/m²`} />
           </div>
         )}
@@ -167,6 +184,7 @@ function Puente({ sala, yo }: P) {
 }
 
 function SoporteVital({ sala, yo }: P) {
+  const remoto = useContext(Remoto)
   const c = sala.cabina
   const co2 = mmHg(c.ppCO2)
   return (
@@ -182,7 +200,7 @@ function SoporteVital({ sala, yo }: P) {
         {c.fuga > 0 && (
           <div className="help">
             Hay una fuga: se pierden {c.fuga} kg de aire por hora.{' '}
-            {puede(sala, yo, ['sistemas']) ? <button className="small" onClick={() => api.accion('sellar')}>Sellar (1 kit)</button> : <Reservado a={['sistemas']} />}
+            {puede(sala, yo, ['sistemas']) ? <button className="small" disabled={remoto} title={remoto ? IR_HASTA_AQUI : undefined} onClick={() => api.accion('sellar')}>Sellar (1 kit)</button> : <Reservado a={['sistemas']} />}
           </div>
         )}
       </Seccion>
@@ -195,7 +213,7 @@ function SoporteVital({ sala, yo }: P) {
       <Seccion titulo="Cartuchos de hidróxido de litio">
         <p className="mini">Quedan {sala.rec.lioh}. Los instalados pueden absorber aún {sala.rec.liohActivo.toFixed(1)} kg de CO₂. Funcionan sin electricidad.</p>
         {puede(sala, yo, ['logistica', 'sistemas']) ? (
-          <button className="small" disabled={sala.rec.lioh < 1} onClick={() => api.accion('lioh')}>Instalar un cartucho ({C.LIOH_KG_CO2} kg de CO₂)</button>
+          <button className="small" disabled={remoto || sala.rec.lioh < 1} title={remoto ? IR_HASTA_AQUI : undefined} onClick={() => api.accion('lioh')}>Instalar un cartucho ({C.LIOH_KG_CO2} kg de CO₂)</button>
         ) : (
           <Reservado a={['logistica', 'sistemas']} />
         )}
@@ -216,6 +234,7 @@ function Energia({ sala, yo }: P) {
           <Dato etiqueta="Generación" valor={`${e.generacion.toFixed(1)} kW`} />
           <Dato etiqueta="Consumo" valor={`${e.consumo.toFixed(1)} kW`} tono={nivel(false, e.consumo > e.generacion)} />
           <Dato etiqueta="Baterías" valor={`${Math.round(e.bateria)} / ${e.capacidad} kWh`} tono={nivel(pct < 15, pct < 40)} barra={{ valor: pct }} />
+          <Dato etiqueta="Usada en la misión" valor={energiaUsada(sala)} nota="Electricidad consumida desde el despegue" />
         </div>
         <p className="mini muted">
           {horas !== null ? `A este ritmo las baterías duran ${horas.toFixed(1)} horas. ` : 'Las baterías se están cargando o están llenas. '}
@@ -312,6 +331,7 @@ function Enfermeria({ sala, yo }: P) {
   const soyMedico = puede(sala, yo, ['medico'])
   const manda = puede(sala, yo, ['medico', 'comandante'])
   const enRefugio = sala.refugioHasta > sala.t
+  const remoto = useContext(Remoto)
   return (
     <>
       <Seccion titulo="Signos de la tripulación">
@@ -334,7 +354,7 @@ function Enfermeria({ sala, yo }: P) {
                   <td className={`mono ${nivel(v.dosis > C.LIMITE_CARRERA_MSV, v.dosis > 450)}`}>{Math.round(v.dosis)}</td>
                   <td>
                     {soyMedico && (
-                      <button className="small" disabled={sala.rec.botiquines < 1 || (!j.dolencia && j.incapacitado <= 0 && v.salud > 90)} onClick={() => api.accion('tratar', { jugadorId: j.id })}>
+                      <button className="small" disabled={remoto || sala.rec.botiquines < 1 || (!j.dolencia && j.incapacitado <= 0 && v.salud > 90)} title={remoto ? IR_HASTA_AQUI : undefined} onClick={() => api.accion('tratar', { jugadorId: j.id })}>
                         Tratar
                       </button>
                     )}
@@ -386,6 +406,7 @@ function Enfermeria({ sala, yo }: P) {
 function Laboratorio({ sala, yo }: P) {
   const h = sala.huerto
   const cie = puede(sala, yo, ['cientifico'])
+  const remoto = useContext(Remoto)
   return (
     <>
       <Seccion titulo="Huerto artificial">
@@ -403,13 +424,13 @@ function Laboratorio({ sala, yo }: P) {
               <div className="grow"><Barra valor={h.progreso} tono="azul" /></div>
               <span className="mono mini">{h.progreso}%</span>
             </div>
-            {cie ? <button className="small" style={{ marginTop: 6 }} disabled={sala.rec.agua < 8} onClick={() => api.accion('huerto')}>Trabajar en el huerto (5 kg de agua)</button> : <Reservado a={['cientifico']} />}
+            {cie ? <button className="small" style={{ marginTop: 6 }} disabled={remoto || sala.rec.agua < 8} title={remoto ? IR_HASTA_AQUI : undefined} onClick={() => api.accion('huerto')}>Trabajar en el huerto (5 kg de agua)</button> : <Reservado a={['cientifico']} />}
           </>
         )}
       </Seccion>
       <Seccion titulo="Muestras del terreno">
         <p className="mini">Analizadas: {sala.mision.muestrasAnalizadas} de {sala.mision.muestrasObjetivo}. Llevas {yo.muestras} sin analizar.</p>
-        <button className="small primary" disabled={yo.muestras < 1} onClick={() => api.accion('analizar')}>
+        <button className="small primary" disabled={remoto || yo.muestras < 1} title={remoto ? IR_HASTA_AQUI : undefined} onClick={() => api.accion('analizar')}>
           Analizar mis muestras ({(1.5 * Math.max(1, yo.muestras)).toFixed(1)} kWh)
         </button>
         <p className="mini muted">Las muestras se recogen fuera, en los puntos marcados, cuando la base ya está operativa.</p>
@@ -441,6 +462,7 @@ function Literas({ yo }: P) {
 function Refugio({ sala, yo }: P) {
   const ts = sala.ambiente.tormentaSolar
   const obligado = sala.refugioHasta > sala.t
+  const remoto = useContext(Remoto)
   return (
     <Seccion titulo="Refugio contra la radiación">
       <p className="mini">
@@ -451,7 +473,7 @@ function Refugio({ sala, yo }: P) {
       {obligado && yo.enRefugio ? (
         <span className="mini warn">Orden de refugio en curso. El médico o el comandante pueden levantarla.</span>
       ) : (
-        <button className={yo.enRefugio ? 'small danger' : 'small primary'} onClick={() => api.refugio(!yo.enRefugio)}>{yo.enRefugio ? 'Salir del refugio' : 'Entrar al refugio'}</button>
+        <button className={yo.enRefugio ? 'small danger' : 'small primary'} disabled={remoto} title={remoto ? IR_HASTA_AQUI : undefined} onClick={() => api.refugio(!yo.enRefugio)}>{yo.enRefugio ? 'Salir del refugio' : 'Entrar al refugio'}</button>
       )}
     </Seccion>
   )
@@ -617,23 +639,149 @@ function contenido(id: string, p: P): ReactNode {
   }
 }
 
-/** Panel de la estación abierta. */
+// ---------- Página principal ----------
+
+const RACION = { normal: 'completa', ahorro: 'de ahorro', estricto: 'estricta' } as const
+const PROTEGE = { vida: 'el aire', calor: 'el calor', ciencia: 'el huerto' } as const
+
+/** Cómo va cada opción de la página principal, en una línea. */
+function resumenOpcion(sala: RoomState, id: OpcionBase['id']): { texto: string; tono: Nivel } {
+  const a = sala.autonomia
+  const e = sala.energia
+  const faltan = diasRestantes(sala)
+  const instalados = sala.sistemas.filter((s) => s.instalado)
+  switch (id) {
+    case 'controlar': {
+      const bat = e.capacidad ? Math.round((e.bateria / e.capacidad) * 100) : 0
+      const minimo = Math.min(a.agua, a.aire, a.comida)
+      return {
+        texto: `Agua ${diasTexto(a.agua)}, aire ${diasTexto(a.aire)}, comida ${diasTexto(a.comida)}. Baterías al ${bat}%. Faltan ${Math.round(faltan)} días de misión.`,
+        tono: nivel(minimo < faltan * 0.9 || bat < 15, minimo < faltan * 1.15 || bat < 40),
+      }
+    }
+    case 'distribuir':
+      return {
+        texto: `Ración de comida ${RACION[sala.ajustes.racionComida]}, agua en uso ${sala.ajustes.racionAgua === 'normal' ? 'normal' : 'de ahorro'}. Si falta energía se protege ${PROTEGE[sala.ajustes.prioridad]}.`,
+        tono: nivel(false, sala.ajustes.racionComida !== 'normal' || sala.ajustes.racionAgua !== 'normal'),
+      }
+    case 'produccion': {
+      const equipos = (['oga', 'cdra', 'wrs'] as SistemaId[]).map((x) => sala.sistemas.find((s) => s.id === x)!)
+      const parados = equipos.filter((s) => !s.operativo)
+      return {
+        texto: parados.length ? `Parado: ${parados.map((s) => nombreSistema(s.id)).join(', ')}.` : 'El generador de oxígeno, el depurador de CO₂ y el reciclador de agua están en marcha.',
+        tono: nivel(parados.length > 1, parados.length === 1),
+      }
+    }
+    case 'equipos': {
+      const peor = [...instalados].sort((x, y) => x.integridad - y.integridad)[0]
+      return {
+        texto: `El más gastado: ${nombreSistema(peor.id)}, al ${Math.round(peor.integridad)}%. Quedan ${sala.rec.repuestos} kits de repuestos.`,
+        tono: nivel(peor.integridad < 30, peor.integridad < 55),
+      }
+    }
+    case 'radiacion': {
+      const dosis = Math.max(0, ...sala.jugadores.filter((j) => j.rol).map((j) => j.vit.dosis))
+      const ts = sala.ambiente.tormentaSolar
+      return {
+        texto: `Dosis más alta: ${Math.round(dosis)} de ${C.LIMITE_CARRERA_MSV} mSv. ${ts ? 'Hay una tormenta solar activa.' : 'Sin tormenta solar.'}${sala.refugioHasta > sala.t ? ' Orden de refugio en curso.' : ''}`,
+        tono: nivel(dosis > C.LIMITE_CARRERA_MSV, Boolean(ts) || dosis > 450),
+      }
+    }
+    case 'huerto': {
+      const h = sala.huerto
+      return {
+        texto: sala.cargamento.huerto < 1 ? 'No trajeron el kit de huerto.' : h.establecido ? `Establecido. Cosechas: ${h.cosechas}.` : `Montaje al ${h.progreso}%.`,
+        tono: nivel(false, sala.cargamento.huerto > 0 && !h.establecido),
+      }
+    }
+  }
+}
+
+/** La página principal: las opciones de gestión, cada una con su sub-interfaz. */
+function Principal({ sala, yo }: P) {
+  const abrir = useStore((s) => s.abrirEstacion)
+  const cerca = useStore((s) => s.cerca)
+  const setPestana = useStore((s) => s.setPestana)
+  const pendientes = sala.propuestas.filter((p) => p.estado === 'pendiente').length
+  const decideComandante = sala.modoDecision === 'comandante'
+  const paso = PASOS_ENSAMBLAJE.find((p) => p.paso === sala.ensamblaje.paso)
+  const tareas = TAREAS_ENSAMBLAJE.filter((t) => t.paso === sala.ensamblaje.paso)
+  return (
+    <>
+      {sala.fase === 'ensamblaje' && paso && (
+        <div className="tarea">
+          <strong>Misión de ensamblaje de la base · paso {paso.paso} de 3</strong>
+          <p>{paso.titulo}. <span className="muted">{roles(paso.roles)}</span></p>
+          {tareas.map((t) => (
+            <div key={t.id} className={`mini ${sala.ensamblaje.hechas[t.id] ? 'ok' : ''}`}>
+              {sala.ensamblaje.hechas[t.id] ? '✓' : '○'} {t.titulo} · {ESTACION_BY_ID[t.estacion].nombre} ({t.zona === 'exterior' ? 'fuera, con el traje' : 'dentro'})
+            </div>
+          ))}
+        </div>
+      )}
+      {sala.fase === 'base' && <div className="help ok">Base activada. Hay que mantenerla en marcha hasta completar los {sala.mision.solesObjetivo} soles.</div>}
+      {pendientes > 0 && (
+        <div className="help">
+          {decideComandante
+            ? yo.rol === 'comandante'
+              ? `Tienes ${pendientes} decisión(es) de otros integrantes por aprobar o rechazar, velando por el bienestar de la mayoría.`
+              : `Hay ${pendientes} decisión(es) esperando al comandante.`
+            : `Hay ${pendientes} decisión(es) en votación.`}{' '}
+          <button className="small" onClick={() => setPestana('propuestas')}>Ver propuestas</button>
+        </div>
+      )}
+      <Seccion titulo="Administrar los recursos">
+        <div className="opciones-base">
+          {GESTION_BASE.map((o) => {
+            const r = resumenOpcion(sala, o.id)
+            const mia = yo.rol !== null && o.roles.includes(yo.rol)
+            return (
+              <div key={o.id} className={`opcion-base ${mia ? 'mia' : ''}`}>
+                <div className="row" style={{ gap: 6 }}>
+                  <strong className="grow">{o.titulo}</strong>
+                  <span className="mini muted">{roles(o.roles)}</span>
+                </div>
+                <p className="mini muted">{o.descripcion}{mia ? ' Te corresponde a ti.' : ''}</p>
+                <p className={`mini ${r.tono}`}>{r.texto}</p>
+                <div className="row" style={{ gap: 5 }}>
+                  {o.estaciones.map((id) => (
+                    <button key={id} className="small" onClick={() => abrir(id, cerca !== id)}>
+                      {ESTACION_BY_ID[id].nombre}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </Seccion>
+    </>
+  )
+}
+
+/** Panel de la estación abierta, o la página principal. */
 export function PanelEstacion({ sala, yo }: P) {
   const id = useStore((s) => s.estacion)
+  const remoto = useStore((s) => s.remoto)
   const abrir = useStore((s) => s.abrirEstacion)
   if (!id) return null
+  const principal = id === 'principal'
   const e = ESTACION_BY_ID[id]
-  if (!e) return null
+  if (!e && !principal) return null
   const impedido = yo.incapacitado > 0 ? 'Estás fuera de servicio.' : yo.enRefugio && id !== 'refugio' ? 'Estás en el refugio: no puedes trabajar.' : null
   return (
     <div className="panel estacion">
       <div className="row cabecera">
-        <h2 className="grow">{e.nombre}</h2>
+        {remoto && <button className="small plano" onClick={() => abrir('principal')}>‹ Página principal</button>}
+        <h2 className="grow">{principal ? `Página principal · ${enMarte(sala) ? 'base' : 'nave'}` : e.nombre}</h2>
         <span className="mini muted">{roles(sala.jugadores.filter((j) => j.rol === yo.rol).map((j) => j.rol!))}</span>
-        <button className="small" onClick={() => abrir(null)}>Cerrar (E)</button>
+        <button className="small" onClick={() => abrir(null)}>Cerrar{principal ? ' (M)' : ' (E)'}</button>
       </div>
-      {impedido && <div className="help">{impedido}</div>}
-      <div className="cuerpo">{contenido(id, { sala, yo })}</div>
+      {impedido && !principal && <div className="help">{impedido}</div>}
+      {remoto && !principal && <div className="help ok">La ves desde la página principal. Aquí puedes consultar y proponer decisiones; para reparar, instalar, tratar o cultivar hay que ir hasta {e.nombre}.</div>}
+      <div className="cuerpo">
+        <Remoto.Provider value={remoto && !principal}>{principal ? <Principal sala={sala} yo={yo} /> : contenido(id, { sala, yo })}</Remoto.Provider>
+      </div>
     </div>
   )
 }

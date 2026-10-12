@@ -62,7 +62,7 @@ function entrarTransito(room: RoomState) {
   room.tFase = room.t
   room.escalaDeseada = 3600
   room.rec.propelente = 100
-  log(room, `Órbita alcanzada y motor encendido rumbo a Marte. Quedan ${room.mision.diasTransito} días de viaje.`, 'ok')
+  log(room, `Órbita alcanzada en 8 minutos y medio, con ${(room.energia.usada ?? 0).toFixed(1)} kWh de energía usados. Motor encendido rumbo a Marte: quedan ${room.mision.diasTransito} días de viaje.`, 'ok')
 }
 
 function entrarOrbita(room: RoomState) {
@@ -70,7 +70,7 @@ function entrarOrbita(room: RoomState) {
   room.subfase = 'orbita'
   room.tFase = room.t
   room.escalaDeseada = 60
-  log(room, `Órbita de Marte tras ${room.mision.diasTransito} días. Hay que elegir dónde aterrizar.`, 'ok')
+  log(room, `Órbita de Marte tras ${room.mision.diasTransito} días en el espacio. Queda un ${Math.round(room.rec.propelente)}% de combustible y se usaron ${Math.round(room.energia.usada ?? 0)} kWh de energía. Hay que elegir dónde aterrizar.`, 'ok')
 }
 
 /** Empieza la entrada en la atmósfera hacia el sitio ya elegido. */
@@ -206,6 +206,7 @@ function energiaYCalor(room: RoomState, dt: number, crew: Player[], superficie: 
   e.bateria = limitar(e.bateria + ((generacion - consumo) * dt) / 3600, 0, e.capacidad)
   e.generacion = generacion
   e.consumo = consumo
+  e.usada = (e.usada ?? 0) + (consumo * dt) / 3600
   e.cortes = cortes
 
   const termico = sis(room, 'termico').operativo
@@ -550,6 +551,7 @@ function redondear(room: RoomState) {
   e.bateria = r5(e.bateria)
   e.generacion = r2(e.generacion)
   e.consumo = r2(e.consumo)
+  e.usada = r2(e.usada ?? 0)
   e.polvo = r5(e.polvo)
   room.ambiente.hora = r5(room.ambiente.hora)
   for (const s of room.sistemas) s.integridad = r5(s.integridad)
@@ -581,6 +583,12 @@ function subpaso(room: RoomState, dt: number) {
     if (room.t >= TRANSITO_INICIO_S) entrarTransito(room)
   } else if (room.fase === 'transito') {
     telemetriaCrucero(room)
+    // Bitácora: cada 30 días se registra el tiempo en el espacio y lo gastado hasta entonces.
+    const marca = Math.floor((room.t - TRANSITO_INICIO_S) / 86400 / 30)
+    if (marca > (room.avisos.bitacora ?? 0)) {
+      room.avisos.bitacora = marca
+      log(room, `Bitácora: ${marca * 30} días en el espacio. Combustible al ${Math.round(room.rec.propelente)}% y ${Math.round(room.energia.usada ?? 0)} kWh de energía usados.`)
+    }
     if (room.vuelo.progreso >= 1) entrarOrbita(room)
   } else if (room.fase === 'llegada' && room.subfase === 'descenso') {
     telemetriaDescenso(room)

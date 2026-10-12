@@ -59,22 +59,36 @@ const estado = async (quien, extra = {}) => {
   return r
 }
 
-await paso(A, 'rol', { rol: 'comandante' }, 'A elige comandante')
-await paso(B, 'rol', { rol: 'comandante' }, 'B no puede repetir rol', 400)
-await paso(B, 'rol', { rol: 'sistemas' }, 'B elige sistemas')
+// El orden del esquema: en la sala de espera no hay roles; la contextualización empieza por
+// la situación, y después vienen los roles, el objetivo y los suministros.
+await paso(A, 'rol', { rol: 'comandante' }, 'en la sala de espera aún no se eligen roles', 400)
 const traje = await paso(B, 'traje', { traje: { color: '#3b82f6', visor: '#38bdf8' } }, 'B personaliza su traje')
 comprobar(traje.d.sala?.jugadores[1].traje.color === '#3b82f6', 'el traje queda guardado')
 await paso(B, 'iniciar', {}, 'solo el anfitrión inicia', 400)
 await paso(A, 'iniciar', {}, 'A inicia la misión')
-comprobar(sala.fase === 'contexto' && sala.capacidad > 0, `contextualización: capacidad ${sala.capacidad} t, carga sugerida ${sala.masa} t`)
+comprobar(sala.fase === 'contexto' && sala.jugadores.every((j) => j.paso === 0 && !j.rol), 'la contextualización empieza por la situación, sin roles asignados')
+comprobar(sala.capacidad === 7, `la nave se dimensiona para los 2 de la sala: ${sala.capacidad} t`)
+await paso(B, 'paso', { paso: 2 }, 'no se pasa al objetivo sin tener rol', 400)
+await paso(B, 'listo', { listo: true }, 'no se marca listo sin tener rol', 400)
+await paso(A, 'paso', { paso: 1 }, 'A pasa de la situación a los roles')
+await paso(A, 'rol', { rol: 'comandante' }, 'A elige comandante')
+await paso(B, 'paso', { paso: 1 }, 'B pasa de la situación a los roles')
+await paso(B, 'rol', { rol: 'comandante' }, 'B no puede repetir rol', 400)
+await paso(A, 'lanzar', {}, 'no se despega mientras alguien no tenga rol', 400)
+await paso(B, 'rol', { rol: 'sistemas' }, 'B elige sistemas')
+await paso(A, 'paso', { paso: 2 }, 'A pasa al objetivo de la misión')
+await paso(B, 'paso', { paso: 2 }, 'B pasa al objetivo de la misión')
+comprobar(sala.jugadores.every((j) => j.paso === 2 && j.rol), 'todos ven el objetivo ya con su rol')
 await paso(B, 'perfil', { perfil: 'corta' }, 'solo el comandante fija el objetivo', 400)
 await paso(A, 'perfil', { perfil: 'corta' }, 'A elige misión corta')
 await paso(A, 'trayectoria', { trayectoria: 'rapida' }, 'A elige trayectoria rápida')
 comprobar(sala.mision.diasTransito === 150 && sala.mision.solesObjetivo === 10, 'el plan cambia viaje y estancia')
+await paso(A, 'paso', { paso: 3 }, 'A pasa a los suministros')
 await paso(A, 'preset', { preset: 'equilibrado' }, 'alternativa de suministros equilibrada')
 if (sala.masa > sala.capacidad) await paso(A, 'cargamento', { cambios: { blindaje: 0, huerto: 0 } }, `recorte de carga (${sala.masa} t)`)
 await paso(A, 'lanzar', {}, 'no se despega sin que todos estén listos', 400)
 await paso(B, 'listo', { listo: true }, 'B marca listo')
+comprobar(sala.jugadores[1].paso === 3, 'al marcar listo, B queda en el último paso')
 await paso(B, 'lanzar', {}, 'solo el comandante autoriza', 400)
 await paso(A, 'lanzar', {}, 'A autoriza el lanzamiento')
 comprobar(sala.fase === 'lanzamiento' && sala.t < 0, `cuenta regresiva (T${Math.round(sala.t)})`)
@@ -96,6 +110,7 @@ for (let i = 0; i < 90 && sala.fase === 'lanzamiento'; i++) {
   pulsoMax = Math.max(pulsoMax, sala.jugadores[0].vit.fc)
 }
 comprobar(sala.fase === 'transito', `órbita y rumbo a Marte (${sala.vuelo.etapa})`)
+comprobar(sala.energia.usada > 0.3 && sala.registro.some((l) => /Órbita alcanzada.*kWh/.test(l.texto)), `el lanzamiento registra la energía usada: ${sala.energia.usada} kWh`)
 comprobar(gMax > 2.5 && pulsoMax > 95, `el cuerpo siente el despegue: ${gMax} g, pulso ${Math.round(pulsoMax)} lpm`)
 const c = sala.cabina
 comprobar(c.ppO2 > 20 && c.ppO2 < 22 && c.ppCO2 > 0.05 && c.ppCO2 < 0.6, `aire de cabina normal: ${c.ppO2.toFixed(1)} kPa O2, ${(c.ppCO2 * 7.5).toFixed(1)} mmHg CO2`)
@@ -133,6 +148,8 @@ if (!corto) {
     await atender()
   }
   comprobar(sala.fase === 'llegada' && sala.subfase === 'orbita', `órbita de Marte tras ${Math.round(sala.t / 86400)} días`)
+  comprobar(sala.registro.some((l) => /Bitácora: \d+ días en el espacio/.test(l.texto)), 'la bitácora registra los días en el espacio, el combustible y la energía')
+  comprobar(sala.registro.some((l) => /Órbita de Marte.*combustible.*kWh/.test(l.texto)), `al llegar se anota lo gastado: ${Math.round(sala.rec.propelente)}% de combustible, ${Math.round(sala.energia.usada)} kWh`)
   comprobar(emergencias.size >= 3, `hubo ${emergencias.size} emergencias en el viaje: ${[...new Set([...emergencias].map((e) => e.split(':')[0]))].join(', ')}`)
   const dosis = sala.jugadores[0].vit.dosis
   comprobar(dosis > 200 && dosis < 600, `dosis acumulada en el viaje: ${Math.round(dosis)} mSv`)

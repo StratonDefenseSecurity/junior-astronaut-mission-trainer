@@ -7,7 +7,7 @@ import { ESCALAS, ESCALA_MAXIMA, ROLES, ROLE_BY_ID, SITE_BY_ID, etiquetaTiempo, 
 import { puede } from '../mundo/mapa'
 import { api } from '../red'
 import { useStore, useYo } from '../store'
-import { Barra, Dato, RolTag, enMarte, escalaTexto, mmHg, nivel, pctTraje, relojMision } from './comun'
+import { Barra, Dato, RolTag, enMarte, energiaUsada, escalaTexto, mmHg, nivel, pctTraje, relojMision, tiempoEnEspacio } from './comun'
 
 const FASES: Record<RoomState['fase'], string> = {
   lobby: 'Sala',
@@ -78,11 +78,11 @@ export function BarraSuperior({ sala }: { sala: RoomState }) {
         </div>
       ) : sala.fase === 'transito' || sala.fase === 'llegada' ? (
         <div className="bloque datos">
-          <Dato etiqueta="Viaje" valor={`${Math.round(v.progreso * 100)}%`} barra={{ valor: v.progreso * 100 }} />
-          <Dato etiqueta="A la Tierra" valor={`${v.distTierra} M km`} />
-          <Dato etiqueta="A Marte" valor={`${v.distMarte} M km`} />
-          <Dato etiqueta="Señal" valor={`${Math.floor(v.retardo / 60)} min ${v.retardo % 60} s`} nota="Lo que tarda un mensaje en llegar a la Tierra" />
-          <Dato etiqueta="Propelente" valor={`${Math.round(sala.rec.propelente)}%`} tono={nivel(sala.rec.propelente < 10, sala.rec.propelente < 30)} />
+          <Dato etiqueta="A Marte" valor={`${v.distMarte} M km`} barra={{ valor: v.progreso * 100 }} nota={`Llevan el ${Math.round(v.progreso * 100)}% del viaje`} />
+          <Dato etiqueta="Señal" valor={`${Math.floor(v.retardo / 60)} min ${v.retardo % 60} s`} nota={`Lo que tarda un mensaje en llegar a la Tierra, a ${v.distTierra} millones de km`} />
+          <Dato etiqueta="En el espacio" valor={tiempoEnEspacio(sala)} nota="Días y horas desde que alcanzaron la órbita" />
+          <Dato etiqueta="Combustible" valor={`${Math.round(sala.rec.propelente)}%`} tono={nivel(sala.rec.propelente < 10, sala.rec.propelente < 30)} nota="Propelente que queda para corregir el rumbo y aterrizar" />
+          <Dato etiqueta="Energía usada" valor={energiaUsada(sala)} nota="Electricidad consumida desde el despegue" />
         </div>
       ) : (
         <div className="bloque datos">
@@ -90,12 +90,13 @@ export function BarraSuperior({ sala }: { sala: RoomState }) {
           <Dato etiqueta="Altitud" valor={`${v.altitud} km`} />
           <Dato etiqueta="Velocidad" valor={`${v.velocidad} km/s`} />
           <Dato etiqueta="Aceleración" valor={`${v.g} g`} tono={nivel(v.g > 4, v.g > 2.5)} />
-          <Dato etiqueta="Propelente" valor={`${Math.round(sala.rec.propelente)}%`} />
+          <Dato etiqueta="Combustible" valor={`${Math.round(sala.rec.propelente)}%`} nota="Propelente de la etapa que está empujando" />
+          <Dato etiqueta="Energía usada" valor={energiaUsada(sala)} nota="Electricidad consumida desde el despegue" />
         </div>
       )}
 
       <div className="bloque datos">
-        <Dato etiqueta="Muestras" valor={`${sala.mision.muestrasAnalizadas}/${sala.mision.muestrasObjetivo}`} />
+        {enMarte(sala) && <Dato etiqueta="Muestras" valor={`${sala.mision.muestrasAnalizadas}/${sala.mision.muestrasObjetivo}`} />}
         <Dato etiqueta="Radiación" valor={`${a.radiacion} mSv/d`} tono={a.tormentaSolar ? 'bad' : undefined} nota="Dosis de fondo por rayos cósmicos" />
       </div>
 
@@ -200,6 +201,9 @@ export function Tripulacion({ sala }: { sala: RoomState }) {
               </div>
             </div>
             <Barra valor={v.salud} tono={nivel(v.salud < 40, v.salud < 70)} />
+            <div className="mini muted progreso">
+              {ACTIVIDAD[j.actividad]} · {j.aportes ?? 0} {(j.aportes ?? 0) === 1 ? 'tarea hecha' : 'tareas hechas'}
+            </div>
             {j.ayuda && (
               <div className="help">
                 <strong>Pide ayuda a {ROLE_BY_ID[j.ayuda.paraRol].nombre}:</strong> {j.ayuda.motivo}
@@ -285,6 +289,11 @@ export function Telemetria({ sala, yo }: { sala: RoomState; yo: Player }) {
         <div><span>Velocidad</span><b>{v.velocidad} km/s</b></div>
         <div><span>Aceleración</span><b className={nivel(v.g > 4, v.g > 2.5)}>{v.g} g</b></div>
         <div><span>Tu pulso</span><b className={nivel(yo.vit.fc > 150, yo.vit.fc > 110)}>{Math.round(yo.vit.fc)} lpm</b></div>
+      </div>
+      <div className="fila gasto">
+        <div><span>Combustible</span><b className={nivel(false, sala.rec.propelente < 25)}>{Math.round(sala.rec.propelente)}%</b></div>
+        <div><span>Energía usada</span><b>{energiaUsada(sala)}</b></div>
+        <div><span>{sala.fase === 'lanzamiento' ? 'Tiempo de vuelo' : 'En el espacio'}</span><b>{sala.fase === 'lanzamiento' ? (cuenta ? 'en tierra' : `${Math.floor(sala.t / 60)} min ${Math.floor(sala.t % 60)} s`) : tiempoEnEspacio(sala)}</b></div>
       </div>
       <div className="muted mini">
         {sala.fase === 'lanzamiento'

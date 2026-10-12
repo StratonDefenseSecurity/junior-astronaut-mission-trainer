@@ -1,6 +1,6 @@
 // Telemetría de vuelo: ascenso, crucero Tierra–Marte y descenso.
 // Son perfiles aproximados con órdenes de magnitud reales, no una integración orbital.
-import { C } from '../../shared/ciencia.js'
+import { C, distanciaTierraAlLlegar } from '../../shared/ciencia.js'
 import { DESCENSO_S, TRANSITO_INICIO_S, type RoomState } from '../../shared/types.js'
 
 const mezcla = (a: number, b: number, x: number) => a + (b - a) * Math.min(1, Math.max(0, x))
@@ -50,7 +50,7 @@ export function telemetriaCrucero(room: RoomState) {
   v.altitud = 0
   v.distSol = Math.round((1 + (C.DISTANCIA_SOL_MARTE_UA - 1) * p) * 1000) / 1000
   // Al llegar, la Tierra ya se ha adelantado en su órbita: quedan unos 250 millones de km.
-  const finalTierra = 180 + room.mision.diasTransito * 0.33
+  const finalTierra = distanciaTierraAlLlegar(room.mision.diasTransito)
   v.distTierra = Math.round(finalTierra * Math.pow(p, 1.5) * 100) / 100
   v.distMarte = Math.round(220 * Math.pow(1 - p, 1.25) * 100) / 100
   v.velocidad = Math.round((32.7 - 10.5 * p) * 10) / 10

@@ -119,6 +119,25 @@ export const C = {
   EJERCICIO_ISS_H: 2.5,
 } as const
 
+/**
+ * Resumen del registro de Curiosity que usa el juego (server/datos/climaMarte.ts). Lo comprueba
+ * scripts/simular.ts contra los datos, para que no se desfase si se vuelven a descargar.
+ */
+export const REMS_RESUMEN = { soles: 669, tMin: -100, tMax: 8, pMin: 679, pMax: 854 } as const
+
+/** Presión al nivel del mar en la Tierra, Pa (atmósfera estándar). */
+export const PRESION_TIERRA_PA = 101_325
+
+/**
+ * Modelo del juego: millones de km a la Tierra al llegar a Marte. Mientras la nave viaja, la
+ * Tierra se adelanta en su órbita, así que un viaje más largo termina más lejos de ella.
+ */
+export const distanciaTierraAlLlegar = (diasDeViaje: number) => 180 + diasDeViaje * 0.33
+
+/** Minutos que tarda una señal en llegar a la Tierra desde Marte al final del viaje. */
+export const minutosDeSenalAlLlegar = (diasDeViaje: number) =>
+  Math.round((distanciaTierraAlLlegar(diasDeViaje) * 1e6) / C.VELOCIDAD_LUZ_KM_S / 60)
+
 export interface Fuente {
   tema: string
   dato: string
