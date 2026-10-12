@@ -8,6 +8,7 @@ import {
   SISTEMA_BY_ID,
   SITE_BY_ID,
   TRANSITO_INICIO_S,
+  nombreSistema,
   type Actividad,
   type Player,
   type RoomState,
@@ -130,7 +131,7 @@ function actividadDe(room: RoomState, j: Player, alerta: boolean): Actividad {
   if (room.fase === 'lanzamiento' || (room.fase === 'llegada' && room.subfase === 'descenso')) return 'trabajo'
   if (j.manual) return j.manual
   const h = room.ambiente.hora
-  const activo = movidos().has(j.id)
+  const activo = room.escala <= 60 && movidos().has(j.id)
   if ((h >= 22 || h < 6) && !alerta && !activo) return 'sueno'
   if (h >= 8 && h < 18) return 'trabajo'
   return activo ? 'trabajo' : 'reposo'
@@ -142,7 +143,7 @@ function rescatar(room: RoomState, j: Player, motivo: string) {
   j.vit.salud = limitar(j.vit.salud - 20, 0, 100)
   j.vit.spo2 = Math.min(j.vit.spo2, 84)
   j.incapacitado = Math.max(j.incapacitado, 2 * 3600)
-  log(room, `${j.nombre} ${motivo} y fue rescatado por la esclusa.`, 'alerta')
+  log(room, `Rescate por la esclusa: ${j.nombre} ${motivo}.`, 'alerta')
 }
 
 // ---------- Energía y temperatura ----------
@@ -270,7 +271,7 @@ function soporteVital(room: RoomState, dt: number, crew: Player[], superficie: b
     }
 
     if (j.incapacitado <= 0 && j.vit.salud > 0) {
-      const motivo = j.vit.spo2 < 78 ? 'perdió el conocimiento por falta de oxígeno' : j.vit.salud < 12 ? 'se desplomó' : j.vit.fatiga >= 99 ? 'cayó rendido de agotamiento' : null
+      const motivo = j.vit.spo2 < 78 ? 'perdió el conocimiento por falta de oxígeno' : j.vit.salud < 12 ? 'se desplomó' : j.vit.fatiga >= 99 ? 'se quedó sin fuerzas por el agotamiento' : null
       if (motivo) {
         if (j.zona === 'exterior') rescatar(room, j, motivo)
         else {
@@ -506,7 +507,7 @@ function puntosCriticos(room: RoomState, crew: Player[]): string[] {
   if (c.ppCO2 > C.PPCO2_LIMITE_KPA) p.push(`CO2 alto: ${(c.ppCO2 * 7.5).toFixed(1)} mmHg (límite 3)`)
   if (c.temp < 15 || c.temp > 28) p.push(`Cabina a ${c.temp.toFixed(0)} °C`)
   if (c.fuga > 0) p.push('Fuga de presión')
-  if (e.cortes.length) p.push(`Sin energía: ${e.cortes.map((id) => SISTEMA_BY_ID[id].nombre.toLowerCase()).join(', ')}`)
+  if (e.cortes.length) p.push(`Sin energía: ${e.cortes.map((id) => nombreSistema(id)).join(', ')}`)
   else if (e.capacidad > 0 && e.bateria / e.capacidad < 0.25 && e.generacion < e.consumo) p.push(`Baterías al ${Math.round((e.bateria / e.capacidad) * 100)}%`)
   if (e.polvo > 0.2) p.push(`Polvo en los paneles: −${Math.round(e.polvo * 100)}%`)
   const a = room.autonomia
@@ -591,7 +592,10 @@ function subpaso(room: RoomState, dt: number) {
 
   const crew = tripulacion(room)
   const alerta = hayEmergencia(room)
-  for (const j of crew) j.actividad = actividadDe(room, j, alerta)
+  for (const j of crew) {
+    if (j.manual && (room.t >= j.manualHasta || (j.manual === 'sueno' && j.vit.fatiga <= 2))) j.manual = null
+    j.actividad = actividadDe(room, j, alerta)
+  }
   energiaYCalor(room, dt, crew, superficie)
   soporteVital(room, dt, crew, superficie, alerta)
   desgaste(room, dt, superficie)

@@ -1,15 +1,17 @@
 import { useEffect } from 'react'
-import { useStore } from './store'
+import { Fuentes } from './hud/Avisos'
 import { iniciarSondeo } from './red'
 import { AuthScreen } from './screens/Auth'
+import { ContextoScreen } from './screens/Contexto'
 import { HomeScreen } from './screens/Home'
+import { JuegoScreen } from './screens/Juego'
 import { LobbyScreen } from './screens/Lobby'
-import { GameScreen } from './screens/Game'
+import { useStore } from './store'
 
 function Toasts() {
   const toasts = useStore((s) => s.toasts)
   return (
-    <div className="toasts">
+    <div className="toasts" role="status">
       {toasts.map((t) => (
         <div key={t.id} className={`toast ${t.tipo}`}>{t.texto}</div>
       ))}
@@ -36,11 +38,13 @@ export default function App() {
     )
   else if (!sala) pantalla = <HomeScreen />
   else if (sala.fase === 'lobby') pantalla = <LobbyScreen />
-  else pantalla = <GameScreen />
+  else if (sala.fase === 'contexto') pantalla = <ContextoScreen />
+  else pantalla = <JuegoScreen />
 
   return (
     <>
       {pantalla}
+      <Fuentes />
       <Toasts />
     </>
   )

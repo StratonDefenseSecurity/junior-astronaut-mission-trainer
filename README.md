@@ -1,80 +1,100 @@
 # Mission Trainer · Base Marte
 
 Juego 3D multijugador para el reto **"Build a Junior Astronaut Mission Trainer"** del NASA Space Apps Challenge 2026.
-Una tripulación de 2 a 6 estudiantes crea su cuenta, entra a una sala, elige un rol y opera una base en Marte
-equilibrando soporte vital, radiación, energía y alimentos. Las decisiones en disputa las aprueba el comandante o se votan.
 
-## Cómo correrlo
+Una tripulación de 2 a 6 estudiantes crea su cuenta, entra a una sala y cada uno elige un rol y personaliza su traje. Cada jugador controla a su astronauta en tercera persona: vive el despegue, cruza el espacio dentro de la nave, aterriza y monta una base en Marte. El cuerpo de cada astronauta, el aire, el agua, la energía, el clima y la radiación se calculan con valores publicados por NASA.
+
+**En línea:** https://mision-marte-trainer-seven.vercel.app
+
+## Cómo se juega
+
+1. **Sala.** Cuenta, código de sala de 6 caracteres, rol y traje. Hace falta un comandante y al menos 2 jugadores.
+2. **Contextualización.** Se presenta la situación y el rol de cada uno. El comandante fija el objetivo y el piloto la trayectoria. Todos eligen los suministros entre tres alternativas o a mano, con un límite de carga. El asistente calcula para cuántos días alcanza cada cosa.
+3. **Lanzamiento.** Cuenta regresiva y ascenso con telemetría: altitud, velocidad y aceleración. El pulso de cada tripulante sube con las g.
+4. **Viaje a Marte.** Se camina por el interior de la nave. Dura 150, 210 o 259 días de misión según la trayectoria. El comandante controla la escala de tiempo.
+5. **Llegada.** Desde la órbita se elige el sitio de aterrizaje y se vive el descenso.
+6. **Montaje de la base.** Elegir ubicación, desplegar hábitat y equipos, activar soporte vital y energía, comprobar instalaciones. Cada tarea la hace el rol responsable yendo al lugar, dentro o fuera.
+7. **Base en operación.** Administrar agua, oxígeno, alimentos y energía; reciclar; mantener equipos; proteger de la radiación; establecer el huerto; recoger y analizar muestras.
+8. **Emergencias.** Alerta, identificación del problema y alternativas con consecuencias distintas. Las de varios roles pasan por el comandante o se votan.
+
+Controles: `W A S D` para moverse, `Mayús` para correr, arrastrar para girar la cámara, rueda para acercarla, `E` para usar la estación cercana, `H` para ocultar los paneles. En pantallas táctiles aparece una palanca.
+
+## Roles y responsabilidades
+
+| Tarea | Roles |
+|---|---|
+| Elegir ubicación de la base | Piloto + comandante |
+| Desplegar hábitat y equipos | Logística + piloto |
+| Activar soporte vital y energía | Sistemas + comandante |
+| Comprobar instalaciones | Sistemas |
+| Distribuir recursos (raciones, prioridad de energía) | Logística + comandante |
+| Producción y reciclaje (encender o apagar equipos) | Logística + comandante + médico |
+| Proteger de la radiación (refugio, ejercicio) | Médico + comandante |
+| Mantener equipos | Sistemas |
+| Huerto y muestras | Científico |
+| Tratamientos | Médico |
+| Escala de tiempo, lanzamiento | Comandante |
+
+Si el rol responsable no está conectado, cualquier tripulante puede hacer su tarea, para que se pueda jugar con pocos.
+
+## Qué es real y qué es del juego
+
+La lista completa, con enlaces, está en el juego (botón **Fuentes**) y en [shared/ciencia.ts](shared/ciencia.ts).
+
+- **Datos reales integrados:** el clima de un año marciano medido por el rover Curiosity (669 soles) y los eventos de clima espacial de 2024 de la base DONKI de NASA (54 fulguraciones de clase X y 29 tormentas de partículas). Se regeneran con `python scripts/datos-nasa.py`.
+- **Constantes verificadas contra su fuente:** consumo de oxígeno y producción de CO2, agua y comida por persona, reciclaje de agua de la ISS, límite de CO2, capacidad del depurador y del generador de oxígeno de la ISS, radiación en crucero y en superficie, límite de dosis de carrera, datos de Marte, traje EMU, reactor Kilopower.
+- **Del juego:** las ecuaciones que combinan esos números, el tamaño del hábitat y de los equipos, las masas de los suministros, la dosis de cada tormenta solar, el modelo de polvo y los umbrales de daño. Se muestran al jugador como supuestos.
+
+## Desarrollo
 
 ```bash
 npm install
 npm run dev
 ```
 
-Abre `http://localhost:5173`. El cliente (Vite) corre en el 5173 y el servidor de juego (Socket.IO) en el 3001.
-Para probar multijugador en una sola computadora abre una pestaña en `http://localhost:5173` y otra en `http://127.0.0.1:5173`
-(son orígenes distintos, así cada una guarda su propia sesión).
-
-Producción (un solo proceso sirve todo):
-
-```bash
-npm run build
-npm start
-```
-
-Otros comandos:
+Abre `http://localhost:5173`. El cliente (Vite) corre en el 5173 y el servidor en el 3001. Para probar dos jugadores en una computadora usa `http://localhost:5173` en una pestaña y `http://127.0.0.1:5173` en otra.
 
 | Comando | Qué hace |
 |---|---|
 | `npm run typecheck` | Revisa tipos de cliente y servidor |
-| `npm run simular` | Simula una misión completa con 6 roles sin navegador y verifica la lógica |
+| `npm run simular` | Juega una misión completa sin navegador. Acepta tripulantes, alternativa, política, trayectoria y perfil: `npx tsx scripts/simular.ts 4 minimo buena rapida corta` |
+| `npm run e2e` | Prueba de punta a punta por la API contra un servidor en marcha. Añade la URL y `--corto` para la versión de 90 segundos |
+| `npm run empaquetar` | Compila el sitio y la función al formato de Vercel |
+| `npm run desplegar` | Empaqueta, prueba el paquete y publica en Vercel |
 
-## Flujo del juego (según el mapa del equipo)
+## Arquitectura
 
-1. **Lobby**: cuenta, sala con código de 6 letras, elección de rol. Se necesita comandante y al menos 2 jugadores.
-2. **Contextualización**: situación, objetivo, consecuencias del rol y elección de suministros con límite de 40 t. El asistente explica cada elección. El comandante autoriza el lanzamiento.
-3. **Lanzamiento**: animación del despegue, combustible según la masa, días en tránsito.
-4. **Ensamblaje de la base**: ubicación (piloto + comandante), despliegue (logística + piloto), activación (sistemas + comandante), comprobación (sistemas). Si un rol no está en la sala, el sistema completa su parte.
-5. **Gestión diaria**: reloj de misión compartido (1 hora cada 2.5 s). Recursos, desgaste de equipos, día y noche, radiación, huerto artificial, experimentos. Objetivo: 6 soles y 3 experimentos.
-6. **Emergencias**: alerta → problema → alternativas con consecuencias distintas y un temporizador. Tormenta solar, fallo de soporte vital, fuga de agua, tripulante enfermo, panel dañado, inventario incorrecto.
-7. **Chatbot**: recibe la consulta, revisa el estado real de la sala, evalúa los datos y explica riesgos. Funciona por reglas, sin claves ni internet.
+No hay un servidor siempre encendido ni sockets: todo corre en Vercel.
 
-## Roles y responsabilidades
-
-| Tarea | Roles |
-|---|---|
-| Elegir ubicación | Piloto + comandante |
-| Desplegar hábitat | Logística + piloto |
-| Activar soporte vital y energía | Sistemas + comandante |
-| Comprobar instalaciones | Sistemas |
-| Distribuir recursos (ración) | Logística + comandante |
-| Producción y reciclaje | Logística + comandante + médico |
-| Proteger de la radiación (refugio) | Médico + comandante |
-| Mantener equipos, prioridad de energía | Sistemas |
-| Huerto artificial, experimentos | Científico |
-| Revisión médica | Médico |
-
-Las acciones con más de un rol responsable se convierten en propuestas. El comandante las aprueba o rechaza,
-o se votan por mayoría según el modo elegido al crear la sala. Cualquier integrante puede pedir ayuda a otro rol
-y el otro ve un botón "Ir a ayudar".
-
-## Estructura
+- **Cliente:** React, React Three Fiber y Zustand. Consulta el estado de la sala dos veces por segundo y en la misma consulta envía la posición de su personaje y recibe la de los demás.
+- **Servidor:** una función (`POST /api/juego`) con la lógica del juego. El estado de cada sala se guarda en Vercel Blob con cada acción y cada 45 segundos mientras alguien juega. Entre guardados, el tiempo se recalcula de forma determinista, así cualquier instancia llega al mismo estado.
+- **Tiempo:** la misión solo avanza mientras alguien consulta. Si todos se van más de 90 segundos, se detiene sola.
 
 ```
-shared/types.ts     tipos, roles, suministros, sitios, módulos, acciones (compartido)
-server/index.ts     Express + Socket.IO, cuentas en server/data/users.json, salas en memoria
-server/game.ts      lógica autoritativa: fases, propuestas, acciones, tick por hora
-server/emergencies.ts catálogo de emergencias y efectos
-server/bot.ts       chatbot por reglas
-src/three/          escenas 3D (React Three Fiber): plataforma, lanzamiento, base marciana
-src/hud/            paneles de interfaz por fase, tripulación, propuestas, emergencias, chat
-src/screens/        acceso, inicio, lobby, juego
-scripts/simular.ts  prueba de punta a punta de la lógica
+shared/types.ts       tipos, roles, suministros, sitios, tareas, escalas
+shared/ciencia.ts     constantes reales, fuentes y supuestos
+server/api.ts         entrada HTTP: cuentas, salas, posiciones, guardado
+server/game.ts        reglas: roles, suministros, propuestas, acciones, emergencias
+server/emergencies.ts catálogo de emergencias
+server/bot.ts         asistente por reglas
+server/sim/           simulación: paso, fisiología, ambiente, vuelo
+server/datos/         datos de NASA generados
+server/almacen.ts     Vercel Blob en producción, archivos en local
+src/mundo/            escenas 3D, personaje, controles, mapa de estaciones
+src/hud/              paneles, estaciones, propuestas, emergencias, asistente, fuentes
+src/screens/          acceso, inicio, sala, contextualización, juego
+scripts/              simulación, prueba e2e, datos de NASA, empaquetado
 ```
+
+## Despliegue
+
+El sitio está en Vercel, en la cuenta personal `nunesjaramilloluis-8913`, proyecto `mision-marte-trainer`, con un almacén Blob privado `mision-marte-datos` y la variable `AUTH_SECRET`.
+
+`npm run desplegar` empaqueta, prueba el paquete y publica con la CLI de Vercel. En esta máquina la sesión de esa cuenta está en una carpeta aparte, anotada en `.vercel/cli-dir.txt`, para no mezclarla con otras cuentas.
 
 ## Límites conocidos
 
-- Las salas viven en memoria: si el servidor se reinicia, las misiones en curso se pierden. Las cuentas sí persisten.
-- Vista de la base en tercera persona con cámara orbital. No hay modo en primera persona todavía.
-- El chatbot es por reglas. Se puede conectar a un modelo de lenguaje desde `server/bot.ts` sin tocar el cliente.
-- Para desplegar en un host con un solo puerto (Render, Railway, Fly) basta `npm run build` y `npm start`; el servidor toma `PORT` del entorno.
+- El plan gratuito de Vercel incluye una cantidad limitada de operaciones de Blob al mes. Cada hora de juego de una sala hace entre 150 y 200 escrituras: conviene revisar el uso en el panel de Vercel si se juega mucho.
+- El asistente responde por reglas, no con un modelo de lenguaje.
+- El movimiento de los compañeros se actualiza dos veces por segundo y se suaviza en pantalla.
+- No hay vista en primera persona.

@@ -1,8 +1,9 @@
 import { create } from 'zustand'
-import type { ChatMsg, ModuleId, RoomState } from '@shared/types'
+import type { ChatMsg, RoomState } from '@shared/types'
 
 export interface Usuario { id: string; nombre: string }
 export interface Toast { id: number; texto: string; tipo: 'error' | 'info' }
+export type Pestana = 'mision' | 'propuestas' | 'asistente'
 
 const leer = (clave: string) => {
   try {
@@ -28,26 +29,34 @@ interface Store {
   codigo: string | null
   reanudando: boolean
   conectado: boolean
-  /** Diferencia entre el reloj del servidor y el de este navegador, en ms. */
+  /** Diferencia entre el reloj de la misión en el servidor y el de este navegador, en ms. */
   desfase: number
   toasts: Toast[]
   botMsgs: ChatMsg[]
-  moduloSeleccionado: ModuleId | null
-  panel: 'rol' | 'propuestas' | 'bot' | 'registro' | null
+  pestana: Pestana
+  /** Estación del mapa cuyo panel está abierto. */
+  estacion: string | null
+  /** Estación más cercana con la que se puede interactuar. */
+  cerca: string | null
+  fuentes: boolean
+  panelesOcultos: boolean
   setAuth: (token: string | null, usuario: Usuario | null) => void
   setSala: (sala: RoomState | null) => void
   setConectado: (v: boolean) => void
   setDesfase: (ms: number) => void
   agregarBot: (m: ChatMsg) => void
   toast: (texto: string, tipo?: 'error' | 'info') => void
-  seleccionarModulo: (m: ModuleId | null) => void
-  setPanel: (p: Store['panel']) => void
+  setPestana: (p: Pestana) => void
+  abrirEstacion: (id: string | null) => void
+  setCerca: (id: string | null) => void
+  setFuentes: (v: boolean) => void
+  alternarPaneles: () => void
 }
 
 let toastId = 0
 const codigoInicial = leer('mt_sala')
 
-export const useStore = create<Store>((set) => ({
+export const useStore = create<Store>((set, get) => ({
   token: leer('mt_token'),
   usuario: JSON.parse(leer('mt_usuario') ?? 'null'),
   sala: null,
@@ -57,32 +66,36 @@ export const useStore = create<Store>((set) => ({
   desfase: 0,
   toasts: [],
   botMsgs: [],
-  moduloSeleccionado: null,
-  panel: 'rol',
+  pestana: 'mision',
+  estacion: null,
+  cerca: null,
+  fuentes: false,
+  panelesOcultos: false,
   setAuth: (token, usuario) => {
     guardar('mt_token', token)
     guardar('mt_usuario', usuario ? JSON.stringify(usuario) : null)
     if (!token) guardar('mt_sala', null)
-    set(token ? { token, usuario } : { token, usuario, sala: null, codigo: null, reanudando: false, botMsgs: [] })
+    set(token ? { token, usuario } : { token, usuario, sala: null, codigo: null, reanudando: false, botMsgs: [], estacion: null })
   },
   setSala: (sala) => {
     guardar('mt_sala', sala ? sala.codigo : null)
-    set(
-      sala
-        ? { sala, codigo: sala.codigo, reanudando: false }
-        : { sala: null, codigo: null, reanudando: false, botMsgs: [], moduloSeleccionado: null },
-    )
+    set(sala ? { sala, codigo: sala.codigo, reanudando: false } : { sala: null, codigo: null, reanudando: false, botMsgs: [], estacion: null, cerca: null })
   },
   setConectado: (conectado) => set({ conectado }),
   setDesfase: (desfase) => set({ desfase }),
   agregarBot: (m) => set((s) => ({ botMsgs: [...s.botMsgs.slice(-40), m] })),
   toast: (texto, tipo = 'error') => {
     const id = ++toastId
-    set((s) => ({ toasts: [...s.toasts, { id, texto, tipo }] }))
-    setTimeout(() => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })), 4500)
+    set((s) => ({ toasts: [...s.toasts.slice(-3), { id, texto, tipo }] }))
+    setTimeout(() => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })), 5000)
   },
-  seleccionarModulo: (moduloSeleccionado) => set({ moduloSeleccionado }),
-  setPanel: (panel) => set({ panel }),
+  setPestana: (pestana) => set({ pestana }),
+  abrirEstacion: (estacion) => set({ estacion }),
+  setCerca: (cerca) => {
+    if (get().cerca !== cerca) set({ cerca })
+  },
+  setFuentes: (fuentes) => set({ fuentes }),
+  alternarPaneles: () => set((s) => ({ panelesOcultos: !s.panelesOcultos })),
 }))
 
 export const useYo = () => {
@@ -91,5 +104,5 @@ export const useYo = () => {
   return sala?.jugadores.find((j) => j.id === usuario?.id) ?? null
 }
 
-/** Hora actual según el reloj del servidor (los vencimientos de la sala usan ese reloj). */
+/** Hora actual según el reloj de la misión en el servidor (los vencimientos usan ese reloj). */
 export const ahoraServidor = () => Date.now() + useStore.getState().desfase

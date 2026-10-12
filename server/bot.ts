@@ -1,7 +1,7 @@
 // Asistente de misión por reglas: recibe la consulta, mira el estado real de la sala,
 // evalúa los datos y explica los riesgos. No usa servicios externos.
 import { C } from '../shared/ciencia.js'
-import { PERFIL_BY_ID, ROLE_BY_ID, SISTEMA_BY_ID, SITE_BY_ID, formatoHora, formatoMET, type Player, type RoomState } from '../shared/types.js'
+import { PERFIL_BY_ID, ROLE_BY_ID, SITE_BY_ID, nombreSistema, formatoHora, formatoMET, type Player, type RoomState } from '../shared/types.js'
 import { rendimiento, sis, tripulacion } from './base.js'
 import { UMBRAL_AVERIA } from './emergencies.js'
 import { enSuperficie, tasaDeDosis } from './sim/ambiente.js'
@@ -50,7 +50,7 @@ function porRol(room: RoomState, j: Player): string {
           : 'Prepara el plan de muestreo para cuando la base esté operativa.'
     case 'sistemas': {
       const peor = [...room.sistemas].filter((s) => s.instalado).sort((a, b) => a.integridad - b.integridad)[0]
-      return `El equipo más gastado es ${SISTEMA_BY_ID[peor.id].nombre.toLowerCase()} (${Math.round(peor.integridad)}%). Por debajo de ${UMBRAL_AVERIA}% deja de funcionar. Quedan ${room.rec.repuestos} kits; hay que ir hasta el equipo para repararlo.`
+      return `El equipo más gastado es ${nombreSistema(peor.id)} (${Math.round(peor.integridad)}%). Por debajo de ${UMBRAL_AVERIA}% deja de funcionar. Quedan ${room.rec.repuestos} kits; hay que ir hasta el equipo para repararlo.`
     }
     default:
       return 'Elige un rol para recibir consejos.'
@@ -127,7 +127,7 @@ export function responderBot(room: RoomState, autor: Player, pregunta: string): 
   }
   if (/energia|bateria|panel|solar|reactor|electric|luz/.test(t)) {
     const pct = e.capacidad ? Math.round((e.bateria / e.capacidad) * 100) : 0
-    return `Generación ${n1(e.generacion)} kW, consumo ${n1(e.consumo)} kW, baterías al ${pct}% (${Math.round(e.bateria)} de ${e.capacidad} kWh). ${sup ? `Son las ${formatoHora(a.hora)}; opacidad del polvo ${a.tau}; polvo sobre los paneles −${Math.round(e.polvo * 100)}%.` : 'En el espacio los paneles reciben luz todo el tiempo.'} ${e.cortes.length ? `Sin energía: ${e.cortes.map((id) => SISTEMA_BY_ID[id].nombre.toLowerCase()).join(', ')}.` : ''} Prioridad si falta energía: ${room.ajustes.prioridad}.`
+    return `Generación ${n1(e.generacion)} kW, consumo ${n1(e.consumo)} kW, baterías al ${pct}% (${Math.round(e.bateria)} de ${e.capacidad} kWh). ${sup ? `Son las ${formatoHora(a.hora)}; opacidad del polvo ${a.tau}; polvo sobre los paneles −${Math.round(e.polvo * 100)}%.` : 'En el espacio los paneles reciben luz todo el tiempo.'} ${e.cortes.length ? `Sin energía: ${e.cortes.map((id) => nombreSistema(id)).join(', ')}.` : ''} Prioridad si falta energía: ${room.ajustes.prioridad}.`
   }
   if (/radiac|dosis|tormenta solar|refugio|blindaje|fulgur|particul/.test(t)) {
     const cabina = tasaDeDosis(room, 'nave', false)
@@ -139,7 +139,7 @@ export function responderBot(room: RoomState, autor: Player, pregunta: string): 
     return `Sol ${a.sol}, ${formatoHora(a.hora)} hora local. Fuera hay ${a.tempExt} °C y ${a.presion} Pa. Son los datos que midió Curiosity en su sol ${a.solCuriosity}${room.sitio !== 'gale' ? ', con un ajuste estimado para este sitio' : ''}. Opacidad del polvo ${a.tau}${a.tormentaPolvo ? `, hay tormenta de polvo para ${a.polvoSoles} soles más` : ''}. La cabina está a ${n1(c.temp)} °C.`
   }
   if (/equipo|reparar|averia|mantenim|integridad|repuesto|sistema/.test(t)) {
-    const lista = room.sistemas.filter((s) => s.instalado).map((s) => `${SISTEMA_BY_ID[s.id].nombre.toLowerCase()} ${Math.round(s.integridad)}%${s.integridad <= UMBRAL_AVERIA ? ' (averiado)' : !s.activo ? ' (apagado)' : ''}`)
+    const lista = room.sistemas.filter((s) => s.instalado).map((s) => `${nombreSistema(s.id)} ${Math.round(s.integridad)}%${s.integridad <= UMBRAL_AVERIA ? ' (averiado)' : !s.activo ? ' (apagado)' : ''}`)
     return `Equipos: ${lista.join(', ')}. Repuestos: ${r.repuestos} kits. Una reparación sube 45 puntos y usa 1 kit, o 2 si el equipo está por debajo de 30%. Por debajo de ${UMBRAL_AVERIA}% el equipo se detiene.`
   }
   if (/escala|tiempo|acelera|rapido|lento|pausa|cuanto falta|reloj/.test(t)) {

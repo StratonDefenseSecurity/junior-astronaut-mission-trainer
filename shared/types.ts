@@ -180,6 +180,11 @@ export const SISTEMAS: SistemaInfo[] = [
   { id: 'isru', nombre: 'Extractor de hielo', descripcion: 'Derrite hielo enterrado y bombea el agua.', exterior: true },
 ]
 export const SISTEMA_BY_ID = Object.fromEntries(SISTEMAS.map((s) => [s.id, s])) as Record<SistemaId, SistemaInfo>
+/** Nombre del equipo para usar en mitad de una frase (inicial en minúscula, siglas intactas). */
+export const nombreSistema = (id: SistemaId) => {
+  const n = SISTEMA_BY_ID[id].nombre
+  return n.charAt(0).toLowerCase() + n.slice(1)
+}
 
 export interface SistemaEstado {
   id: SistemaId
@@ -255,6 +260,8 @@ export interface Player {
   actividad: Actividad
   /** Actividad que el jugador eligió a mano (ejercitarse, dormir); null = según el horario. */
   manual: Actividad | null
+  /** Segundo de misión en que termina la actividad elegida a mano. */
+  manualHasta: number
   vit: Vitales
   /** kg de agua que le faltan al cuerpo. */
   deficitAgua: number

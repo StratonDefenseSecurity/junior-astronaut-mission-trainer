@@ -1,6 +1,6 @@
 // Emergencias: alerta → identificación del problema → alternativas con consecuencias distintas.
 import { C } from '../shared/ciencia.js'
-import { SISTEMA_BY_ID, type Emergency, type EmergencyAlternative, type Role, type RoomState, type SistemaId } from '../shared/types.js'
+import { SISTEMA_BY_ID, nombreSistema, type Emergency, type EmergencyAlternative, type Role, type RoomState, type SistemaId } from '../shared/types.js'
 import { hayEmergencia, jugador, limitar, log, rid, sis, tripulacion } from './base.js'
 import { ahora, azar } from './reloj.js'
 import { enSuperficie } from './sim/ambiente.js'
@@ -120,13 +120,13 @@ export const EMERGENCIAS: Record<string, Definicion> = {
         j.manual = null
       }
       room.refugioHasta = Math.max(room.refugioHasta, hasta)
-      return alt === 'parcial' ? 'La tripulación se protege; sistemas queda expuesto en la cabina.' : 'Toda la tripulación está en el refugio.'
+      return alt === 'parcial' ? 'La tripulación se protege; quien lleva los sistemas recibe la dosis de cabina.' : 'Toda la tripulación está en el refugio.'
     },
   },
 
   fallo: {
     roles: (_room, d) => (d.sistema === 'wrs' ? ['sistemas', 'logistica'] : ['sistemas']),
-    titulo: (_room, d) => `Avería: ${SISTEMA_BY_ID[d.sistema as SistemaId].nombre.toLowerCase()}`,
+    titulo: (_room, d) => `Avería: ${nombreSistema(d.sistema as SistemaId)}`,
     descripcion: (room, d) => `${FALLOS[d.sistema as SistemaId].problema} Quedan ${room.rec.repuestos} kits de repuestos.`,
     alOcurrir: (room, d) => {
       const s = sis(room, d.sistema as SistemaId)
@@ -247,7 +247,7 @@ export const EMERGENCIAS: Record<string, Definicion> = {
         room.rec.botiquines -= 1
         j.dolencia = null
         j.vit.salud = limitar(j.vit.salud + 5, 0, 100)
-        return `${j.nombre} fue tratado y sigue en servicio.`
+        return `${j.nombre} recibió tratamiento y sigue en servicio.`
       }
       if (alt === 'reposo') {
         j.incapacitado = 12 * 3600
@@ -273,7 +273,7 @@ export const EMERGENCIAS: Record<string, Definicion> = {
     alternativas: () => [
       { id: 'tratar', etiqueta: 'Medicación contra el mareo', consecuencia: 'Usa 1 botiquín. Se recupera en poco tiempo.' },
       { id: 'reposo', etiqueta: 'Reposo de 12 horas', consecuencia: 'No gasta botiquín. El cuerpo se adapta solo, pero queda fuera de servicio.' },
-      { id: 'nada', etiqueta: 'Que siga trabajando', consecuencia: 'Pierde salud y sigue mareado hasta que el médico lo trate.' },
+      { id: 'nada', etiqueta: 'Que siga trabajando', consecuencia: 'Pierde salud y el mareo sigue hasta recibir tratamiento.' },
     ],
     aplicar: (room, d, alt) => EMERGENCIAS.medico.aplicar(room, { ...d, dolencia: 'mareo espacial' }, alt),
   },

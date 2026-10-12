@@ -1,6 +1,8 @@
 // Comunicación con el servidor por HTTP. No hay sockets: el cliente consulta el estado de la
-// sala una vez por segundo y envía cada acción como una petición aparte.
-import { masaTotal, type Loadout, type RoomState } from '@shared/types'
+// sala dos veces por segundo y envía cada acción como una petición aparte. En cada consulta
+// manda dónde está su personaje y recibe dónde están los demás.
+import { masaTotal, type Loadout, type RoomState, type Traje } from '@shared/types'
+import { local } from './mundo/control'
 import { useStore } from './store'
 
 interface Resultado {
@@ -8,6 +10,7 @@ interface Resultado {
   h?: string
   ahora?: number
   igual?: boolean
+  pos?: Record<string, number[]>
   error?: string
   sinSala?: boolean
   sinSesion?: boolean
@@ -16,6 +19,18 @@ interface Resultado {
   usuario?: { id: string; nombre: string }
 }
 
+export interface PosicionAjena {
+  x: number
+  z: number
+  giro: number
+  andando: boolean
+  /** Momento (reloj local) en que llegó. */
+  t: number
+}
+/** Última posición conocida de los demás personajes. La lee la escena en cada fotograma. */
+export const ajenos = new Map<string, PosicionAjena>()
+
+const INTERVALO_MS = 500
 let secuencia = 0
 let aplicada = 0
 let huella = ''
@@ -46,8 +61,15 @@ async function llamar(op: string, datos: Record<string, unknown> = {}, silencios
     return null
   }
   const st = useStore.getState()
-  st.setConectado(true)
-  if (typeof d.ahora === 'number') st.setDesfase(d.ahora - Date.now())
+  if (!st.conectado) st.setConectado(true)
+  if (typeof d.ahora === 'number') {
+    const desfase = d.ahora - Date.now()
+    if (Math.abs(desfase - st.desfase) > 250) st.setDesfase(desfase)
+  }
+  if (d.pos) {
+    const t = performance.now()
+    for (const [id, p] of Object.entries(d.pos)) ajenos.set(id, { x: p[0], z: p[1], giro: p[2] ?? 0, andando: (p[3] ?? 0) > 0, t })
+  }
   if (d.sinSesion) {
     st.setAuth(null, null)
     return d
@@ -55,6 +77,7 @@ async function llamar(op: string, datos: Record<string, unknown> = {}, silencios
   if (d.sinSala) {
     const teniaSala = Boolean(st.sala)
     huella = ''
+    ajenos.clear()
     st.setSala(null)
     if (d.error && (teniaSala || !silencioso)) st.toast(d.error)
     return d
@@ -73,7 +96,9 @@ async function sondear() {
   if (!s.token || !s.codigo || consultando) return
   consultando = true
   try {
-    await llamar('estado', { h: huella }, true)
+    const enMundo = s.sala && !['lobby', 'contexto', 'fin'].includes(s.sala.fase)
+    const p = enMundo ? [local.x, local.z, local.giro, local.vel > 0.2 ? 1 : 0] : undefined
+    await llamar('estado', { h: huella, p }, true)
   } finally {
     consultando = false
   }
@@ -81,7 +106,7 @@ async function sondear() {
 
 export function iniciarSondeo() {
   if (temporizador !== null) return
-  temporizador = window.setInterval(sondear, 1000)
+  temporizador = window.setInterval(sondear, INTERVALO_MS)
   void sondear()
 }
 
@@ -89,7 +114,9 @@ export const api = {
   crearSala: (modo: 'comandante' | 'votacion') => llamar('crear', { modo, codigo: undefined }),
   unirse: (codigo: string) => llamar('unirse', { codigo }),
   salir: () => llamar('salir'),
+  // Lobby y contextualización
   elegirRol: (rol: string | null) => llamar('rol', { rol }),
+  elegirTraje: (traje: Partial<Traje>) => llamar('traje', { traje }),
   iniciar: () => llamar('iniciar'),
   /** Los deslizadores cambian muchas veces por segundo: se muestran al instante y se envían agrupados. */
   cargamento: (cambios: Partial<Loadout>) => {
@@ -104,6 +131,13 @@ export const api = {
       if (cargaTimer === null) cargaPendiente = {}
     }, 350)
   },
+  preset: (preset: string) => {
+    cargaPendiente = {}
+    return llamar('preset', { preset })
+  },
+  perfil: (perfil: string) => llamar('perfil', { perfil }),
+  trayectoria: (trayectoria: string) => llamar('trayectoria', { trayectoria }),
+  listo: (listo: boolean) => llamar('listo', { listo }),
   lanzar: async () => {
     if (cargaTimer !== null) {
       window.clearTimeout(cargaTimer)
@@ -113,8 +147,14 @@ export const api = {
     }
     return llamar('lanzar')
   },
-  confirmarPaso: (paso: number) => llamar('confirmar', { paso }),
+  // Misión
+  escala: (valor: number) => llamar('escala', { valor }),
+  pausa: (pausa: boolean) => llamar('pausa', { pausa }),
   proponerUbicacion: (sitioId: string) => llamar('ubicacion', { sitioId }),
+  tarea: (tarea: string) => llamar('tarea', { tarea }),
+  zona: (zona: 'nave' | 'exterior') => llamar('zona', { zona }),
+  actividad: (actividad: 'ejercicio' | 'sueno' | null) => llamar('actividad', { actividad }),
+  refugio: (entrar: boolean) => llamar('refugio', { entrar }),
   accion: (id: string, payload?: Record<string, unknown>) => llamar('accion', { id, payload }),
   votar: (id: string, aprueba: boolean) => llamar('votar', { id, aprueba }),
   elegirAlternativa: (id: string, altId: string) => llamar('emergencia', { id, altId }),

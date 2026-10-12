@@ -15,6 +15,7 @@ import {
   TRAYECTORIA_BY_ID,
   capacidadCarga,
   masaTotal,
+  nombreSistema,
   trajePorDefecto,
   type Actividad,
   type DecisionMode,
@@ -116,6 +117,7 @@ export function nuevoJugador(id: string, nombre: string): Player {
     zona: 'nave',
     actividad: 'reposo',
     manual: null,
+    manualHasta: 0,
     vit: { fc: 64, fr: 13, spo2: 97.5, hidratacion: 100, reservas: 100, fatiga: 10, dosis: 0, dosisTasa: 0, condicion: 100, salud: 100 },
     deficitAgua: 0,
     deficitKcal: 0,
@@ -501,6 +503,8 @@ export function fijarActividad(room: RoomState, id: string, actividad: Actividad
     if (impedido) return impedido
   }
   j.manual = actividad
+  // Una sesión de ejercicio dura una hora; el sueño, hasta nueve.
+  j.manualHasta = room.t + (actividad === 'ejercicio' ? 3600 : 9 * 3600)
   return null
 }
 
@@ -530,8 +534,12 @@ export function accion(room: RoomState, id: string, tipo: string, d: Record<stri
   if (!['transito', 'llegada', 'ensamblaje', 'base'].includes(room.fase)) return 'Ahora no se pueden hacer acciones.'
   const j = jugador(room, id)
   if (!j || !j.rol) return 'Jugador no encontrado.'
-  const impedido = impedimento(j)
-  if (impedido) return impedido
+  // Desde el refugio se puede decidir, pero no hacer trabajo físico.
+  const esDecision = ['racionComida', 'racionAgua', 'prioridad', 'equipo', 'ejercicio', 'refugio'].includes(tipo)
+  if (!esDecision || j.incapacitado > 0) {
+    const impedido = impedimento(j)
+    if (impedido) return impedido
+  }
   const superficie = enSuperficie(room)
   const pendiente = (t: ProposalType, filtro?: (p: Proposal) => boolean) =>
     room.propuestas.some((p) => p.estado === 'pendiente' && p.tipo === t && (!filtro || filtro(p)))
@@ -578,7 +586,7 @@ export function accion(room: RoomState, id: string, tipo: string, d: Record<stri
       return proponer(
         'equipo',
         ['logistica', 'comandante', 'medico'],
-        `${activo ? 'Encender' : 'Apagar'} ${nombre.toLowerCase()}`,
+        `${activo ? 'Encender' : 'Apagar'} ${nombreSistema(s.id)}`,
         activo ? `${nombre} vuelve a funcionar y a consumir energía.` : `${nombre} deja de funcionar y de consumir energía.`,
         { sistema: s.id, activo },
       )
@@ -622,7 +630,7 @@ export function accion(room: RoomState, id: string, tipo: string, d: Record<stri
       s.integridad = Math.min(100, s.integridad + 45)
       s.activo = true
       j.vit.fatiga = limitar(j.vit.fatiga + 3, 0, 100)
-      log(room, `${j.nombre} reparó ${SISTEMA_BY_ID[s.id].nombre.toLowerCase()} (${Math.round(s.integridad)}%).`, 'ok')
+      log(room, `${j.nombre} reparó ${nombreSistema(s.id)} (${Math.round(s.integridad)}%).`, 'ok')
       break
     }
     case 'sellar': {
