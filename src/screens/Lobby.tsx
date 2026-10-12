@@ -1,6 +1,6 @@
 import { ROLES } from '@shared/types'
 import { useStore, useYo } from '../store'
-import { api } from '../socket'
+import { api } from '../red'
 
 export function LobbyScreen() {
   const sala = useStore((s) => s.sala)!

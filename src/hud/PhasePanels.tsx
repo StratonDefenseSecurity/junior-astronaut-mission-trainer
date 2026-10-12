@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { ACTIONS, ASSEMBLY_STEPS, MASA_MAXIMA, MODULES, ROLE_BY_ID, SITES, SUPPLIES, type RacionLevel, type RoomState, type SupplyId } from '@shared/types'
 import { useYo } from '../store'
-import { api } from '../socket'
+import { api } from '../red'
 
 export function ContextoPanel({ sala }: { sala: RoomState }) {
   const yo = useYo()

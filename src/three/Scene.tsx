@@ -3,6 +3,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import * as THREE from 'three'
 import type { RoomState } from '@shared/types'
+import { ahoraServidor } from '../store'
 import { Planet, Stars } from './Space'
 import { Rocket } from './Rocket'
 import { BaseScene } from './Base'
@@ -46,7 +47,7 @@ function LaunchScene({ sala }: { sala: RoomState }) {
   const { camera } = useThree()
   const flameRef = useRef(1)
   useFrame(() => {
-    const t = sala.transito ? Math.min(1, (Date.now() - sala.transito.inicio) / sala.transito.duracion) : 1
+    const t = sala.transito ? Math.min(1, (ahoraServidor() - sala.transito.inicio) / sala.transito.duracion) : 1
     const ease = t * t * (3 - 2 * t)
     if (rocket.current) {
       rocket.current.position.y = ease * 40

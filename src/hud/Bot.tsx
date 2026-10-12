@@ -1,15 +1,18 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import type { RoomState } from '@shared/types'
-import { api } from '../socket'
+import { api } from '../red'
+import { useStore } from '../store'
 
 const SUGERENCIAS = ['¿Cómo vamos?', '¿Cuánto oxígeno queda?', '¿Qué debo hacer con mi rol?', '¿Hay riesgo de radiación?', '¿Qué equipo reparar?']
 
 export function BotPanel({ sala }: { sala: RoomState }) {
   const [texto, setTexto] = useState('')
   const fin = useRef<HTMLDivElement>(null)
+  const botMsgs = useStore((s) => s.botMsgs)
+  const mensajes = [...sala.chat, ...botMsgs].sort((a, b) => a.t - b.t)
   useEffect(() => {
     fin.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [sala.chat.length])
+  }, [mensajes.length])
 
   const enviar = (e: FormEvent, bot: boolean) => {
     e.preventDefault()
@@ -33,8 +36,8 @@ export function BotPanel({ sala }: { sala: RoomState }) {
         ))}
       </div>
       <div className="msgs">
-        {sala.chat.length === 0 && <p className="muted">Aquí aparecen los mensajes del equipo y las respuestas del asistente.</p>}
-        {sala.chat.map((m) => (
+        {mensajes.length === 0 && <p className="muted">Aquí aparecen los mensajes del equipo y tus consultas al asistente (solo tú las ves).</p>}
+        {mensajes.map((m) => (
           <div key={m.id} className={`msg ${m.bot ? 'bot' : ''}`}>
             <b>{m.de}</b>
             {m.texto}

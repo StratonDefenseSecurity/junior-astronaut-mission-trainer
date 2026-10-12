@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react'
 import { ROLE_BY_ID, type RoomState } from '@shared/types'
-import { useYo } from '../store'
-import { api } from '../socket'
+import { ahoraServidor, useYo } from '../store'
+import { api } from '../red'
 
 export function EmergencyModal({ sala }: { sala: RoomState }) {
   const yo = useYo()
   const em = sala.emergencias.find((e) => e.estado === 'activa')
-  const [ahora, setAhora] = useState(Date.now())
+  const [ahora, setAhora] = useState(ahoraServidor())
   const [minimizada, setMinimizada] = useState(false)
   useEffect(() => {
-    const id = setInterval(() => setAhora(Date.now()), 1000)
+    const id = setInterval(() => setAhora(ahoraServidor()), 1000)
     return () => clearInterval(id)
   }, [])
   useEffect(() => setMinimizada(false), [em?.id])

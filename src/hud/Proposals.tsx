@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
 import { ROLE_BY_ID, type RoomState } from '@shared/types'
-import { useYo } from '../store'
-import { api } from '../socket'
+import { ahoraServidor, useYo } from '../store'
+import { api } from '../red'
 
 function useAhora() {
-  const [t, setT] = useState(Date.now())
+  const [t, setT] = useState(ahoraServidor())
   useEffect(() => {
-    const id = setInterval(() => setT(Date.now()), 1000)
+    const id = setInterval(() => setT(ahoraServidor()), 1000)
     return () => clearInterval(id)
   }, [])
   return t

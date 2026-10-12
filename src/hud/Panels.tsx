@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { ROLES, ROLE_BY_ID, MODULE_BY_ID, type RoomState } from '@shared/types'
 import { useStore, useYo } from '../store'
-import { api } from '../socket'
+import { api } from '../red'
 
 const FASES: Record<RoomState['fase'], string> = {
   lobby: 'Lobby',

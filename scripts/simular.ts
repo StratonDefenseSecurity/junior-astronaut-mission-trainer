@@ -12,7 +12,7 @@ import {
   nuevoJugador,
   pedirAyuda,
   proponerUbicacion,
-  tick,
+  avanzar,
   votar,
 } from '../server/game.js'
 import { responderBot } from '../server/bot.js'
@@ -52,7 +52,7 @@ ok(`lanzamiento: combustible ${room.mision.combustible}%`)
 
 // tránsito instantáneo
 room.transito = { inicio: Date.now() - 999_999, duracion: 1000 }
-tick(room)
+avanzar(room, Date.now())
 assert(room.fase === 'ensamblaje', 'llegada a ensamblaje')
 
 // paso 0: piloto propone, comandante aprueba

@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { useStore } from '../store'
-import { httpAuth } from '../socket'
+import { httpAuth } from '../red'
 
 export function AuthScreen() {
   const setAuth = useStore((s) => s.setAuth)

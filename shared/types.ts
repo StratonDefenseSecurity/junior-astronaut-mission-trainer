@@ -189,6 +189,12 @@ export const ASSEMBLY_STEPS: AssemblyStep[] = [
 
 export interface RoomState {
   codigo: string
+  /** Sube en 1 con cada acción guardada. Sirve para detectar copias atrasadas. */
+  version: number
+  /** Instante (ms) de la última hora de misión procesada. */
+  reloj: number
+  /** Semilla del azar de la sala. */
+  rng: number
   hostId: string
   modoDecision: DecisionMode
   fase: Phase

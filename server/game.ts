@@ -22,17 +22,22 @@ import {
   type RoomState,
 } from '../shared/types.js'
 import { EMERGENCIAS, aplicarAlternativa } from './emergencies.js'
+import { ahora, azar, fijarAhora, semilla } from './reloj.js'
 
-const rid = () => Math.random().toString(36).slice(2, 10)
+const rid = (room: RoomState) =>
+  Math.floor(azar(room) * 0xffffffff).toString(36) + Math.floor(azar(room) * 0xffffffff).toString(36)
 
 export function log(room: RoomState, texto: string, tipo: 'info' | 'alerta' | 'ok' | 'bot' = 'info') {
-  room.registro.push({ t: Date.now(), texto, tipo })
+  room.registro.push({ t: ahora(), texto, tipo })
   if (room.registro.length > 80) room.registro.shift()
 }
 
 export function crearSala(codigo: string, hostId: string, modoDecision: DecisionMode): RoomState {
   return {
     codigo,
+    version: 0,
+    reloj: 0,
+    rng: semilla(codigo),
     hostId,
     modoDecision,
     fase: 'lobby',
@@ -142,7 +147,7 @@ export function lanzar(room: RoomState, playerId: string): string | null {
   // combustible: más masa, más consumo
   room.mision.combustible = Math.max(5, Math.round(100 - room.masa * 1.6))
   room.mision.diasTransito = 0
-  room.transito = { inicio: Date.now(), duracion: TRANSITO_MS }
+  room.transito = { inicio: ahora(), duracion: TRANSITO_MS }
   room.fase = 'lanzamiento'
   const c = room.cargamento
   room.recursos = {
@@ -161,7 +166,7 @@ export function lanzar(room: RoomState, playerId: string): string | null {
 
 function actualizarTransito(room: RoomState) {
   if (room.fase !== 'lanzamiento' || !room.transito) return
-  const p = Math.min(1, (Date.now() - room.transito.inicio) / room.transito.duracion)
+  const p = Math.min(1, (ahora() - room.transito.inicio) / room.transito.duracion)
   room.mision.diasTransito = Math.round(p * 210)
   if (p >= 1) {
     room.fase = 'ensamblaje'
@@ -208,6 +213,7 @@ function avanzarPaso(room: RoomState) {
     room.fase = 'base'
     room.mision.sol = 1
     room.mision.hora = 8
+    room.reloj = ahora()
     log(room, 'Instalaciones comprobadas. Empieza la gestión diaria de la base.', 'ok')
     return
   }
@@ -245,12 +251,12 @@ export function crearPropuesta(
   p: { tipo: ProposalType; titulo: string; descripcion: string; payload: Record<string, unknown>; proponente: string; rolesResponsables: Role[] },
 ) {
   const prop: Proposal = {
-    id: rid(),
+    id: rid(room),
     ...p,
     votos: { [p.proponente]: true },
     estado: 'pendiente',
-    creada: Date.now(),
-    vence: Date.now() + 90_000,
+    creada: ahora(),
+    vence: ahora() + 90_000,
   }
   room.propuestas.unshift(prop)
   const quien = jugador(room, p.proponente)?.nombre ?? 'Alguien'
@@ -429,7 +435,7 @@ export function accion(room: RoomState, playerId: string, id: string, payload: R
 export function pedirAyuda(room: RoomState, playerId: string, paraRol: Role, motivo: string): string | null {
   const j = jugador(room, playerId)
   if (!j) return 'Jugador no encontrado.'
-  j.ayuda = { paraRol, motivo: motivo.slice(0, 120), desde: Date.now() }
+  j.ayuda = { paraRol, motivo: motivo.slice(0, 120), desde: ahora() }
   log(room, `${j.nombre} necesita ayuda de ${ROLE_BY_ID[paraRol].nombre}: ${j.ayuda.motivo}`, 'alerta')
   return null
 }
@@ -491,16 +497,16 @@ function generarEmergencia(room: RoomState) {
   if (room.emergencias.some((e) => e.estado === 'activa')) return
   const candidatas = EMERGENCIAS.filter((e) => e.condicion(room))
   if (candidatas.length === 0) return
-  const def = candidatas[Math.floor(Math.random() * candidatas.length)]
+  const def = candidatas[Math.floor(azar(room) * candidatas.length)]
   const em: Emergency = {
-    id: rid(),
+    id: rid(room),
     tipo: def.tipo,
     titulo: def.titulo,
     descripcion: def.descripcion(room),
     rolesResponsables: def.roles,
     alternativas: def.alternativas,
-    creada: Date.now(),
-    vence: Date.now() + 75_000,
+    creada: ahora(),
+    vence: ahora() + 75_000,
     estado: 'activa',
     elegida: null,
     resultado: null,
@@ -511,40 +517,56 @@ function generarEmergencia(room: RoomState) {
   log(room, `ALERTA: ${em.titulo}. Deciden: ${def.roles.map((r) => ROLE_BY_ID[r].corto).join(' + ')}.`, 'alerta')
 }
 
-// ---------- Tick de simulación ----------
+// ---------- Avance de la simulación ----------
 
-const ultimaHora = new Map<string, number>()
-
-export function tick(room: RoomState) {
-  const ahora = Date.now()
-  if (room.fase === 'lanzamiento') actualizarTransito(room)
-
-  // expirar propuestas y emergencias
+function vencer(room: RoomState, t: number) {
   for (const p of room.propuestas) {
-    if (p.estado === 'pendiente' && ahora > p.vence) {
+    if (p.estado === 'pendiente' && p.vence <= t) {
       p.estado = 'rechazada'
       log(room, `Propuesta "${p.titulo}" venció sin decisión.`, 'alerta')
     }
   }
   for (const e of room.emergencias) {
-    if (e.estado === 'activa' && ahora > e.vence) {
+    if (e.estado === 'activa' && e.vence <= t) {
       e.estado = 'vencida'
+      if (room.resultado) continue
       const peor = e.alternativas[e.alternativas.length - 1]
       e.elegida = peor.id
       e.resultado = aplicarAlternativa(room, e, peor.id)
       log(room, `Nadie decidió a tiempo: ${e.titulo}. ${e.resultado}`, 'alerta')
     }
   }
+}
 
-  if (room.fase !== 'base' || room.resultado) return
-  const last = ultimaHora.get(room.codigo)
-  if (last === undefined) {
-    ultimaHora.set(room.codigo, ahora)
-    return
+/**
+ * Lleva la sala hasta el instante `hasta`, procesando en orden cronológico todo lo que debió
+ * ocurrir desde la última vez: fin del tránsito, cada hora de misión y cada vencimiento.
+ * Partiendo de la misma copia guardada, cualquier instancia llega al mismo estado.
+ */
+export function avanzar(room: RoomState, hasta: number) {
+  if (room.fase === 'lanzamiento' && room.transito) {
+    fijarAhora(Math.min(hasta, room.transito.inicio + room.transito.duracion))
+    actualizarTransito(room)
   }
-  if (ahora - last < HORA_MS) return
-  ultimaHora.set(room.codigo, ahora)
-  horaDeMision(room)
+  for (let guarda = 0; guarda < 5000; guarda++) {
+    let t = Infinity
+    let esHora = false
+    for (const p of room.propuestas) if (p.estado === 'pendiente' && p.vence < t) t = p.vence
+    for (const e of room.emergencias) if (e.estado === 'activa' && e.vence < t) t = e.vence
+    if (room.fase === 'base' && !room.resultado && room.reloj + HORA_MS < t) {
+      t = room.reloj + HORA_MS
+      esHora = true
+    }
+    if (t > hasta) break
+    fijarAhora(t)
+    if (esHora) {
+      room.reloj = t
+      horaDeMision(room)
+    } else {
+      vencer(room, t)
+    }
+  }
+  fijarAhora(hasta)
 }
 
 export function horaDeMision(room: RoomState) {
@@ -608,8 +630,8 @@ export function horaDeMision(room: RoomState) {
   // desgaste de equipos
   for (const s of room.sistemas) {
     if (!s.online) continue
-    s.integridad = Math.max(0, s.integridad - (0.2 + Math.random() * 0.3))
-    if (s.integridad < 25 && Math.random() < 0.08) {
+    s.integridad = Math.max(0, s.integridad - (0.2 + azar(room) * 0.3))
+    if (s.integridad < 25 && azar(room) < 0.08) {
       s.online = false
       log(room, `FALLO: ${MODULE_BY_ID[s.id].nombre} se apagó por falta de mantenimiento.`, 'alerta')
     }
@@ -637,15 +659,15 @@ export function horaDeMision(room: RoomState) {
     j.oxigeno = Math.round(Math.max(0, Math.min(100, (r.oxigeno / Math.max(1, room.capacidad.oxigeno * 0.3)) * 100)))
     j.pulso = Math.round(64 + (100 - j.salud) * 0.5 + (room.tormenta ? 12 : 0) + (r.oxigeno <= 0 ? 25 : 0))
     if (j.fueraDeServicio > 0) j.fueraDeServicio -= 1
-    if (j.salud < 35 && !j.ayuda && Math.random() < 0.15) {
-      j.ayuda = { paraRol: 'medico', motivo: 'Salud crítica, necesito revisión médica.', desde: Date.now() }
+    if (j.salud < 35 && !j.ayuda && azar(room) < 0.15) {
+      j.ayuda = { paraRol: 'medico', motivo: 'Salud crítica, necesito revisión médica.', desde: ahora() }
       log(room, `${j.nombre} pide ayuda al médico: salud crítica.`, 'alerta')
     }
     if (j.ayudando && !jugador(room, j.ayudando)?.ayuda) j.ayudando = null
   }
 
   // emergencias aleatorias
-  if (m.hora % 6 === 3 && Math.random() < 0.4) generarEmergencia(room)
+  if (m.hora % 6 === 3 && azar(room) < 0.4) generarEmergencia(room)
 
   // puntos críticos
   const pc: string[] = []

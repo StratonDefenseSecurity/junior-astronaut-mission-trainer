@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useStore } from '../store'
-import { api } from '../socket'
+import { api } from '../red'
 
 export function HomeScreen() {
   const usuario = useStore((s) => s.usuario)

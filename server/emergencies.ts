@@ -1,3 +1,4 @@
+import { azar } from './reloj.js'
 import { MODULE_BY_ID, type Emergency, type EmergencyAlternative, type ModuleId, type Role, type RoomState } from '../shared/types.js'
 
 export interface EmergencyDef {
@@ -63,7 +64,7 @@ export const EMERGENCIAS: EmergencyDef[] = [
     titulo: 'Tripulante con síntomas',
     descripcion: (r) => {
       const t = tripulacion(r)
-      const p = t[Math.floor(Math.random() * t.length)]
+      const p = t[Math.floor(azar(r) * t.length)]
       return `${p?.nombre ?? 'Un tripulante'} presenta mareos y fiebre. Puede ser deshidratación o una infección.`
     },
     roles: ['medico'],
@@ -142,7 +143,7 @@ export function aplicarAlternativa(room: RoomState, em: Emergency, altId: string
         return 'No había repuestos suficientes. El módulo sigue apagado.'
       }
       if (altId === 'reinicio') {
-        if (Math.random() < 0.5) {
+        if (azar(room) < 0.5) {
           mod.online = true
           return 'El reinicio funcionó.'
         }
@@ -189,7 +190,7 @@ export function aplicarAlternativa(room: RoomState, em: Emergency, altId: string
         return `${p.nombre} queda fuera de servicio 8 horas.`
       }
       p.salud = Math.max(0, p.salud - 20)
-      if (Math.random() < 0.4) dañar(5, (x) => x.id !== p.id)
+      if (azar(room) < 0.4) dañar(5, (x) => x.id !== p.id)
       return `${p.nombre} empeoró y pudo contagiar a otros.`
     }
 
