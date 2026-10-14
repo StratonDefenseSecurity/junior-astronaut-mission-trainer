@@ -1,6 +1,7 @@
-// Comunicación con el servidor por HTTP. No hay sockets: el cliente consulta el estado de la
-// sala dos veces por segundo y envía cada acción como una petición aparte. En cada consulta
-// manda dónde está su personaje y recibe dónde están los demás.
+// Comunicación con el servidor. Cada acción es una petición HTTP. Además, el cliente consulta
+// el estado de la sala dos veces por segundo; en cada consulta manda dónde está su personaje y
+// recibe dónde están los demás. Esa consulta va por WebSocket cuando el servidor lo ofrece
+// (Cloudflare) y por HTTP cuando no (servidor local), con la misma pregunta y la misma respuesta.
 import { masaTotal, type Loadout, type RoomState, type Traje } from '@shared/types'
 import { local } from './mundo/control'
 import { useStore } from './store'
@@ -45,21 +46,8 @@ function conCargaPendiente(sala: RoomState): RoomState {
   return { ...sala, cargamento, masa: masaTotal(cargamento) }
 }
 
-async function llamar(op: string, datos: Record<string, unknown> = {}, silencioso = false): Promise<Resultado | null> {
-  const s = useStore.getState()
-  const n = ++secuencia
-  let d: Resultado
-  try {
-    const r = await fetch('/api/juego', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', ...(s.token ? { authorization: `Bearer ${s.token}` } : {}) },
-      body: JSON.stringify({ op, codigo: s.codigo ?? undefined, v: s.sala?.version ?? 0, ...datos }),
-    })
-    d = (await r.json().catch(() => ({ error: 'Respuesta inválida del servidor.' }))) as Resultado
-  } catch {
-    useStore.getState().setConectado(false)
-    return null
-  }
+/** Aplica una respuesta del servidor, venga por HTTP o por WebSocket. `n` ordena las respuestas. */
+function aplicar(d: Resultado, n: number, silencioso: boolean) {
   const st = useStore.getState()
   if (!st.conectado) st.setConectado(true)
   if (typeof d.ahora === 'number') {
@@ -71,16 +59,18 @@ async function llamar(op: string, datos: Record<string, unknown> = {}, silencios
     for (const [id, p] of Object.entries(d.pos)) ajenos.set(id, { x: p[0], z: p[1], giro: p[2] ?? 0, andando: (p[3] ?? 0) > 0, t })
   }
   if (d.sinSesion) {
+    cerrarSocket()
     st.setAuth(null, null)
-    return d
+    return
   }
   if (d.sinSala) {
     const teniaSala = Boolean(st.sala)
     huella = ''
     ajenos.clear()
+    cerrarSocket()
     st.setSala(null)
     if (d.error && (teniaSala || !silencioso)) st.toast(d.error)
-    return d
+    return
   }
   if (d.sala && n > aplicada) {
     aplicada = n
@@ -88,16 +78,120 @@ async function llamar(op: string, datos: Record<string, unknown> = {}, silencios
     st.setSala(conCargaPendiente(d.sala))
   }
   if (d.error && !silencioso) st.toast(d.error)
+}
+
+async function llamar(op: string, datos: Record<string, unknown> = {}, silencioso = false): Promise<Resultado | null> {
+  const s = useStore.getState()
+  const n = ++secuencia
+  let d: Resultado
+  try {
+    const r = await fetch('/api/juego', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...(s.token ? { authorization: `Bearer ${s.token}` } : {}) },
+      body: JSON.stringify({ op, codigo: s.codigo ?? undefined, v: s.sala?.version ?? 0, ...datos }),
+    })
+    if (r.headers.get('x-mt-ws') === '1') socketDisponible = true
+    d = (await r.json().catch(() => ({ error: 'Respuesta inválida del servidor.' }))) as Resultado
+  } catch {
+    useStore.getState().setConectado(false)
+    return null
+  }
+  aplicar(d, n, silencioso)
   return d
+}
+
+// ---------- Consulta del estado por WebSocket ----------
+
+/** El servidor anunció (cabecera x-mt-ws) que acepta las consultas por WebSocket. */
+let socketDisponible = false
+let socket: WebSocket | null = null
+let socketCodigo = ''
+let socketAbierto = false
+/** Consultas enviadas por el WebSocket que aún no tienen respuesta. */
+let sinRespuesta: { n: number; t: number }[] = []
+/** No se intenta reconectar antes de este instante. */
+let socketReintento = 0
+
+function cerrarSocket(esperaMs = 0) {
+  const s = socket
+  socket = null
+  socketAbierto = false
+  sinRespuesta = []
+  socketReintento = performance.now() + esperaMs
+  if (!s) return
+  s.onopen = s.onmessage = s.onclose = s.onerror = null
+  try {
+    s.close()
+  } catch {
+    // ya estaba cerrado
+  }
+}
+
+/** Devuelve el WebSocket de la sala si ya se puede usar; si no, lo va abriendo. */
+function socketDe(codigo: string, token: string): WebSocket | null {
+  if (!socketDisponible || typeof WebSocket === 'undefined') return null
+  if (socket && socketCodigo !== codigo) cerrarSocket()
+  if (socket) return socketAbierto ? socket : null
+  if (performance.now() < socketReintento) return null
+  const s = new WebSocket(`${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/api/ws?codigo=${encodeURIComponent(codigo)}`)
+  socket = s
+  socketCodigo = codigo
+  s.onopen = () => {
+    if (socket !== s) return
+    // La sesión viaja en el primer mensaje, no en la dirección.
+    s.send(JSON.stringify({ auth: `Bearer ${token}` }))
+    socketAbierto = true
+  }
+  s.onmessage = (e) => {
+    if (socket !== s || typeof e.data !== 'string') return
+    let d: Resultado & { n?: number }
+    try {
+      d = JSON.parse(e.data) as Resultado & { n?: number }
+    } catch {
+      return
+    }
+    const n = typeof d.n === 'number' ? d.n : 0
+    sinRespuesta = sinRespuesta.filter((p) => p.n > n)
+    aplicar(d, n, true)
+  }
+  s.onclose = s.onerror = () => {
+    if (socket === s) cerrarSocket(5000)
+  }
+  return null
 }
 
 async function sondear() {
   const s = useStore.getState()
-  if (!s.token || !s.codigo || consultando) return
+  if (!s.token || !s.codigo) {
+    if (socket) cerrarSocket()
+    return
+  }
+  const enMundo = s.sala && !['lobby', 'contexto', 'fin'].includes(s.sala.fase)
+  const p = enMundo ? [local.x, local.z, local.giro, local.vel > 0.2 ? 1 : 0] : undefined
+
+  const ws = socketDe(s.codigo, s.token)
+  if (ws) {
+    const t = performance.now()
+    if (sinRespuesta.length && t - sinRespuesta[0].t > 5000) {
+      // El WebSocket dejó de responder: se cierra y esta consulta sigue por HTTP.
+      cerrarSocket(5000)
+    } else {
+      if (sinRespuesta.length < 2) {
+        const n = ++secuencia
+        try {
+          ws.send(JSON.stringify({ n, v: s.sala?.version ?? 0, h: huella, p }))
+          sinRespuesta.push({ n, t })
+        } catch {
+          cerrarSocket(5000)
+        }
+      }
+      return
+    }
+  }
+
+  if (consultando) return
   consultando = true
   try {
-    const enMundo = s.sala && !['lobby', 'contexto', 'fin'].includes(s.sala.fase)
-    const p = enMundo ? [local.x, local.z, local.giro, local.vel > 0.2 ? 1 : 0] : undefined
     await llamar('estado', { h: huella, p }, true)
   } finally {
     consultando = false

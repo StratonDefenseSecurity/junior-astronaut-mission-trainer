@@ -1,6 +1,6 @@
-// Prueba de punta a punta contra un servidor en marcha (local o Vercel):
+// Prueba de punta a punta contra un servidor en marcha (local o Cloudflare):
 //   node scripts/e2e.mjs http://localhost:3001            misión completa (unos 6 minutos)
-//   node scripts/e2e.mjs https://mi-sitio.vercel.app --corto   hasta el inicio del viaje (1.5 min)
+//   node scripts/e2e.mjs https://mi-sitio.workers.dev --corto   hasta el inicio del viaje (1.5 min)
 // Crea dos cuentas de prueba y juega con ellas por la API, como lo haría el navegador.
 const base = (process.argv[2] ?? 'http://localhost:3001').replace(/\/$/, '')
 const corto = process.argv.includes('--corto')
@@ -15,7 +15,36 @@ async function llamar(op, datos = {}, token) {
     body: JSON.stringify({ op, ...datos }),
   })
   const d = await r.json().catch(() => ({ error: `respuesta no JSON (${r.status})` }))
-  return { status: r.status, d, ms: Date.now() - t0 }
+  return { status: r.status, d, ms: Date.now() - t0, ws: r.headers.get('x-mt-ws') === '1' }
+}
+
+/** Abre el WebSocket de consultas de una sala y devuelve cómo preguntar por él. */
+function abrirSocket(codigo, token) {
+  return new Promise((resolver, rechazar) => {
+    const ws = new WebSocket(`${base.replace(/^http/, 'ws')}/api/ws?codigo=${codigo}`)
+    const esperando = []
+    let cerrado = null
+    ws.onmessage = (e) => esperando.shift()?.(JSON.parse(e.data))
+    ws.onclose = (e) => {
+      cerrado = e.code
+      for (const r of esperando.splice(0)) r(null)
+    }
+    ws.onerror = () => rechazar(new Error('no se pudo abrir el WebSocket'))
+    ws.onopen = () => {
+      if (token) ws.send(JSON.stringify({ auth: `Bearer ${token}` }))
+      resolver({
+        preguntar: (m) =>
+          new Promise((r) => {
+            if (cerrado !== null) return r(null)
+            esperando.push(r)
+            ws.send(JSON.stringify(m))
+            setTimeout(() => r(null), 8000)
+          }),
+        cerrar: () => ws.close(),
+        codigoDeCierre: () => cerrado,
+      })
+    }
+  })
 }
 function comprobar(cond, msg, detalle = '') {
   if (cond) console.log('  ok  ', msg)
@@ -47,6 +76,21 @@ const une = await llamar('unirse', { codigo }, B)
 comprobar(une.status === 200 && une.d.sala.jugadores.length === 2, `B se une (${une.ms} ms)`)
 
 let sala = une.d.sala
+
+if (une.ws) {
+  // El servidor ofrece las consultas por WebSocket (Cloudflare): misma pregunta, misma respuesta.
+  const s1 = await abrirSocket(codigo, B)
+  const t0 = Date.now()
+  const r1 = await s1.preguntar({ n: 1, v: 0, h: '' })
+  comprobar(r1?.n === 1 && r1.sala?.codigo === codigo && typeof r1.h === 'string', `consulta por WebSocket (${Date.now() - t0} ms)`, JSON.stringify(r1).slice(0, 200))
+  const r2 = await s1.preguntar({ n: 2, v: r1?.sala?.version ?? 0, h: r1?.h ?? '', p: [2, 1, 0, 1] })
+  comprobar(r2?.n === 2 && r2.igual === true && typeof r2.ahora === 'number', 'sin cambios, el WebSocket responde solo "igual"', JSON.stringify(r2).slice(0, 200))
+  s1.cerrar()
+  const s2 = await abrirSocket(codigo, null)
+  const r3 = await s2.preguntar({ n: 1, v: 0, h: '' })
+  await esperar(300)
+  comprobar(r3?.sinSesion === true && s2.codigoDeCierre() !== null, 'un WebSocket sin sesión se rechaza y se cierra', JSON.stringify(r3))
+} else console.log('  ...   este servidor no ofrece WebSocket: las consultas van por HTTP')
 const paso = async (quien, op, datos, msg, esperado = 200) => {
   const r = await llamar(op, { codigo, v: sala.version, ...datos }, quien)
   if (r.d.sala) sala = r.d.sala

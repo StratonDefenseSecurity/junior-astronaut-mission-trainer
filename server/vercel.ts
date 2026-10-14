@@ -1,6 +1,11 @@
 // Entrada de la función de Vercel: POST /api/juego
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { usarAlmacen } from './almacen.js'
+import { almacenBlob } from './almacen-vercel.js'
 import { manejar } from './api.js'
+
+// Sin almacén Blob configurado, las salas viven solo en la memoria de la instancia.
+if (process.env.BLOB_READ_WRITE_TOKEN || process.env.BLOB_STORE_ID) usarAlmacen(almacenBlob())
 
 async function leerCuerpo(req: IncomingMessage & { body?: unknown }): Promise<unknown> {
   let cuerpo = req.body

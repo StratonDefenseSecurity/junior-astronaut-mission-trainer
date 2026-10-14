@@ -10,5 +10,6 @@
     "types": ["node"],
     "paths": { "@shared/*": ["./shared/*"] }
   },
-  "include": ["server", "shared"]
+  "include": ["server", "shared"],
+  "exclude": ["server/cloudflare.ts"]
 }

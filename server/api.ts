@@ -1,14 +1,16 @@
-// API del juego sobre HTTP: una sola entrada (`manejar`) que usan tanto la función de Vercel
-// como el servidor local de desarrollo.
+// API del juego: una sola entrada (`manejar`) que usan el Worker de Cloudflare, el servidor
+// local de desarrollo y la función de Vercel.
 //
-// Modelo de ejecución (pensado para funciones sin proceso permanente):
-// - El estado de cada sala vive en el almacén (Vercel Blob). Se guarda con cada acción y,
-//   mientras alguien juega, cada 45 segundos.
+// Modelo de ejecución (pensado para plataformas sin proceso permanente):
+// - El estado de cada sala vive en el almacén. Se guarda con cada acción y, mientras alguien
+//   juega, cada 45 segundos.
 // - Cada instancia mantiene una copia en memoria para no leer el almacén en cada consulta, y la
-//   revalida cada pocos segundos por si otra instancia escribió.
+//   revalida cada pocos segundos por si otra instancia escribió. En Cloudflare cada sala tiene
+//   una única instancia (su Durable Object), así que nunca hay otra que escriba.
 // - El paso del tiempo entre guardados se recalcula de forma determinista (`avanzar`).
-// - Los clientes consultan el estado dos veces por segundo (`estado`) en lugar de usar sockets.
-//   En esa misma consulta envían dónde está su personaje y reciben dónde están los demás.
+// - Los clientes consultan el estado dos veces por segundo (`estado`), por WebSocket donde lo
+//   hay y por HTTP donde no. En esa consulta envían dónde está su personaje y reciben dónde
+//   están los demás.
 import crypto from 'node:crypto'
 import type { Actividad, DecisionMode, PerfilId, Role, RoomState, Traje, TrayectoriaId, Zona } from '../shared/types.js'
 import { almacen } from './almacen.js'
@@ -76,9 +78,14 @@ const fallo = (status: number, error: string, extra: Record<string, unknown> = {
 
 // ---------- Cuentas ----------
 
+let secretoFijado = ''
+/** Fija el secreto de sesiones cuando no llega por variable de entorno (Cloudflare). */
+export function fijarSecreto(s: string) {
+  secretoFijado = s
+}
 function secreto(): string {
-  const s = process.env.AUTH_SECRET
-  if (!s) throw new Error('Falta la variable de entorno AUTH_SECRET')
+  const s = secretoFijado || (typeof process !== 'undefined' ? process.env.AUTH_SECRET : '')
+  if (!s) throw new Error('Falta el secreto de sesiones AUTH_SECRET')
   return s
 }
 const hmac = (texto: string) => crypto.createHmac('sha256', secreto()).update(texto).digest('base64url')
@@ -310,10 +317,17 @@ function consultar(codigo: string, usuario: Usuario, versionCliente: number, hue
   })
 }
 
-async function crear(usuario: Usuario, modo: DecisionMode): Promise<Respuesta> {
-  const letras = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-  for (let intento = 0; intento < 6; intento++) {
-    const codigo = Array.from(crypto.randomBytes(6), (b) => letras[b % letras.length]).join('')
+const LETRAS_CODIGO = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+/** Código de sala nuevo: 6 caracteres sin letras ni cifras que se confundan. */
+export const codigoAleatorio = () => Array.from(crypto.randomBytes(6), (b) => LETRAS_CODIGO[b % LETRAS_CODIGO.length]).join('')
+
+/**
+ * Crea una sala. `codigoFijo` lo pasa quien ya eligió el código porque de él depende dónde se
+ * guarda la sala (en Cloudflare, en qué Durable Object); si está en uso responde `codigoEnUso`.
+ */
+async function crear(usuario: Usuario, modo: DecisionMode, codigoFijo?: string): Promise<Respuesta> {
+  for (let intento = 0; intento < (codigoFijo ? 1 : 6); intento++) {
+    const codigo = codigoFijo ?? codigoAleatorio()
     const t = Date.now()
     fijarAhora(t)
     const room = crearSala(codigo, usuario.id, modo)
@@ -322,7 +336,10 @@ async function crear(usuario: Usuario, modo: DecisionMode): Promise<Respuesta> {
     room.version = 1
     const texto = JSON.stringify(room)
     const r = await almacen().escribir(rutaSala(codigo), documento(t, texto), null)
-    if (r === 'conflicto') continue
+    if (r === 'conflicto') {
+      if (codigoFijo) return fallo(409, 'Ese código de sala ya está en uso.', { codigoEnUso: true })
+      continue
+    }
     const e: Entrada = { room, etiqueta: r, verificado: t, visto: t, guardado: t }
     salas.set(codigo, e)
     presenciaDe(codigo).ultimo.set(usuario.id, t)
@@ -397,7 +414,12 @@ function preguntarBot(codigo: string, usuario: Usuario, versionCliente: number, 
 const texto = (v: unknown, max = 300) => String(v ?? '').trim().slice(0, max)
 const objeto = (v: unknown) => (v && typeof v === 'object' ? (v as Record<string, unknown>) : {})
 
-async function despachar(c: Record<string, unknown>, autorizacion: string | undefined): Promise<Respuesta> {
+export interface OpcionesManejo {
+  /** Código para la sala que se va a crear (ver `crear`). Nunca viene del cliente. */
+  codigoNuevo?: string
+}
+
+async function despachar(c: Record<string, unknown>, autorizacion: string | undefined, opciones: OpcionesManejo): Promise<Respuesta> {
   const op = texto(c.op, 30)
   if (op === 'registro') return registro(texto(c.usuario, 40), String(c.clave ?? ''))
   if (op === 'ingresar') return ingresar(texto(c.usuario, 40), String(c.clave ?? ''))
@@ -405,7 +427,7 @@ async function despachar(c: Record<string, unknown>, autorizacion: string | unde
   const usuario = verificar(autorizacion)
   if (!usuario) return fallo(401, 'Sesión inválida. Vuelve a ingresar.', { sinSesion: true })
   if (op === 'yo') return ok({ usuario })
-  if (op === 'crear') return crear(usuario, c.modo === 'votacion' ? 'votacion' : 'comandante')
+  if (op === 'crear') return crear(usuario, c.modo === 'votacion' ? 'votacion' : 'comandante', opciones.codigoNuevo)
 
   const codigo = texto(c.codigo, 10).toUpperCase()
   if (!/^[A-Z0-9]{6}$/.test(codigo)) return fallo(400, 'El código de sala tiene 6 letras o números.')
@@ -484,9 +506,9 @@ async function despachar(c: Record<string, unknown>, autorizacion: string | unde
   return fallo(400, 'Operación desconocida.')
 }
 
-export async function manejar(cuerpo: unknown, autorizacion?: string): Promise<Respuesta> {
+export async function manejar(cuerpo: unknown, autorizacion?: string, opciones: OpcionesManejo = {}): Promise<Respuesta> {
   try {
-    return await despachar(objeto(cuerpo), autorizacion)
+    return await despachar(objeto(cuerpo), autorizacion, opciones)
   } catch (e) {
     console.error('[api]', e)
     return fallo(500, 'Error interno del servidor.')

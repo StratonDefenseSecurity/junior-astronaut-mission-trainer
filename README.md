@@ -4,7 +4,7 @@ Juego 3D multijugador para el reto **"Build a Junior Astronaut Mission Trainer"*
 
 Una tripulación de 2 a 6 estudiantes crea su cuenta y entra a una sala. La misión sigue el esquema que diseñó el equipo: primero se les da la situación que tienen que afrontar, después cada uno recibe su rol, se establece el objetivo y eligen los suministros. Cada jugador controla a su astronauta en tercera persona: vive el despegue, cruza el espacio dentro de la nave, aterriza y monta una base en Marte. El cuerpo de cada astronauta, el aire, el agua, la energía, el clima y la radiación se calculan con valores publicados por NASA.
 
-**En línea:** https://mision-marte-trainer-seven.vercel.app
+**En línea:** https://mision-marte-trainer.nunesjaramilloluis.workers.dev
 
 ## Cómo se juega
 
@@ -62,46 +62,62 @@ Abre `http://localhost:5173`. El cliente (Vite) corre en el 5173 y el servidor e
 
 | Comando | Qué hace |
 |---|---|
-| `npm run typecheck` | Revisa tipos de cliente y servidor |
+| `npm run typecheck` | Revisa tipos del cliente, del servidor y del Worker |
 | `npm run simular` | Juega una misión completa sin navegador. Acepta tripulantes, alternativa, política, trayectoria y perfil: `npx tsx scripts/simular.ts 4 minimo buena rapida corta` |
 | `npm run e2e` | Prueba de punta a punta por la API contra un servidor en marcha. Añade la URL y `--corto` para la versión de 90 segundos |
-| `npm run empaquetar` | Compila el sitio y la función al formato de Vercel |
-| `npm run desplegar` | Empaqueta, prueba el paquete y publica en Vercel |
+| `npm run cf:dev` | Compila el sitio y lo sirve con el emulador de Cloudflare en `http://127.0.0.1:8787`, con Durable Objects y WebSocket como en producción |
+| `npm run desplegar` | Compila el sitio y lo publica en Cloudflare |
 
 ## Arquitectura
 
-No hay un servidor siempre encendido ni sockets: todo corre en Vercel.
+Todo corre en Cloudflare, en el plan gratuito, sin un servidor siempre encendido.
 
-- **Cliente:** React, React Three Fiber y Zustand. Consulta el estado de la sala dos veces por segundo y en la misma consulta envía la posición de su personaje y recibe la de los demás.
-- **Servidor:** una función (`POST /api/juego`) con la lógica del juego. El estado de cada sala se guarda en Vercel Blob con cada acción y cada 45 segundos mientras alguien juega. Entre guardados, el tiempo se recalcula de forma determinista, así cualquier instancia llega al mismo estado.
+- **Cliente:** React, React Three Fiber y Zustand. Cada acción es una petición HTTP. Además consulta el estado de la sala dos veces por segundo, y en esa consulta envía la posición de su personaje y recibe la de los demás. La consulta va por WebSocket; si el WebSocket falla, sigue por HTTP.
+- **Worker:** sirve el sitio y reparte las peticiones de `/api/*`. No calcula nada: en el plan gratuito solo dispone de 10 ms de CPU por petición.
+- **Durable Objects:** cada sala tiene el suyo, una única instancia en todo el mundo con la sala en memoria y su propio almacenamiento SQLite. Ahí corren las reglas y la simulación. Las cuentas viven en otro. Como cada sala tiene un solo proceso, nunca hay dos escribiendo a la vez.
+- **Guardado:** la sala se guarda con cada acción y cada 45 segundos mientras alguien juega. Entre guardados el tiempo se recalcula de forma determinista, así que si Cloudflare descarga el objeto de memoria, al volver llega al mismo estado.
 - **Tiempo:** la misión solo avanza mientras alguien consulta. Si todos se van más de 90 segundos, se detiene sola.
 
 ```
 shared/types.ts       tipos, roles, suministros, sitios, tareas, escalas
 shared/ciencia.ts     constantes reales, fuentes y supuestos
 shared/plan.ts        alternativas de suministros y cuentas del asistente sobre la carga
-server/api.ts         entrada HTTP: cuentas, salas, posiciones, guardado
+server/cloudflare.ts  Worker y Durable Objects: reparto de peticiones, WebSocket, almacenamiento
+server/api.ts         operaciones del juego: cuentas, salas, posiciones, guardado
 server/game.ts        reglas: roles, suministros, propuestas, acciones, emergencias
 server/emergencies.ts catálogo de emergencias
 server/bot.ts         asistente por reglas
 server/sim/           simulación: paso, fisiología, ambiente, vuelo
 server/datos/         datos de NASA generados
-server/almacen.ts     Vercel Blob en producción, archivos en local
+server/almacen*.ts    dónde se guardan los documentos: Durable Object, archivos locales o Vercel Blob
+server/index.ts       servidor local de desarrollo (Express)
 src/mundo/            escenas 3D, personaje, controles, mapa de estaciones
 src/hud/              paneles, estaciones, propuestas, emergencias, asistente, fuentes
 src/screens/          acceso, inicio, sala, contextualización por pasos, juego
-scripts/              simulación, prueba e2e, datos de NASA, empaquetado
+scripts/              simulación, prueba e2e, datos de NASA
+wrangler.jsonc        configuración del despliegue en Cloudflare
 ```
 
 ## Despliegue
 
-El sitio está en Vercel, en la cuenta personal `nunesjaramilloluis-8913`, proyecto `mision-marte-trainer`, con un almacén Blob privado `mision-marte-datos` y la variable `AUTH_SECRET`.
+El sitio está en Cloudflare Workers, en la cuenta `e205fb741a6d9827ec596ebd9adfa1da`, como el Worker `mision-marte-trainer`. La configuración está en [wrangler.jsonc](wrangler.jsonc).
 
-`npm run desplegar` empaqueta, prueba el paquete y publica con la CLI de Vercel. En esta máquina la sesión de esa cuenta está en una carpeta aparte, anotada en `.vercel/cli-dir.txt`, para no mezclarla con otras cuentas.
+```bash
+npx wrangler login
+```
+
+```bash
+npm run desplegar
+```
+
+El primer comando solo hace falta una vez por computadora. El secreto de sesiones `AUTH_SECRET` ya está guardado en Cloudflare y los despliegues no lo tocan. Para el emulador local se lee de `.dev.vars`, que no se sube a git.
+
+El despliegue anterior en Vercel sigue en el repositorio como alternativa (`npm run desplegar:vercel`), pero ya no es el que se usa.
 
 ## Límites conocidos
 
-- El plan gratuito de Vercel incluye una cantidad limitada de operaciones de Blob al mes. Cada hora de juego de una sala hace entre 150 y 200 escrituras: conviene revisar el uso en el panel de Vercel si se juega mucho.
+- El plan gratuito de Cloudflare admite 100 000 peticiones al día, tanto al Worker como a los Durable Objects, y se renueva a las 00:00 UTC. Con las consultas por WebSocket, cada jugador gasta unas 400 por hora de juego. Si un día se agotan, el juego deja de responder hasta el día siguiente.
+- Las cuentas y las salas creadas en el despliegue de Vercel no pasaron a Cloudflare: hay que registrarse de nuevo.
 - El asistente responde por reglas, no con un modelo de lenguaje.
 - El movimiento de los compañeros se actualiza dos veces por segundo y se suaviza en pantalla.
 - No hay vista en primera persona.

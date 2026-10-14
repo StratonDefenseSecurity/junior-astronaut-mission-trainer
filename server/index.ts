@@ -1,16 +1,18 @@
 // Servidor local: desarrollo (`npm run dev`) y autoalojado (`npm start`).
-// En Vercel no se usa este archivo: ahí la entrada es server/vercel.ts.
+// En Cloudflare no se usa este archivo: ahí la entrada es server/cloudflare.ts.
 import express from 'express'
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { usarAlmacen } from './almacen.js'
+import { almacenArchivos } from './almacen-archivos.js'
 import { manejar } from './api.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const DATA_DIR = path.join(__dirname, 'data')
 fs.mkdirSync(DATA_DIR, { recursive: true })
-process.env.MT_DATA_DIR ??= DATA_DIR
+usarAlmacen(almacenArchivos(process.env.MT_DATA_DIR ?? DATA_DIR))
 
 // Secreto de sesiones: en local se genera una vez y se guarda en server/data (fuera de git).
 if (!process.env.AUTH_SECRET) {
