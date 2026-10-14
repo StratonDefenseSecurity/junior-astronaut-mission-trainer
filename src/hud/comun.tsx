@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { C } from '@shared/ciencia'
+import { escenarioDe, fechaCorta, fechaDeMision } from '@shared/escenarios'
 import { ROLE_BY_ID, TRANSITO_INICIO_S, formatoHora, formatoMET, type Role, type RoomState } from '@shared/types'
 import { ahoraServidor } from '../store'
 
@@ -51,15 +52,19 @@ export function useAhora() {
 export const enMarte = (sala: RoomState) => sala.tAterrizaje > 0
 
 /** Reloj de la misión: T+ durante el vuelo, sol y hora local en Marte. */
+/** Fecha real (calendario terrestre, UTC) del instante actual de la misión. */
+export const fechaActual = (sala: RoomState) => fechaDeMision(escenarioDe(sala.escenario), Math.max(0, sala.t))
+
 export function relojMision(sala: RoomState): { principal: string; secundario: string } {
+  const fecha = fechaCorta(fechaActual(sala))
   if (enMarte(sala)) {
-    return { principal: `Sol ${sala.ambiente.sol} · ${formatoHora(sala.ambiente.hora)}`, secundario: `de ${sala.mision.solesObjetivo} soles` }
+    return { principal: `Sol ${sala.ambiente.sol} · ${formatoHora(sala.ambiente.hora)}`, secundario: `de ${sala.mision.solesObjetivo} soles · ${fecha}` }
   }
   if (sala.fase === 'transito' || sala.fase === 'llegada') {
     const dia = Math.floor(Math.max(0, sala.t) / 86400) + 1
-    return { principal: `Día ${dia} · ${formatoHora(sala.ambiente.hora)}`, secundario: `de ${sala.mision.diasTransito} de viaje` }
+    return { principal: `Día ${dia} · ${formatoHora(sala.ambiente.hora)}`, secundario: `de ${sala.mision.diasTransito} de viaje · ${fecha}` }
   }
-  return { principal: formatoMET(sala.t), secundario: 'tiempo de misión' }
+  return { principal: formatoMET(sala.t), secundario: `tiempo de misión · ${fecha}` }
 }
 
 /** Días y horas que la tripulación lleva en el espacio, desde que alcanzó la órbita hasta aterrizar. */

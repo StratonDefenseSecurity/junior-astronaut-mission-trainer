@@ -1,5 +1,6 @@
 // Columna de pestañas: qué toca hacer (Misión), decisiones en curso (Propuestas) y el asistente.
 import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { escenarioDe } from '@shared/escenarios'
 import { PASOS_ENSAMBLAJE, ROLE_BY_ID, TAREAS_ENSAMBLAJE, type Player, type RoomState } from '@shared/types'
 import { ESTACION_BY_ID, estacionesDestacadas, puede } from '../mundo/mapa'
 import { api } from '../red'
@@ -41,6 +42,14 @@ export function Mision({ sala, yo }: { sala: RoomState; yo: Player }) {
   const cinematica = sala.fase === 'lanzamiento' || (sala.fase === 'llegada' && sala.subfase === 'descenso')
   return (
     <div className="stack">
+      <div className="mision-tarjeta">
+        <span className="brand">{sala.nombreMision || 'Misión'} · {escenarioDe(sala.escenario).nombre}</span>
+        <p className="mini">{escenarioDe(sala.escenario).reto}</p>
+        <div className="mini muted">
+          Muestras {sala.mision.muestrasAnalizadas}/{sala.mision.muestrasObjetivo}
+          {sala.mision.aguaObjetivo > 0 && ` · agua del hielo ${Math.round(sala.mision.aguaExtraida)}/${sala.mision.aguaObjetivo} kg`}
+        </div>
+      </div>
       {!cinematica && !sala.resultado && (
         <button className="primary" onClick={() => abrir('principal')}>Página principal (M)</button>
       )}

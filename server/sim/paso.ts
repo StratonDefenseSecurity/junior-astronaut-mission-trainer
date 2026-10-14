@@ -1,6 +1,7 @@
 // Un paso de simulación: avanza el tiempo de misión y recalcula energía, aire, agua, comida,
 // el cuerpo de cada tripulante, el desgaste de los equipos y los sucesos.
 import { C } from '../../shared/ciencia.js'
+import { CIUDAD_BY_ID, escenarioDe } from '../../shared/escenarios.js'
 import {
   DESCENSO_S,
   ESCALA_ALERTA,
@@ -351,7 +352,11 @@ function soporteVital(room: RoomState, dt: number, crew: Player[], superficie: b
     r.aguaResidual -= proc
   }
   const isru = sis(room, 'isru')
-  if (superficie && isru.operativo) r.agua += (45 * rendimiento(isru.integridad) * dt) / 86400
+  if (superficie && isru.operativo) {
+    const agua = (45 * rendimiento(isru.integridad) * dt) / 86400
+    r.agua += agua
+    room.mision.aguaExtraida = (room.mision.aguaExtraida ?? 0) + agua
+  }
 }
 
 // ---------- Desgaste, averías y sucesos ----------
@@ -360,7 +365,7 @@ function desgaste(room: RoomState, dt: number, superficie: boolean) {
   const dias = dt / 86400
   for (const s of room.sistemas) {
     if (!s.instalado || !s.operativo) continue
-    let tasa = DESGASTE[s.id]
+    let tasa = DESGASTE[s.id] * escenarioDe(room.escenario).mod.desgaste
     if (superficie && room.ambiente.tormentaPolvo && (s.id === 'energia' || s.id === 'isru')) tasa *= 3
     s.integridad = Math.max(0, s.integridad - tasa * dias)
     const riesgo = (0.0025 + (s.integridad < 50 ? (50 - s.integridad) * 0.002 : 0)) * dias
@@ -372,8 +377,11 @@ function sucesos(room: RoomState, dt: number, crew: Player[], superficie: boolea
   const dias = dt / 86400
   const micro = enMicrogravedad(room)
 
-  // Clima espacial: eventos reales de 2024
+  // Clima espacial: eventos reales de 2024, más o menos frecuentes según la situación.
+  const actividad = escenarioDe(room.escenario).mod.particulas
   for (const ev of eventosSolaresPendientes(room)) {
+    if (actividad < 1 && azar(room) > actividad) continue
+    if (actividad > 1 && ev.tasa) ev.tasa *= actividad
     if (ev.tipo === 'fulguracion') {
       log(room, `Fulguración solar de clase ${ev.clase}${ev.region ? ` en la región activa ${ev.region}` : ''}, como la del ${ev.fecha}. Posible corte de radio.`, 'alerta')
     } else if (ev.fuerte) {
@@ -395,6 +403,8 @@ function sucesos(room: RoomState, dt: number, crew: Player[], superficie: boolea
   }
 
   if (crew.length === 0) return
+  sucesosDelGuion(room, crew, superficie)
+  transmisiones(room, crew)
 
   // Mareo espacial en los primeros días sin gravedad
   if (micro && !room.avisos.mareo && room.t > 1.2 * 86400) {
@@ -448,6 +458,68 @@ export function diasRestantes(room: RoomState): number {
   return viaje + estancia
 }
 
+/** Sucesos preparados de la situación (y los que se sortearon al despegar). */
+function sucesosDelGuion(room: RoomState, crew: Player[], superficie: boolean) {
+  for (const g of room.guion ?? []) {
+    if (g.hecho) continue
+    const toca =
+      (g.viaje !== undefined && room.fase === 'transito' && room.vuelo.progreso >= g.viaje) ||
+      (g.sol !== undefined && superficie && room.fase === 'base' && room.ambiente.sol >= g.sol)
+    if (!toca) continue
+    g.hecho = true
+    if (g.tipo === 'fuga' && room.cabina.fuga === 0) lanzarEmergencia(room, 'fuga')
+    else if (g.tipo === 'fallo') {
+      const id = String(g.datos?.sistema ?? 'oga') as SistemaId
+      const s = sis(room, id)
+      if (s.instalado && s.integridad > UMBRAL_AVERIA) lanzarEmergencia(room, 'fallo', { sistema: id })
+    } else if (g.tipo === 'medico') {
+      const j = crew[Math.floor(azar(room) * crew.length)]
+      if (j && !j.dolencia) lanzarEmergencia(room, 'medico', { jugadorId: j.id, nombre: j.nombre, dolencia: DOLENCIAS[Math.floor(azar(room) * DOLENCIAS.length)] })
+    } else if (g.tipo === 'polvo' && !room.ambiente.tormentaPolvo) {
+      const soles = Number(g.datos?.soles ?? 6)
+      const tau = Number(g.datos?.tau ?? 4)
+      room.ambiente.tormentaPolvo = true
+      room.ambiente.polvoSoles = soles
+      room.ambiente.tau = tau
+      room.avisos.polvo = room.t
+      lanzarEmergencia(room, 'polvo', { soles, tau })
+    }
+  }
+}
+
+const minutosSenal = (room: RoomState) => {
+  const s = Math.round(room.vuelo.retardo)
+  return s >= 60 ? `${Math.floor(s / 60)} min ${s % 60} s` : `${s} s`
+}
+
+/** Mensajes del centro de control y de casa en momentos del viaje. Llegan con el retraso real de la señal. */
+function transmisiones(room: RoomState, crew: Player[]) {
+  const una = (clave: string, texto: string) => {
+    if (room.avisos[clave]) return
+    room.avisos[clave] = room.t
+    log(room, texto, 'radio')
+  }
+  const mision = room.nombreMision || 'la tripulación'
+  const v = room.vuelo
+  if (room.fase === 'transito') {
+    if (v.distTierra >= 0.3844) una('msgLuna', `Centro de control a ${mision}: acaban de cruzar la distancia de la Luna, 384 400 km. Desde aquí, todo es más lejos de lo que nadie ha ido nunca en esta nave.`)
+    if (v.progreso >= 0.25) {
+      // Un mensaje de casa para alguien de la tripulación, si eligió su ciudad.
+      const j = crew.find((x) => x.hogar) ?? crew[0]
+      const ciudad = j?.hogar ? CIUDAD_BY_ID[j.hogar as keyof typeof CIUDAD_BY_ID] : null
+      if (j) una('msgCasa1', `Mensaje de casa para ${j.nombre}${ciudad ? `, desde ${ciudad.nombre}` : ''}: "Te vemos cada noche en el mapa del viaje. Cuídate y cuida a tu tripulación". Tardó ${minutosSenal(room)} en llegar.`)
+    }
+    if (v.progreso >= 0.5) una('msgMitad', `Centro de control: mitad del camino. Cada mensaje tarda ya ${minutosSenal(room)} en llegar, así que las decisiones urgentes son suyas. Confiamos en ustedes.`)
+    if (v.progreso >= 0.75) {
+      const j = crew.filter((x) => x.hogar)[1] ?? crew[1]
+      const ciudad = j?.hogar ? CIUDAD_BY_ID[j.hogar as keyof typeof CIUDAD_BY_ID] : null
+      if (j) una('msgCasa2', `Mensaje de casa para ${j.nombre}${ciudad ? `, desde ${ciudad.nombre}` : ''}: "Hoy salimos a mirar el cielo. Nos dijeron que Marte es ese punto rojo. Ahí estás tú". Tardó ${minutosSenal(room)} en llegar.`)
+    }
+  }
+  if (room.fase === 'llegada' && room.subfase === 'orbita') una('msgOrbita', `Centro de control: confirmamos que están en órbita de Marte. Elijan bien dónde aterrizar; nosotros veremos el resultado ${minutosSenal(room)} después que ustedes.`)
+  if (room.tAterrizaje > 0 && room.t > room.tAterrizaje + 3600) una('msgAterrizaje', `Centro de control: recibimos la señal de aterrizaje de ${mision}. Cuando la escuchamos, ustedes ya llevaban ${minutosSenal(room)} en el suelo de Marte.`)
+}
+
 function evaluar(room: RoomState, crew: Player[]) {
   const muerto = crew.find((j) => j.vit.salud <= 0)
   if (muerto) {
@@ -467,8 +539,12 @@ function evaluar(room: RoomState, crew: Player[]) {
     const dosis = sobre.length
       ? ` ${sobre.length === crew.length ? 'Toda la tripulación superó' : `${sobre.map((j) => j.nombre).join(', ')} ${sobre.length > 1 ? 'superaron' : 'superó'}`} el límite de radiación de ${C.LIMITE_CARRERA_MSV} mSv: no podrán volver a volar.`
       : ` Nadie superó el límite de radiación de ${C.LIMITE_CARRERA_MSV} mSv.`
-    if (m.muestrasAnalizadas >= m.muestrasObjetivo) {
-      terminar(room, true, 'Misión cumplida', `La tripulación completó ${m.solesObjetivo} soles en Marte y analizó ${m.muestrasAnalizadas} muestras.${dosis}`)
+    const aguaOk = !m.aguaObjetivo || (m.aguaExtraida ?? 0) >= m.aguaObjetivo
+    const agua = m.aguaObjetivo ? ` y sacó ${Math.round(m.aguaExtraida ?? 0)} kg de agua del hielo` : ''
+    if (m.muestrasAnalizadas >= m.muestrasObjetivo && aguaOk) {
+      terminar(room, true, 'Misión cumplida', `La tripulación completó ${m.solesObjetivo} soles en Marte, analizó ${m.muestrasAnalizadas} muestras${agua}.${dosis}`)
+    } else if (!aguaOk) {
+      terminar(room, false, 'Objetivo incompleto', `Todos sobrevivieron los ${m.solesObjetivo} soles, pero solo se sacaron ${Math.round(m.aguaExtraida ?? 0)} de ${m.aguaObjetivo} kg de agua del hielo.${dosis}`)
     } else {
       terminar(room, false, 'Objetivo incompleto', `Todos sobrevivieron los ${m.solesObjetivo} soles, pero solo se analizaron ${m.muestrasAnalizadas} de ${m.muestrasObjetivo} muestras.${dosis}`)
     }

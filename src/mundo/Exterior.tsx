@@ -4,6 +4,10 @@ import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import type { RoomState } from '@shared/types'
+import { escenarioDe, fechaDeMision } from '@shared/escenarios'
+import { Cielo } from './cielo/Cielo'
+import { vectorHelio } from './cielo/astro'
+import { SITIOS_MARTE, orientacionCieloMarte } from './cieloMarte'
 import { Marca, Rotulo } from './Interior'
 import { ESTACIONES, ESTACION_BY_ID, estacionVisible } from './mapa'
 
@@ -339,6 +343,17 @@ function Estrellas() {
   )
 }
 
+function CieloNocturno({ sala, brillo }: { sala: RoomState; brillo: number }) {
+  const fecha = fechaDeMision(escenarioDe(sala.escenario), Math.max(0, sala.t))
+  const sitio = SITIOS_MARTE[sala.sitio ?? 'gale'] ?? SITIOS_MARTE.gale
+  const minuto = Math.floor(fecha.getTime() / 300_000)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const orientacion = useMemo(() => orientacionCieloMarte(fecha, sitio.lat, sitio.lon, sala.ambiente.hora), [minuto, sitio.lat])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const observador = useMemo(() => vectorHelio('Marte', fecha), [Math.floor(minuto / 12)])
+  return <Cielo fecha={fecha} observador={observador} orientacion={orientacion} brillo={Math.max(0, brillo) * 0.9} atmosfera centelleo={0.05} etiquetas ocultarCuerpos={['Sol']} />
+}
+
 export function Exterior({ sala, cerca, destacadas }: { sala: RoomState; cerca: string | null; destacadas: string[] }) {
   const a = sala.ambiente
   // Altura del Sol: 0 de noche, 1 al mediodía.
@@ -361,7 +376,8 @@ export function Exterior({ sala, cerca, destacadas }: { sala: RoomState; cerca: 
       <ambientLight intensity={0.16 + dia * 0.45} color={esNoche ? '#9db4ff' : '#ffe2c8'} />
       <hemisphereLight args={['#ffd2b0', '#4a1f10', 0.12 + dia * 0.3]} />
       <directionalLight position={sol} intensity={dia * 1.9 * (1 - polvo * 0.75)} color="#ffe6cf" castShadow />
-      {esNoche && <Estrellas />}
+      {/* De noche, el cielo real del sitio: estrellas, planetas y la Tierra como un lucero azulado. */}
+      {(esNoche || dia < 0.15) && <CieloNocturno sala={sala} brillo={(1 - dia / 0.15) * (1 - polvo * 0.85)} />}
       {/* disco del Sol, pequeño: desde Marte se ve dos tercios del tamaño que tiene desde la Tierra */}
       {dia > 0.02 && (
         <mesh position={[sol[0] * 2, sol[1] * 2, sol[2] * 2]}>

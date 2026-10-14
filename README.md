@@ -8,11 +8,11 @@ Una tripulación de 2 a 6 estudiantes crea su cuenta y entra a una sala. La misi
 
 ## Cómo se juega
 
-1. **Sala.** Cuenta, código de sala de 6 caracteres y traje. Aquí todavía no hay roles. Hacen falta al menos 2 jugadores para empezar.
+1. **Sala.** Cuenta, código de sala de 6 caracteres, aspecto del personaje (piel, pelo, peinado, traje y visor) y ciudad de origen, que se marca en la Tierra y desde la que llegan mensajes de casa. Aquí todavía no hay roles. Quien crea la sala elige la situación o la deja al azar. Hacen falta al menos 2 jugadores.
 2. **Contextualización.** Es una interfaz sencilla, de un paso por pantalla, y cada integrante avanza a su ritmo:
-   1. *La situación.* Se le da a cada uno la situación que tiene que afrontar: lo que dura el viaje, lo lejos que queda la Tierra, el aire, el frío, la radiación y lo que consume cada persona.
+   1. *La situación.* Se le da a la tripulación una de seis situaciones, cada una con una fecha de lanzamiento real, su contexto verídico, su reto y sucesos propios: Primera base en Marte, El Sol en su máximo, Temporada de tormentas, Agua bajo el hielo, Rastros de un antiguo lago y Problema a bordo. Después vienen los datos comunes a cualquier viaje a Marte.
    2. *Asignación de roles.* Cada uno elige su rol entre los seis. El asistente dice qué consecuencias tiene. Hace falta un comandante.
-   3. *Objetivo de la misión.* El comandante establece cuántos soles se quedan y cuántas muestras analizan. El piloto o el comandante eligen la trayectoria.
+   3. *Objetivo de la misión.* El comandante establece cuántos soles se quedan y bautiza la misión. El piloto o el comandante eligen la trayectoria.
    4. *Suministros.* Se presentan tres alternativas sobre la cantidad de suministros, que también se pueden ajustar a mano con un límite de carga. El asistente analiza para cuántos días alcanza cada cosa.
 3. **Lanzamiento.** Cuenta regresiva y ascenso con telemetría: altitud, velocidad, aceleración, combustible y energía usada. El pulso de cada tripulante sube con las g.
 4. **Viaje a Marte.** Se camina por el interior de la nave. Dura 150, 210 o 259 días de misión según la trayectoria. En pantalla y en la bitácora quedan registrados los días y horas que llevan en el espacio, el combustible y la energía usada. El comandante controla la escala de tiempo.
@@ -21,9 +21,13 @@ Una tripulación de 2 a 6 estudiantes crea su cuenta y entra a una sala. La misi
 7. **Administrar recursos.** La página principal reúne las opciones del esquema, cada una con su sub-interfaz: controlar agua, oxígeno, alimentos y energía; decidir cómo distribuir recursos limitados; administrar producción y reciclaje; mantener los equipos; proteger a la tripulación de la radiación; y el huerto artificial. El comandante aprueba o rechaza las decisiones de los demás.
 8. **Emergencias.** Alerta, identificación del problema y alternativas con consecuencias distintas. Las de varios roles pasan por el comandante o se votan.
 
+Durante el viaje no hay gravedad: los personajes flotan, se impulsan con inercia y hay objetos sueltos que flotan por el módulo. Cada espacio tiene su animación: correr en la cinta o pedalear en el gimnasio, dormir en el saco sujeto a la pared (en Marte, en la litera), teclear en las consolas y encogerse en el refugio. Por el ventanal se ve el cielo real de la fecha desde la posición real de la nave: la Tierra alejándose con la Luna, Marte creciendo, los planetas y las estrellas. De noche en Marte se ve la Tierra como un lucero.
+
+Hay sonido en todas las escenas y chat de voz por proximidad: dentro se oye más fuerte a quien está cerca, y por radio a quien está fuera con el traje. La mesa común del módulo es el lugar para reunirse a hablar. El centro de control y las familias envían mensajes durante el viaje, con el retraso real de la señal, y al terminar se descarga un certificado de la misión.
+
 Al lado se ve siempre a los integrantes, con su oxígeno, su salud, su pulso y su progreso, y abajo los puntos críticos.
 
-Controles: `W A S D` para moverse, `Mayús` para correr, arrastrar para girar la cámara, rueda para acercarla, `E` para usar la estación cercana, `M` para abrir la página principal, `H` para ocultar los paneles. En pantallas táctiles aparece una palanca.
+Controles: `W A S D` para moverse (sin gravedad, para impulsarse), `Mayús` para correr, arrastrar para girar la cámara, rueda para acercarla, `E` para usar la estación cercana, `M` para abrir la página principal, `H` para ocultar los paneles. En pantallas táctiles aparece una palanca.
 
 ## Roles y responsabilidades
 
@@ -48,6 +52,8 @@ Si el rol responsable no está conectado, cualquier tripulante puede hacer su ta
 La lista completa, con enlaces, está en el juego (botón **Fuentes**) y en [shared/ciencia.ts](shared/ciencia.ts).
 
 - **Datos reales integrados:** el clima de un año marciano medido por el rover Curiosity (669 soles) y los eventos de clima espacial de 2024 de la base DONKI de NASA (54 fulguraciones de clase X y 29 tormentas de partículas). Se regeneran con `python scripts/datos-nasa.py`.
+- **El cielo y las fechas:** 5 044 estrellas reales del catálogo Hipparcos (XHIP), las 88 constelaciones de la IAU y la Vía Láctea; el Sol, la Luna y los planetas en su posición real para la fecha de la misión con astronomy-engine, validada contra JPL Horizons. La nave sigue una órbita de transferencia calculada con el problema de Lambert, y las ventanas de lanzamiento son las reales.
+- **La estación en Marte:** la fecha de llegada fija la estación marciana (Ls) y con ella el registro de Curiosity que se usa como clima.
 - **Constantes verificadas contra su fuente:** consumo de oxígeno y producción de CO2, agua y comida por persona, reciclaje de agua de la ISS, límite de CO2, capacidad del depurador y del generador de oxígeno de la ISS, radiación en crucero y en superficie, límite de dosis de carrera, datos de Marte, traje EMU, reactor Kilopower.
 - **Del juego:** las ecuaciones que combinan esos números, el tamaño del hábitat y de los equipos, las masas de los suministros, la dosis de cada tormenta solar, el modelo de polvo y los umbrales de daño. Se muestran al jugador como supuestos.
 
@@ -84,6 +90,8 @@ shared/ciencia.ts     constantes reales, fuentes y supuestos
 shared/plan.ts        alternativas de suministros y cuentas del asistente sobre la carga
 server/cloudflare.ts  Worker y Durable Objects: reparto de peticiones, WebSocket, almacenamiento
 server/api.ts         operaciones del juego: cuentas, salas, posiciones, guardado
+shared/escenarios.ts  situaciones de misión, fechas reales y ciudades de origen
+shared/astronomia.ts  estación de Marte (Ls) a partir de la fecha
 server/game.ts        reglas: roles, suministros, propuestas, acciones, emergencias
 server/emergencies.ts catálogo de emergencias
 server/bot.ts         asistente por reglas
@@ -91,7 +99,10 @@ server/sim/           simulación: paso, fisiología, ambiente, vuelo
 server/datos/         datos de NASA generados
 server/almacen*.ts    dónde se guardan los documentos: Durable Object, archivos locales o Vercel Blob
 server/index.ts       servidor local de desarrollo (Express)
-src/mundo/            escenas 3D, personaje, controles, mapa de estaciones
+src/mundo/            escenas 3D, personaje animado, controles, mapa de estaciones
+src/mundo/cielo/      cielo real: estrellas, constelaciones, planetas, trayectoria
+src/sonido/           sonido generado en el navegador
+src/voz.ts            chat de voz por proximidad (WebRTC)
 src/hud/              paneles, estaciones, propuestas, emergencias, asistente, fuentes
 src/screens/          acceso, inicio, sala, contextualización por pasos, juego
 scripts/              simulación, prueba e2e, datos de NASA
@@ -121,3 +132,4 @@ El despliegue anterior en Vercel sigue en el repositorio como alternativa (`npm 
 - El asistente responde por reglas, no con un modelo de lenguaje.
 - El movimiento de los compañeros se actualiza dos veces por segundo y se suaviza en pantalla.
 - No hay vista en primera persona.
+- El chat de voz conecta de igual a igual sin servidor TURN: en algunas redes muy cerradas no llega a conectar. Solo funciona en el juego publicado, no con `npm run dev`.

@@ -12,6 +12,7 @@ import {
   cambiarZona,
   crearSala,
   elegirAlternativa,
+  elegirEscenario,
   elegirPerfil,
   elegirRol,
   elegirTrayectoria,
@@ -26,12 +27,14 @@ import {
   votar,
 } from '../server/game.js'
 import { responderBot } from '../server/bot.js'
+import { escenarioDe } from '../shared/escenarios.js'
 
 const N = Math.min(6, Math.max(2, Number(process.argv[2] ?? 6)))
 const PRESET = process.argv[3] ?? 'equilibrado'
 const POLITICA = process.argv[4] ?? 'buena'
 const TRAYECTORIA = process.argv[5] ?? 'estandar'
 const PERFIL = process.argv[6] ?? 'estandar'
+const ESCENARIO = process.argv[7] ?? 'primeraBase'
 
 const exigir = (cond: unknown, msg: string) => {
   if (!cond) {
@@ -72,6 +75,8 @@ const tic = () => {
 tic()
 // El orden del esquema: primero la situación, después los roles, el objetivo y los suministros.
 exigir(elegirRol(room, 'u0', 'comandante') !== null, 'en la sala de espera aún no hay roles')
+exigir(elegirEscenario(room, 'u1', ESCENARIO) !== null, 'solo quien creó la sala elige la situación')
+sinError(elegirEscenario(room, 'u0', ESCENARIO), 'situación')
 sinError(iniciarMision(room, 'u0'), 'iniciar')
 exigir(room.jugadores.every((j) => j.paso === 0 && !j.rol), 'la contextualización empieza por la situación, sin roles')
 exigir(fijarPaso(room, 'u1', 2) !== null, 'no se pasa al objetivo sin rol')
@@ -86,8 +91,14 @@ for (const j of room.jugadores) sinError(fijarPaso(room, j.id, 2), 'paso a objet
 sinError(elegirPerfil(room, cmd.id, PERFIL as never), 'perfil')
 sinError(elegirTrayectoria(room, cmd.id, TRAYECTORIA as never), 'trayectoria')
 sinError(aplicarPreset(room, PRESET), 'preset')
+console.log(`Situación: ${escenarioDe(room.escenario).nombre} (${room.escenario}) · clima desde el sol ${room.indiceClima} de Curiosity`)
 console.log(`Tripulación ${N} · preset ${PRESET} · política ${POLITICA} · trayectoria ${TRAYECTORIA} (${room.mision.diasTransito} d) · ${room.mision.solesObjetivo} soles`)
 console.log(`Carga ${room.masa} t de ${room.capacidad} t:`, JSON.stringify(room.cargamento))
+// Lo que aconseja la situación, como haría una tripulación que lee la contextualización.
+if (room.escenario === 'tormentaPolvo') {
+  room.cargamento.reactor = 1
+  room.masa = masaTotal(room.cargamento)
+}
 if (room.masa > room.capacidad) {
   // Recorta lo menos vital hasta que quepa, como haría una tripulación.
   const recortes: [keyof typeof room.cargamento, number][] = [['blindaje', 0], ['huerto', 0], ['oxigeno', 1], ['paneles', 3], ['baterias', 1], ['repuestos', 8]]
@@ -164,6 +175,16 @@ function base() {
     }
   }
   if (cie.muestras > 0) accion(room, cie.id, 'analizar', {})
+  // Tras una tormenta, vuelve a encender lo que se apagó para ahorrar.
+  if (!room.ambiente.tormentaPolvo && room.energia.bateria > room.energia.capacidad * 0.5) {
+    for (const id of ['isru', 'huerto'] as const) {
+      const x = room.sistemas.find((y) => y.id === id)!
+      if (x.instalado && !x.activo && !room.propuestas.some((p) => p.estado === 'pendiente' && p.tipo === 'equipo')) {
+        accion(room, de('logistica').id, 'equipo', { sistema: id })
+        for (const p of room.propuestas.filter((y) => y.estado === 'pendiente')) votar(room, cmd.id, p.id, true)
+      }
+    }
+  }
   if (room.cargamento.huerto && !room.huerto.establecido) accion(room, cie.id, 'huerto', {})
   if (room.energia.polvo > 0.08 && room.ambiente.hora > 9 && room.ambiente.hora < 16) {
     const p = de('piloto')
@@ -195,7 +216,7 @@ while (!room.resultado && segundos < 6 * 3600) {
   }
   atenderEmergencias()
   if (room.fase === 'llegada' && room.subfase === 'orbita' && !room.propuestas.some((p) => p.estado === 'pendiente')) {
-    sinError(proponerUbicacion(room, de('piloto').id, 'gale'), 'ubicación')
+    sinError(proponerUbicacion(room, de('piloto').id, escenarioDe(room.escenario).sitio ?? 'gale'), 'ubicación')
     for (const p of room.propuestas.filter((x) => x.estado === 'pendiente')) votar(room, cmd.id, p.id, true)
   }
   if (room.fase === 'ensamblaje' && segundos % 5 === 0) ensamblar()

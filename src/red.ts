@@ -5,6 +5,7 @@
 import { masaTotal, type Loadout, type RoomState, type Traje } from '@shared/types'
 import { local } from './mundo/control'
 import { useStore } from './store'
+import { voz } from './voz'
 
 interface Resultado {
   sala?: RoomState
@@ -25,6 +26,8 @@ export interface PosicionAjena {
   z: number
   giro: number
   andando: boolean
+  /** Está usando una consola. */
+  trabajando: boolean
   /** Momento (reloj local) en que llegó. */
   t: number
 }
@@ -56,7 +59,7 @@ function aplicar(d: Resultado, n: number, silencioso: boolean) {
   }
   if (d.pos) {
     const t = performance.now()
-    for (const [id, p] of Object.entries(d.pos)) ajenos.set(id, { x: p[0], z: p[1], giro: p[2] ?? 0, andando: (p[3] ?? 0) > 0, t })
+    for (const [id, p] of Object.entries(d.pos)) ajenos.set(id, { x: p[0], z: p[1], giro: p[2] ?? 0, andando: p[3] === 1, trabajando: p[3] === 2, t })
   }
   if (d.sinSesion) {
     cerrarSocket()
@@ -118,6 +121,7 @@ function cerrarSocket(esperaMs = 0) {
   socketAbierto = false
   sinRespuesta = []
   socketReintento = performance.now() + esperaMs
+  voz.conectarCanal(useStore.getState().usuario?.id ?? '', null)
   if (!s) return
   s.onopen = s.onmessage = s.onclose = s.onerror = null
   try {
@@ -141,13 +145,21 @@ function socketDe(codigo: string, token: string): WebSocket | null {
     // La sesión viaja en el primer mensaje, no en la dirección.
     s.send(JSON.stringify({ auth: `Bearer ${token}` }))
     socketAbierto = true
+    // El mismo WebSocket sirve para las señales del chat de voz.
+    voz.conectarCanal(useStore.getState().usuario?.id ?? '', (para, d) => {
+      if (socket === s && s.readyState === WebSocket.OPEN) s.send(JSON.stringify({ senal: { para, d } }))
+    })
   }
   s.onmessage = (e) => {
     if (socket !== s || typeof e.data !== 'string') return
-    let d: Resultado & { n?: number }
+    let d: Resultado & { n?: number; senal?: { de: string; d: Parameters<typeof voz.alRecibir>[1] } }
     try {
-      d = JSON.parse(e.data) as Resultado & { n?: number }
+      d = JSON.parse(e.data) as typeof d
     } catch {
+      return
+    }
+    if (d.senal) {
+      void voz.alRecibir(d.senal.de, d.senal.d)
       return
     }
     const n = typeof d.n === 'number' ? d.n : 0
@@ -167,7 +179,8 @@ async function sondear() {
     return
   }
   const enMundo = s.sala && !['lobby', 'contexto', 'fin'].includes(s.sala.fase)
-  const p = enMundo ? [local.x, local.z, local.giro, local.vel > 0.2 ? 1 : 0] : undefined
+  // El cuarto valor es la animación: 0 quieto, 1 andando, 2 trabajando en una consola.
+  const p = enMundo ? [local.x, local.z, local.giro, local.trabajando ? 2 : local.vel > 0.2 ? 1 : 0] : undefined
 
   const ws = socketDe(s.codigo, s.token)
   if (ws) {
@@ -212,6 +225,9 @@ export const api = {
   elegirRol: (rol: string | null) => llamar('rol', { rol }),
   elegirTraje: (traje: Partial<Traje>) => llamar('traje', { traje }),
   iniciar: () => llamar('iniciar'),
+  escenario: (escenario: string) => llamar('escenario', { escenario }),
+  hogar: (hogar: string | null) => llamar('hogar', { hogar }),
+  nombrarMision: (nombre: string) => llamar('nombre', { nombre }),
   /** Los deslizadores cambian muchas veces por segundo: se muestran al instante y se envían agrupados. */
   cargamento: (cambios: Partial<Loadout>) => {
     cargaPendiente = { ...cargaPendiente, ...cambios }

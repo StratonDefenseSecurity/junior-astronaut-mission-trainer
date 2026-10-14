@@ -1,6 +1,6 @@
 // Ventanas que aparecen sobre el juego: emergencias (alerta → problema → alternativas),
 // propuestas que esperan tu voto, resultado final y las fuentes de los datos.
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { C, FUENTES, SUPUESTOS } from '@shared/ciencia'
 import { ROLE_BY_ID, type Player, type RoomState } from '@shared/types'
 import { ESTACION_BY_ID, puede } from '../mundo/mapa'
@@ -8,6 +8,40 @@ import { palanca } from '../mundo/control'
 import { api } from '../red'
 import { useStore } from '../store'
 import { RolTag, useAhora } from './comun'
+import { descargarCertificado } from './Certificado'
+
+/**
+ * Mensajes del centro de control y de casa. Aparecen un momento sobre el juego, como una
+ * transmisión que llega con el retraso real de la señal.
+ */
+export function Transmision({ sala }: { sala: RoomState }) {
+  const vistos = useRef<Set<string> | null>(null)
+  const [actual, setActual] = useState<string | null>(null)
+  const radios = sala.registro.filter((l) => l.tipo === 'radio')
+  const clave = (l: { t: number; texto: string }) => `${l.t}|${l.texto.slice(0, 40)}`
+  // Lo que ya estaba al entrar no se vuelve a anunciar.
+  if (vistos.current === null) vistos.current = new Set(radios.map(clave))
+  const nuevo = radios.find((l) => !vistos.current!.has(clave(l)))
+  useEffect(() => {
+    if (!nuevo) return
+    vistos.current!.add(clave(nuevo))
+    setActual(nuevo.texto)
+    window.dispatchEvent(new CustomEvent('mt:transmision'))
+    const id = window.setTimeout(() => setActual(null), 16000)
+    return () => window.clearTimeout(id)
+  }, [nuevo])
+  if (!actual) return null
+  return (
+    <div className="transmision" role="status">
+      <div className="cabeza">
+        <i /> Transmisión recibida
+        <span className="grow" />
+        <button className="small plano" onClick={() => setActual(null)}>Cerrar</button>
+      </div>
+      <p>{actual}</p>
+    </div>
+  )
+}
 
 export function Emergencia({ sala, yo }: { sala: RoomState; yo: Player }) {
   const em = sala.emergencias.find((e) => e.estado === 'activa')
@@ -89,7 +123,7 @@ export function Resultado({ sala }: { sala: RoomState }) {
     <div className="velo">
       <div className={`modal ${sala.resultado.victoria ? 'ok' : 'bad'}`}>
         <div className="brand">{sala.resultado.titulo}</div>
-        <h1>{sala.resultado.victoria ? 'Base establecida en Marte' : 'La misión terminó'}</h1>
+        <h1>{sala.nombreMision ? `${sala.nombreMision}: ` : ''}{sala.resultado.victoria ? 'base establecida en Marte' : 'la misión terminó'}</h1>
         <p>{sala.resultado.motivo}</p>
         <table className="tabla compacta">
           <thead>
@@ -121,7 +155,10 @@ export function Resultado({ sala }: { sala: RoomState }) {
             </div>
           </>
         )}
-        <button className="primary" style={{ marginTop: 12 }} onClick={() => api.salir()}>Volver al inicio</button>
+        <div className="row" style={{ marginTop: 12, gap: 8 }}>
+          <button className="ok" onClick={() => descargarCertificado(sala)}>Descargar el certificado de la misión</button>
+          <button className="primary" onClick={() => api.salir()}>Volver al inicio</button>
+        </div>
       </div>
     </div>
   )

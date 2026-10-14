@@ -77,14 +77,28 @@ export const ROLE_BY_ID: Record<Role, RoleInfo> = Object.fromEntries(ROLES.map((
 
 // ---------- Traje ----------
 
+export type Peinado = 'corto' | 'largo' | 'rizado' | 'mono' | 'rapado'
 export interface Traje {
   color: string
   acento: string
   visor: string
+  /** Tono de piel, color y forma del pelo del personaje. */
+  piel: string
+  pelo: string
+  peinado: Peinado
 }
 export const TRAJE_COLORES = ['#f2f4f7', '#ff7a1a', '#3b82f6', '#22c55e', '#e11d48', '#a855f7', '#eab308', '#334155']
 export const TRAJE_VISORES = ['#f5b942', '#38bdf8', '#111827', '#f472b6']
-export const trajePorDefecto = (): Traje => ({ color: '#f2f4f7', acento: '#ff7a1a', visor: '#f5b942' })
+export const TRAJE_PIELES = ['#f3d2b8', '#e8b48f', '#d39a6e', '#b97a4f', '#8d5a3b', '#5e3b26']
+export const TRAJE_PELOS = ['#1b1410', '#3b2417', '#6b4226', '#a8743f', '#d8b16a', '#9a9a9a']
+export const PEINADOS: { id: Peinado; nombre: string }[] = [
+  { id: 'corto', nombre: 'Corto' },
+  { id: 'largo', nombre: 'Largo' },
+  { id: 'rizado', nombre: 'Rizado' },
+  { id: 'mono', nombre: 'Moño' },
+  { id: 'rapado', nombre: 'Rapado' },
+]
+export const trajePorDefecto = (): Traje => ({ color: '#f2f4f7', acento: '#ff7a1a', visor: '#f5b942', piel: '#d39a6e', pelo: '#1b1410', peinado: 'corto' })
 
 // ---------- Perfil de misión y trayectoria ----------
 
@@ -372,6 +386,8 @@ export interface Player {
   listo: boolean
   /** Tareas y trabajos que ha completado: su progreso a la vista de los demás. */
   aportes: number
+  /** Ciudad de origen (ver CIUDADES): se marca en la Tierra y recibe mensajes de casa. */
+  hogar: string | null
   /** Muestras que carga sin analizar. */
   muestras: number
 }
@@ -507,7 +523,7 @@ export interface Emergency {
 }
 
 /** `t` es el segundo de misión en que ocurrió. */
-export interface LogEntry { t: number; fase: Phase; texto: string; tipo: 'info' | 'alerta' | 'ok' }
+export interface LogEntry { t: number; fase: Phase; texto: string; tipo: 'info' | 'alerta' | 'ok' | 'radio' }
 export interface ChatMsg { id: string; de: string; texto: string; t: number; bot: boolean }
 
 export interface RoomState {
@@ -542,6 +558,14 @@ export interface RoomState {
   diaLanzamiento: number
   /** Primer índice del año de datos de Curiosity que se usa como sol 1. */
   indiceClima: number
+  /** Situación de la misión (ver shared/escenarios.ts). */
+  escenario: string
+  /** Lo que eligió quien creó la sala: una situación concreta o 'azar'. */
+  escenarioElegido: string
+  /** Nombre que la tripulación le pone a su misión. */
+  nombreMision: string
+  /** Sucesos preparados para esta misión: los de la situación más alguno al azar. */
+  guion: { viaje?: number; sol?: number; tipo: string; datos?: Record<string, unknown>; hecho: boolean }[]
 
   perfil: PerfilId
   trayectoria: TrayectoriaId
@@ -551,6 +575,9 @@ export interface RoomState {
     muestrasObjetivo: number
     muestrasAnalizadas: number
     diasTransito: number
+    /** kg de agua sacados del hielo con el extractor, y la meta si la misión la tiene. */
+    aguaExtraida: number
+    aguaObjetivo: number
   }
   cargamento: Loadout
   masa: number

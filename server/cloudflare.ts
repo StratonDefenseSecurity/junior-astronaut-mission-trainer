@@ -13,7 +13,7 @@
 //   objeto solo se factura mientras atiende un mensaje.
 import { DurableObject } from 'cloudflare:workers'
 import { conAlmacen, type Almacen } from './almacen.js'
-import { codigoAleatorio, fijarSecreto, manejar, type Respuesta } from './api.js'
+import { codigoAleatorio, fijarSecreto, manejar, usuarioDeToken, type Respuesta } from './api.js'
 
 interface Env {
   NODO: DurableObjectNamespace<Nodo>
@@ -67,6 +67,8 @@ interface Adjunto {
   codigo: string
   /** Cabecera de autorización que el cliente envía en su primer mensaje. */
   auth: string
+  /** Usuario verificado de esa sesión. */
+  id?: string
 }
 
 /** Antepone el número de consulta para que el cliente sepa a cuál responde. */
@@ -98,7 +100,8 @@ export class Nodo extends DurableObject<Env> {
   }
 
   async webSocketMessage(ws: WebSocket, mensaje: string | ArrayBuffer): Promise<void> {
-    if (typeof mensaje !== 'string' || mensaje.length > 4000) return
+    // Las señales de voz llevan descripciones de sesión WebRTC de unos pocos KB.
+    if (typeof mensaje !== 'string' || mensaje.length > 24_000) return
     let m: Record<string, unknown>
     try {
       m = JSON.parse(mensaje) as Record<string, unknown>
@@ -109,8 +112,21 @@ export class Nodo extends DurableObject<Env> {
     const adjunto = ws.deserializeAttachment() as Adjunto
     if (typeof m.auth === 'string') {
       adjunto.auth = m.auth.slice(0, 1500)
+      adjunto.id = usuarioDeToken(adjunto.auth)?.id
       ws.serializeAttachment(adjunto)
       if (m.n === undefined) return
+    }
+    // Señal de voz para otro jugador de la sala (o para todos con '*'): solo se reenvía.
+    if (m.senal && typeof m.senal === 'object') {
+      const { para, d } = m.senal as { para?: unknown; d?: unknown }
+      if (!adjunto.id || typeof para !== 'string') return
+      const texto = JSON.stringify({ senal: { de: adjunto.id, d } })
+      for (const otro of this.ctx.getWebSockets()) {
+        if (otro === ws) continue
+        const a = otro.deserializeAttachment() as Adjunto
+        if (a.id && (para === '*' || a.id === para)) otro.send(texto)
+      }
+      return
     }
     const r = await conAlmacen(this.almacen, () =>
       manejar({ op: 'estado', codigo: adjunto.codigo, v: m.v, h: m.h, p: m.p }, adjunto.auth || undefined),

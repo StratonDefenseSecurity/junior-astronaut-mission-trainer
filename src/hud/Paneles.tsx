@@ -7,6 +7,8 @@ import { ESCALAS, ESCALA_MAXIMA, ROLES, ROLE_BY_ID, SITE_BY_ID, etiquetaTiempo, 
 import { puede } from '../mundo/mapa'
 import { api } from '../red'
 import { useStore, useYo } from '../store'
+import { sonido, useSonido } from '../sonido'
+import { useVoz, voz } from '../voz'
 import { Barra, Dato, RolTag, enMarte, energiaUsada, escalaTexto, mmHg, nivel, pctTraje, relojMision, tiempoEnEspacio } from './comun'
 
 const FASES: Record<RoomState['fase'], string> = {
@@ -104,12 +106,40 @@ export function BarraSuperior({ sala }: { sala: RoomState }) {
       <div className="bloque" style={{ textAlign: 'right' }}>
         <div className="mono mini">Sala {sala.codigo}</div>
         <div className="row" style={{ gap: 4, justifyContent: 'flex-end' }}>
+          <BotonesAudio />
           <button className="chip" onClick={alternar} title="Tecla H">Paneles</button>
           <button className="chip" onClick={() => setFuentes(true)}>Fuentes</button>
           <button className="chip" onClick={() => api.salir()}>Salir</button>
         </div>
       </div>
     </div>
+  )
+}
+
+/** Silenciar el sonido y activar el chat de voz. */
+export function BotonesAudio() {
+  const s = useSonido()
+  const v = useVoz()
+  return (
+    <>
+      <button className="chip" title={s.silenciado ? 'Activar el sonido' : 'Silenciar'} onClick={() => (void sonido.activar(), sonido.silenciar(!s.silenciado))}>
+        {s.silenciado ? 'Sonido: no' : 'Sonido'}
+      </button>
+      {v.disponible && (
+        <button
+          className={`chip ${v.activa ? 'activo' : ''}`}
+          title={v.activa ? 'Salir del chat de voz' : 'Hablar con la tripulación'}
+          onClick={() => (v.activa ? voz.desactivar() : void voz.activar())}
+        >
+          {v.activa ? `Voz · ${v.conectados}` : 'Voz'}
+        </button>
+      )}
+      {v.activa && v.microfono === 'si' && (
+        <button className="chip" title="Micrófono" onClick={() => voz.silenciar(!v.silenciado)}>
+          {v.silenciado ? 'Mic: no' : 'Mic'}
+        </button>
+      )}
+    </>
   )
 }
 

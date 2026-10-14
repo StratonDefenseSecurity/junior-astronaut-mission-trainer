@@ -266,10 +266,79 @@ export const FUENTES: Fuente[] = [
     fuente: 'Stuurman et al. (2016), Geophys. Res. Lett. 43, y NASA JPL, "Mars Ice Deposit Holds as Much Water as Lake Superior".',
     url: 'https://doi.org/10.1002/2016GL070138',
   },
+  {
+    tema: 'Ventanas de lanzamiento y fechas de las situaciones',
+    dato: 'Las fechas de despegue (25 oct 2024, 5 dic 2026, 7 ene 2029, 10 feb 2031, 19 mar 2033) son ventanas reales para una transferencia de Hohmann, calculadas con efemérides. Coinciden con las oposiciones de Marte de 2027, 2029, 2031 y 2033.',
+    fuente: 'astronomy-engine (Don Cross, MIT), validada contra JPL Horizons',
+    url: 'https://github.com/cosinekitty/astronomy',
+  },
+  {
+    tema: 'Estación de Marte al llegar',
+    dato: 'La longitud solar Ls se obtiene de la posición real de Marte en la fecha de llegada; el clima se toma del sol de Curiosity con la misma Ls.',
+    fuente: 'JPL, Approximate Positions of the Planets; REMS de Curiosity',
+    url: 'https://ssd.jpl.nasa.gov/planets/approx_pos.html',
+  },
+  {
+    tema: 'Estrellas y constelaciones',
+    dato: 'Las 5 044 estrellas hasta la magnitud 6 están en su posición real, con su brillo y su color. Las constelaciones son las 88 de la IAU.',
+    fuente: 'XHIP, An Extended Hipparcos Compilation (Anderson y Francis 2012), vía d3-celestial',
+    url: 'https://cdsarc.cds.unistra.fr/viz-bin/cat/V/137D',
+  },
+  {
+    tema: 'Planetas en el cielo y trayectoria de la nave',
+    dato: 'Sol, Luna y planetas se ven donde estaban en la fecha de la misión, desde la nave o desde Marte. La nave sigue una órbita de transferencia calculada con el problema de Lambert.',
+    fuente: 'astronomy-engine; brillos según Mallama y Hilton (2018)',
+    url: 'https://arxiv.org/abs/1808.01973',
+  },
+  {
+    tema: 'El Sol en su máximo',
+    dato: 'La NASA y la NOAA anunciaron el 15 de octubre de 2024 que el Sol había llegado a la fase de máximo de su ciclo de 11 años.',
+    fuente: 'NASA, "NASA, NOAA: Sun Reaches Maximum Phase in 11-Year Solar Cycle"',
+    url: 'https://science.nasa.gov/science-research/heliophysics/nasa-noaa-sun-reaches-maximum-phase-in-11-year-solar-cycle/',
+  },
+  {
+    tema: 'Hielo enterrado en Utopia Planitia',
+    dato: 'El radar SHARAD de Mars Reconnaissance Orbiter encontró en 2016 un depósito de hielo con tanta agua como el lago Superior, cubierto por 1 a 10 m de suelo.',
+    fuente: 'NASA JPL / Universidad de Texas, "Mars Ice Deposit Holds as Much Water as Lake Superior" (2016)',
+    url: 'https://www.jpl.nasa.gov/news/mars-ice-deposit-holds-as-much-water-as-lake-superior/',
+  },
+  {
+    tema: 'Opportunity y la tormenta global de 2018',
+    dato: 'El rover solar Opportunity dejó de comunicarse el 10 de junio de 2018 durante una tormenta de polvo que cubrió el planeta.',
+    fuente: 'NASA Science, misión MER Opportunity',
+    url: 'https://science.nasa.gov/mission/mer-opportunity/',
+  },
+  {
+    tema: 'Perseverance en Jezero',
+    dato: 'Perseverance aterrizó en el cráter Jezero, un antiguo lago con delta, el 18 de febrero de 2021 y guarda muestras de roca en tubos sellados.',
+    fuente: 'NASA Science, misión Mars 2020 Perseverance',
+    url: 'https://science.nasa.gov/mission/mars-2020-perseverance/',
+  },
+  {
+    tema: 'Apolo 13',
+    dato: 'En abril de 1970 explotó un tanque de oxígeno camino a la Luna; la tripulación adaptó cartuchos de hidróxido de litio con materiales de a bordo.',
+    fuente: 'NASA, misión Apolo 13',
+    url: 'https://www.nasa.gov/mission/apollo-13/',
+  },
+  {
+    tema: 'El sonido en Marte',
+    dato: 'En Marte un mismo sonido llega unos 20 dB más débil que en la Tierra y los agudos se apagan pronto; hay dos velocidades del sonido, unos 240 m/s en graves y 250 m/s en agudos.',
+    fuente: 'Maurice et al., "In situ recording of Mars soundscape", Nature 605 (2022)',
+    url: 'https://doi.org/10.1038/s41586-022-04679-0',
+  },
+  {
+    tema: 'Tonos Quindar',
+    dato: 'Las transmisiones del centro de control del Apolo empezaban con un tono de 2525 Hz y terminaban con uno de 2475 Hz, de 250 ms cada uno.',
+    fuente: 'Quindar tones (resumen con referencias)',
+    url: 'https://en.wikipedia.org/wiki/Quindar_tones',
+  },
 ]
 
 /** Lo que el juego simplifica o inventa para poder jugarse. Se muestra junto a las fuentes. */
 export const SUPUESTOS: string[] = [
+  'Las misiones de la contextualización son situaciones de entrenamiento: las premisas y los mensajes del centro de control o de casa son ficción; los datos que las acompañan son reales.',
+  'Las tormentas solares se reproducen desde los registros de 2024 también en las misiones de otros años, con más o menos frecuencia según la fase del ciclo solar estimada por el juego.',
+  'Los sonidos se generan en el navegador: los niveles y timbres son decisiones del juego inspiradas en mediciones reales.',
   'El tiempo de misión corre acelerado. La escala se ve siempre en pantalla y la controla el comandante.',
   'El clima es el que midió Curiosity en el cráter Gale. Para otros sitios se aplica un ajuste estimado de temperatura y luz.',
   'Las tormentas solares ocurren en las mismas fechas que en 2024, contando desde el día del lanzamiento. Se asume que la nave está en la trayectoria de las partículas, lo cual no siempre ocurre.',

@@ -145,6 +145,27 @@ i.bad { color: var(--bad); font-style: normal; font-size: 11.5px; }
 .recorrido li span { color: var(--muted); font-size: 12.5px; line-height: 1.4; }
 .recorrido li.siguiente strong { color: var(--accent); }
 .crew-lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px; }
+.escenarios { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px; }
+.escenario-cabecera { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; }
+.escenario-cabecera h2 { margin: 0; font-size: 22px; }
+.escenario-cabecera .fecha { font-family: var(--mono); color: var(--warn); font-size: 13px; }
+.situacion.especial .hecho { border-color: rgba(245, 185, 66, 0.45); background: rgba(245, 185, 66, 0.06); }
+.situacion.especial .hecho > b { color: var(--warn); }
+.reto { border: 1px solid rgba(79, 195, 247, 0.5); background: rgba(79, 195, 247, 0.08); border-radius: 10px; padding: 9px 12px; }
+.reto strong { display: block; color: var(--accent); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 2px; }
+.nombre-mision { font-family: var(--mono); font-size: 17px; letter-spacing: 0.06em; color: var(--warn); }
+input.nombre-mision { border-color: rgba(245, 185, 66, 0.5); }
+.supuestos { font-size: 11.5px; color: var(--muted); margin: 0; padding-left: 16px; }
+.log .radio { color: #9fd8ff; }
+.nombre .habla { color: #3ddc97; }
+.mision-tarjeta { border: 1px solid rgba(245, 185, 66, 0.4); border-radius: 10px; padding: 7px 9px; background: rgba(245, 185, 66, 0.06); }
+.mision-tarjeta p { margin: 3px 0; }
+.transmision { position: absolute; top: 96px; left: 50%; transform: translateX(-50%); width: min(560px, calc(100vw - 24px)); z-index: 7; background: rgba(6, 18, 32, 0.94); border: 1px solid rgba(79, 195, 247, 0.6); border-radius: 12px; padding: 10px 14px; box-shadow: 0 0 24px rgba(79, 195, 247, 0.25); animation: llega 0.4s ease-out; }
+.transmision .cabeza { font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em; color: var(--accent); text-transform: uppercase; display: flex; gap: 8px; align-items: center; }
+.transmision .cabeza i { width: 8px; height: 8px; border-radius: 50%; background: #3ddc97; box-shadow: 0 0 8px #3ddc97; animation: parpadeo 1s infinite; }
+.transmision p { margin: 6px 0 2px; font-size: 13.5px; line-height: 1.45; }
+@keyframes llega { from { opacity: 0; transform: translate(-50%, -10px); } to { opacity: 1; transform: translate(-50%, 0); } }
+@keyframes parpadeo { 50% { opacity: 0.3; } }
 
 /* ---------- juego ---------- */
 .juego { position: relative; height: 100%; width: 100%; overflow: hidden; }

@@ -5,14 +5,16 @@
 //   4. Se presentan alternativas sobre la cantidad de suministros y se eligen.
 // Es una interfaz sencilla, de un paso por pantalla. El asistente analiza las consecuencias
 // de cada rol y de cada elección.
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { C, PRESION_TIERRA_PA, REMS_RESUMEN, minutosDeSenalAlLlegar } from '@shared/ciencia'
-import { ALTERNATIVAS, analizarCarga, cargaRecomendada } from '@shared/plan'
+import { escenarioDe, fechaLarga } from '@shared/escenarios'
+import { ALTERNATIVAS, analizarCarga, cargaRecomendada, minimoDe } from '@shared/plan'
 import {
   PASOS_CONTEXTO,
   PERFILES,
   ROLES,
   ROLE_BY_ID,
+  SITE_BY_ID,
   SUPPLIES,
   TRAYECTORIAS,
   masaTotal,
@@ -83,12 +85,31 @@ function Situacion({ sala, alSeguir }: { sala: RoomState; alSeguir: () => void }
       texto: `más ${C.AGUA_BEBIDA_KG_DIA} kg de agua para beber y ${C.COMIDA_KG_DIA} kg de comida. Multiplicado por ${n} tripulantes y por cientos de días.`,
     },
   ]
+  const esc = escenarioDe(sala.escenario)
   return (
     <div className="stack">
-      <p className="entrada">
-        Son {n} personas y van a viajar a Marte para montar una base y vivir en ella. Nadie los espera allá y nadie puede ir a buscarlos: lo que lleven en la nave es todo lo que tendrán.
-      </p>
-      <h3>Esto es lo que van a afrontar</h3>
+      <div className="escenario-cabecera">
+        <h2>{esc.nombre}</h2>
+        <span className="fecha">Despegue: {fechaLarga(new Date(esc.lanzamiento))}</span>
+      </div>
+      {esc.situacion.map((t, i) => (
+        <p key={i} className="entrada">{t}</p>
+      ))}
+      <div className="situacion especial">
+        {esc.hechos.map((d) => (
+          <div key={d.etiqueta} className="hecho">
+            <span>{d.etiqueta}</span>
+            <b>{d.valor}</b>
+            <p>{d.texto}</p>
+          </div>
+        ))}
+      </div>
+      <div className="reto">
+        <strong>El reto de esta misión</strong>
+        {esc.reto}
+      </div>
+      <h3>Lo que afronta cualquier tripulación que viaje a Marte</h3>
+      <p className="mini muted">Son {n}. Nadie los espera allá y nadie puede ir a buscarlos: lo que lleven en la nave es todo lo que tendrán.</p>
       <div className="situacion">
         {datos.map((d) => (
           <div key={d.etiqueta} className="hecho">
@@ -105,6 +126,16 @@ function Situacion({ sala, alSeguir }: { sala: RoomState; alSeguir: () => void }
       <Asistente>
         Voy a acompañarlos toda la misión. Ahora cada uno recibirá su rol, después se establecerá el objetivo y al final elegirán los suministros. En cada elección les diré qué consecuencias tiene.
       </Asistente>
+      {esc.supuestos.length > 0 && (
+        <div>
+          <span className="mini muted">Supuestos del juego en esta situación:</span>
+          <ul className="supuestos">
+            {esc.supuestos.map((t) => (
+              <li key={t}>{t}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       <div className="row">
         <button className="small plano" onClick={() => setFuentes(true)}>De dónde salen estos datos</button>
         <div className="grow" />
@@ -165,8 +196,30 @@ function Roles({ sala, yo, alSeguir }: P & { alSeguir: () => void }) {
 
 // ---------- Paso 3: objetivo de la misión ----------
 
+/** El comandante bautiza la misión; los demás ven el nombre. */
+function NombreMision({ sala, editable }: { sala: RoomState; editable: boolean }) {
+  const [texto, setTexto] = useState(sala.nombreMision)
+  useEffect(() => setTexto(sala.nombreMision), [sala.nombreMision])
+  const guardar = () => {
+    if (texto.trim() !== sala.nombreMision) void api.nombrarMision(texto)
+  }
+  if (!editable) return <div className="nombre-mision">{sala.nombreMision || 'Todavía sin nombre'}</div>
+  return (
+    <input
+      className="nombre-mision"
+      value={texto}
+      maxLength={28}
+      placeholder="Por ejemplo: Inti 1, Chaski, Esperanza…"
+      onChange={(e) => setTexto(e.target.value)}
+      onBlur={guardar}
+      onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && (e.currentTarget.blur(), guardar())}
+    />
+  )
+}
+
 function Objetivo({ sala, yo, alSeguir }: P & { alSeguir: () => void }) {
   const a = analizarCarga(sala)
+  const esc = escenarioDe(sala.escenario)
   const comandante = sala.jugadores.find((j) => j.rol === 'comandante')
   const mando = puede(sala, yo, ['comandante'])
   const navega = puede(sala, yo, ['piloto', 'comandante'])
@@ -201,6 +254,15 @@ function Objetivo({ sala, yo, alSeguir }: P & { alSeguir: () => void }) {
             {comandante ? `Lo establece ${comandante.nombre}, comandante.` : 'Aún no hay comandante: por ahora puede fijarlo cualquiera que ya tenga rol.'}
           </span>
         </div>
+        <label className="stack" style={{ gap: 4 }}>
+          <span className="mini muted">Nombre de la misión {mando ? '· aparecerá en la nave, en los trajes y en el certificado final' : '· lo pone el comandante'}</span>
+          <NombreMision sala={sala} editable={mando} />
+        </label>
+        {esc.sitio && (
+          <Asistente>
+            Esta misión aterrizará en {SITE_BY_ID[esc.sitio].nombre}: {SITE_BY_ID[esc.sitio].descripcion}
+          </Asistente>
+        )}
         <Asistente>
           Con este plan pasarán {Math.round(a.total)} días fuera de la Tierra: {a.viaje} de viaje y {Math.round(a.estancia)} en la superficie.
         </Asistente>
@@ -286,7 +348,7 @@ function Suministros({ sala, yo }: P) {
                   </div>
                   <input
                     type="range"
-                    min={s.min}
+                    min={Math.max(s.min, minimoDe(sala, s.id))}
                     max={s.max}
                     value={sala.cargamento[s.id]}
                     aria-label={s.nombre}
@@ -312,6 +374,7 @@ function Suministros({ sala, yo }: P) {
 
       <div className="stack">
         <h3>El asistente analiza las consecuencias</h3>
+        {escenarioDe(sala.escenario).consejo && <Asistente>{escenarioDe(sala.escenario).consejo}</Asistente>}
         <div className="row" style={{ gap: 6 }}>
           <span className="mini muted">Carga</span>
           <div className="grow"><Barra valor={sala.masa} max={sala.capacidad} tono={nivel(exceso, sala.masa > sala.capacidad * 0.93)} /></div>
@@ -336,6 +399,11 @@ function Suministros({ sala, yo }: P) {
           <Linea bien={sala.cargamento.blindaje >= 1} regular>
             {sala.cargamento.blindaje} capa(s) de blindaje en el refugio para las tormentas solares.
           </Linea>
+          {sala.mision.aguaObjetivo > 0 && (
+            <Linea bien={sala.cargamento.isru > 0}>
+              Extractor de hielo {sala.cargamento.isru > 0 ? 'a bordo' : 'sin cargar'}: la meta es sacar {sala.mision.aguaObjetivo} kg de agua. Da hasta 45 kg al día si tiene energía.
+            </Linea>
+          )}
           <Linea bien={sala.cargamento.repuestos >= 14} regular={sala.cargamento.repuestos >= 8}>
             {sala.cargamento.repuestos} kits de repuestos para {Math.round(a.total)} días de desgaste y averías.
           </Linea>

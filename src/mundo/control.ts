@@ -14,6 +14,13 @@ export const local = {
   zona: 'nave' as Zona,
   /** Fase del ciclo de pasos, para animar. */
   paso: 0,
+  /** Altura sobre el suelo (al flotar o en una litera). */
+  y: 0,
+  /** Velocidad en el plano, para la inercia sin gravedad. */
+  vx: 0,
+  vz: 0,
+  /** Trabajando en una consola: los demás lo ven teclear. */
+  trabajando: false,
   camGiro: -Math.PI / 2,
   camAltura: 0.32,
   camDistancia: 4.4,

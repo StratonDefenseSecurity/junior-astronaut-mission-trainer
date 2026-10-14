@@ -9,3 +9,6 @@ server/data
 # Vercel (despliegue anterior)
 .vercel
 .env*
+
+# ayuda de desarrollo
+scripts/.sala-demo.json

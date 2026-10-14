@@ -73,7 +73,7 @@ for (let i = 0; i < 900; i++) {
     if (sala.escalaDeseada !== 86400) await accion(A, 'escala', { valor: 86400 })
     for (const s of sala.sistemas) if (s.instalado && s.integridad < 50 && sala.rec.repuestos >= 2) await accion(A, 'accion', { id: 'reparar', payload: { sistema: s.id } })
   }
-  if (sala.fase === 'llegada' && sala.subfase === 'orbita' && !sala.propuestas.some((p) => p.estado === 'pendiente')) await accion(A, 'ubicacion', { sitioId: 'gale' })
+  if (sala.fase === 'llegada' && sala.subfase === 'orbita' && !sala.propuestas.some((p) => p.estado === 'pendiente')) await accion(A, 'ubicacion', { sitioId: { hieloUtopia: 'utopia', vidaJezero: 'jezero' }[sala.escenario] ?? 'gale' })
   if (sala.fase === 'ensamblaje' && meta === 'base') {
     for (const [tarea, fuera] of [['paneles', true], ['carga', true], ['energia', false], ['soporte', false], ['revisionInt', false], ['revisionExt', true]]) {
       if (sala.ensamblaje.hechas[tarea]) continue

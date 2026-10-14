@@ -3,15 +3,17 @@
 import { useRef } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import { TRAJE_COLORES, TRAJE_VISORES, type Traje } from '@shared/types'
+import { CIUDADES, ESCENARIOS, ESCENARIO_BY_ID, fechaLarga, type EscenarioId } from '@shared/escenarios'
+import { PEINADOS, TRAJE_COLORES, TRAJE_PELOS, TRAJE_PIELES, TRAJE_VISORES, type Traje } from '@shared/types'
 import { Astronauta } from '../mundo/Astronauta'
 import { api } from '../red'
 import { useStore, useYo } from '../store'
 
 function Giratorio({ traje, distintivo }: { traje: Traje; distintivo: string }) {
   const ref = useRef<THREE.Group>(null)
-  useFrame((_, dt) => {
-    if (ref.current) ref.current.rotation.y += dt * 0.6
+  // Gira de un lado a otro para que casi siempre se le vea la cara.
+  useFrame(({ clock }) => {
+    if (ref.current) ref.current.rotation.y = Math.sin(clock.elapsedTime * 0.45) * 1.1
   })
   return (
     <group ref={ref} position={[0, -1.05, 0]}>
@@ -27,7 +29,7 @@ function Giratorio({ traje, distintivo }: { traje: Traje; distintivo: string }) 
 export function VistaTraje({ traje, distintivo }: { traje: Traje; distintivo: string }) {
   return (
     <div className="vista-traje">
-      <Canvas camera={{ position: [0, 0.35, 4.3], fov: 34 }} dpr={[1, 1.5]}>
+      <Canvas camera={{ position: [0, 0.42, 2.7], fov: 30 }} dpr={[1, 2]}>
         <ambientLight intensity={0.75} />
         <directionalLight position={[3, 5, 4]} intensity={1.7} />
         <directionalLight position={[-4, 2, -3]} intensity={0.5} color="#7dd3fc" />
@@ -100,6 +102,25 @@ export function LobbyScreen() {
               ))}
             </div>
 
+            <h3>La situación {soyHost ? '· la eliges tú' : ''}</h3>
+            <div className="escenarios">
+              <button className={`opcion ${sala.escenarioElegido === 'azar' ? 'activa' : ''}`} disabled={!soyHost} onClick={() => api.escenario('azar')}>
+                <strong>Que la asigne el centro de control</strong>
+                <small>Una de las seis situaciones, al azar. Nadie sabe cuál hasta empezar.</small>
+              </button>
+              {ESCENARIOS.map((e) => (
+                <button key={e.id} className={`opcion ${sala.escenarioElegido === e.id ? 'activa' : ''}`} disabled={!soyHost} onClick={() => api.escenario(e.id)}>
+                  <strong>{e.nombre}</strong>
+                  <small>{e.lema} Despegue: {fechaLarga(new Date(e.lanzamiento))}.</small>
+                </button>
+              ))}
+            </div>
+            {!soyHost && (
+              <p className="mini muted">
+                {sala.escenarioElegido === 'azar' ? 'La situación se asignará al empezar.' : `Situación elegida: ${ESCENARIO_BY_ID[sala.escenarioElegido as EscenarioId]?.nombre}.`}
+              </p>
+            )}
+
             <h3>Cómo será la misión</h3>
             <ol className="recorrido">
               {RECORRIDO.map((r, i) => (
@@ -117,9 +138,32 @@ export function LobbyScreen() {
             {yo && (
               <>
                 <VistaTraje traje={yo.traje} distintivo="#94a3b8" />
+                <Muestras titulo="Piel" colores={TRAJE_PIELES} actual={yo.traje.piel} onElegir={(piel) => api.elegirTraje({ piel })} />
+                <Muestras titulo="Pelo" colores={TRAJE_PELOS} actual={yo.traje.pelo} onElegir={(pelo) => api.elegirTraje({ pelo })} />
+                <div className="muestras">
+                  <span className="mini muted">Peinado</span>
+                  <div className="row" style={{ gap: 4 }}>
+                    {PEINADOS.map((x) => (
+                      <button key={x.id} className={`chip ${yo.traje.peinado === x.id ? 'activo' : ''}`} onClick={() => api.elegirTraje({ peinado: x.id })}>
+                        {x.nombre}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <Muestras titulo="Traje" colores={TRAJE_COLORES} actual={yo.traje.color} onElegir={(color) => api.elegirTraje({ color })} />
                 <Muestras titulo="Franjas" colores={TRAJE_COLORES} actual={yo.traje.acento} onElegir={(acento) => api.elegirTraje({ acento })} />
-                <Muestras titulo="Visor" colores={TRAJE_VISORES} actual={yo.traje.visor} onElegir={(visor) => api.elegirTraje({ visor })} />
+                <Muestras titulo="Visor del casco" colores={TRAJE_VISORES} actual={yo.traje.visor} onElegir={(visor) => api.elegirTraje({ visor })} />
+                <label className="stack" style={{ gap: 3 }}>
+                  <span className="mini muted">Tu ciudad: se marcará en la Tierra y desde allí te escribirán</span>
+                  <select value={yo.hogar ?? ''} onChange={(e) => api.hogar(e.target.value || null)}>
+                    <option value="">Sin elegir</option>
+                    {CIUDADES.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.nombre}, {c.pais}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               </>
             )}
             <div className="assistant">{aviso}</div>

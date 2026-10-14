@@ -20,6 +20,7 @@ import {
 import { ESTACION_BY_ID, puede } from '../mundo/mapa'
 import { api } from '../red'
 import { useStore } from '../store'
+import { useVoz, voz } from '../voz'
 import { Barra, Dato, RolTag, diasRestantes, diasTexto, enMarte, energiaUsada, mmHg, nivel, pctTraje, roles, tiempoEnEspacio, type Nivel } from './comun'
 
 interface P {
@@ -576,8 +577,48 @@ function Muestreo({ sala, yo, id }: P & { id: string }) {
   )
 }
 
+/** Mesa común: el sitio para reunirse a hablar. */
+function Comedor({ sala, yo }: P) {
+  const v = useVoz()
+  const setPestana = useStore((s) => s.setPestana)
+  const aqui = sala.jugadores.filter((j) => j.rol && j.zona === yo.zona)
+  return (
+    <>
+      <Seccion titulo="Hablar con la tripulación">
+        <p className="mini">
+          Aquí come la tripulación y se reúne a decidir. Con el chat de voz se oye más fuerte a quien está cerca; si alguien está fuera con el traje, se le oye por radio.
+        </p>
+        {!v.disponible ? (
+          <p className="mini muted">El chat de voz funciona en el juego publicado. En este servidor se puede escribir en el chat del asistente.</p>
+        ) : v.activa ? (
+          <div className="row" style={{ gap: 6 }}>
+            <span className="mini ok">Voz activa · {v.conectados} conectado(s){v.microfono === 'denegado' ? ' · solo escuchas: sin permiso de micrófono' : ''}</span>
+            {v.microfono === 'si' && <button className="small" onClick={() => voz.silenciar(!v.silenciado)}>{v.silenciado ? 'Activar micrófono' : 'Silenciar micrófono'}</button>}
+            <button className="small" onClick={() => voz.desactivar()}>Salir de la voz</button>
+          </div>
+        ) : (
+          <button className="primary" onClick={() => void voz.activar()}>Entrar al chat de voz</button>
+        )}
+        {v.error && <p className="mini warn">{v.error}</p>}
+      </Seccion>
+      <Seccion titulo="En la nave ahora">
+        <div className="row" style={{ gap: 5, flexWrap: 'wrap' }}>
+          {aqui.map((j) => (
+            <span key={j.id} className="tag">
+              <RolTag rol={j.rol} /> {j.nombre}
+            </span>
+          ))}
+        </div>
+        <button className="small" style={{ marginTop: 6 }} onClick={() => setPestana('asistente')}>Escribir al equipo</button>
+      </Seccion>
+    </>
+  )
+}
+
 function contenido(id: string, p: P): ReactNode {
   switch (id) {
+    case 'comedor':
+      return <Comedor {...p} />
     case 'puente':
       return <Puente {...p} />
     case 'soporte':

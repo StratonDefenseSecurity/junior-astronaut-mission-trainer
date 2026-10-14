@@ -1,9 +1,10 @@
 // Cuentas del plan de misión que usan igual el servidor y la pantalla de contextualización:
 // las alternativas de suministros y lo que el asistente analiza sobre la carga elegida.
 import { C } from './ciencia.js'
+import { escenarioDe } from './escenarios.js'
 import { SUPPLIES, masaTotal, tripulantesPlan, type Loadout, type RoomState } from './types.js'
 
-type Plan = Pick<RoomState, 'fase' | 'jugadores' | 'mision' | 'cargamento' | 'capacidad'>
+type Plan = Pick<RoomState, 'fase' | 'jugadores' | 'mision' | 'cargamento' | 'capacidad' | 'escenario'>
 
 /** Las tres alternativas sobre la cantidad de suministros. `margen` 1 = lo justo. */
 export const ALTERNATIVAS = [
@@ -43,9 +44,12 @@ export function cargaRecomendada(room: Plan, margen: number): Loadout {
     huerto: justo ? 0 : 1,
     isru: 0,
   }
-  for (const s of SUPPLIES) carga[s.id] = limitar(carga[s.id], s.min, s.max)
+  for (const s of SUPPLIES) carga[s.id] = limitar(Math.max(carga[s.id], minimoDe(room, s.id)), s.min, s.max)
   return carga
 }
+
+/** Cantidad mínima de un suministro que exige la situación de la misión. */
+export const minimoDe = (room: Pick<RoomState, 'escenario'>, id: keyof Loadout) => escenarioDe(room.escenario).cargaMinima?.[id] ?? 0
 
 /** Lo que el asistente calcula sobre una carga: para cuántos días alcanza cada cosa. */
 export function analizarCarga(room: Plan, carga: Loadout = room.cargamento) {

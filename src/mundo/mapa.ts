@@ -29,6 +29,8 @@ export const ESTACIONES: Estacion[] = [
   { id: 'literas', zona: 'nave', nombre: 'Literas', x: 1.6, z: 2.6, radio: 0 },
   { id: 'refugio', zona: 'nave', nombre: 'Refugio', x: 4.7, z: 2.6, radio: 0 },
   { id: 'esclusa', zona: 'nave', nombre: 'Esclusa', x: 8.4, z: 0, radio: 0, sistemas: ['esclusa'] },
+  // Mesa común en el centro del módulo: donde la tripulación come y conversa.
+  { id: 'comedor', zona: 'nave', nombre: 'Mesa común', x: 0.05, z: 0, radio: 0.62 },
 
   { id: 'esclusaExt', zona: 'exterior', nombre: 'Esclusa', x: 10.6, z: 0, radio: 0 },
   { id: 'plantaExt', zona: 'exterior', nombre: 'Planta de energía', x: 14.5, z: -8, radio: 1.1, sistemas: ['energia'] },
@@ -66,6 +68,16 @@ export const PUESTO: Record<Role, { x: number; z: number }> = {
   sistemas: { x: -1.5, z: -1.5 },
 }
 export const PUESTO_REFUGIO = { x: 4.7, z: 1.7 }
+
+/** Dónde se coloca cada uno para hacer ejercicio, dormir o refugiarse. */
+export const PUNTOS = {
+  /** Cinta de correr y bicicleta del gimnasio, mirando hacia el puente. */
+  cinta: { x: -2.15, z: 1.72, giro: -Math.PI / 2 },
+  bici: { x: -0.75, z: 1.72, giro: -Math.PI / 2 },
+  /** Sacos de dormir sujetos a la pared (sin gravedad) y literas (en Marte). */
+  sacos: [-0.1, 0.52, 1.14, 1.76, 2.38, 3.0].map((x) => ({ x, z: 2.28, giro: Math.PI })),
+  literas: [0.6, 1.6, 2.6].flatMap((x) => [0.42, 1.32].map((y) => ({ x, z: 2.35, y, giro: Math.PI }))),
+}
 
 /** Corrige una posición para que no atraviese paredes ni objetos. */
 export function limitarPosicion(zona: Zona, x: number, z: number, visibles: (id: string) => boolean): [number, number] {

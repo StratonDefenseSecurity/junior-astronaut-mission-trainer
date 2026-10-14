@@ -24,6 +24,8 @@ import {
   cambiarZona,
   crearSala,
   elegirAlternativa,
+  elegirEscenario,
+  elegirHogar,
   elegirPerfil,
   elegirRol,
   elegirTraje,
@@ -37,6 +39,7 @@ import {
   jugador,
   lanzar,
   marcarListo,
+  nombrarMision,
   nuevoJugador,
   pausar,
   pedirAyuda,
@@ -108,6 +111,9 @@ function verificar(autorizacion: string | undefined): Usuario | null {
     return null
   }
 }
+/** Quién es el dueño de una cabecera de autorización, o null. */
+export const usuarioDeToken = (autorizacion: string | undefined) => verificar(autorizacion)
+
 const claveDerivada = (clave: string, salt: string) => crypto.scryptSync(clave, salt, 32).toString('hex')
 const rutaCuenta = (usuario: string) => `usuarios/${Buffer.from(usuario.toLowerCase()).toString('hex')}.json`
 
@@ -453,6 +459,12 @@ async function despachar(c: Record<string, unknown>, autorizacion: string | unde
       return m((room) => elegirTraje(room, yo, objeto(c.traje) as Partial<Traje>))
     case 'iniciar':
       return m((room) => iniciarMision(room, yo))
+    case 'escenario':
+      return m((room) => elegirEscenario(room, yo, texto(c.escenario, 20)))
+    case 'hogar':
+      return m((room) => elegirHogar(room, yo, c.hogar ? texto(c.hogar, 20) : null))
+    case 'nombre':
+      return m((room) => nombrarMision(room, yo, texto(c.nombre, 60)))
     case 'cargamento':
       return m((room) => ajustarCargamento(room, objeto(c.cambios) as Record<string, number>))
     case 'preset':

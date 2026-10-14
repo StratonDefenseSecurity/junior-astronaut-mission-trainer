@@ -1,16 +1,27 @@
 // Interior del hábitat: es la nave durante el viaje y la base una vez en Marte.
+//
+// Se inspira en los módulos de la Estación Espacial: paredes cubiertas de bastidores de equipos,
+// pasamanos para moverse sin gravedad, cables, bolsas de carga blancas, luces LED y anillos de
+// estructura. Cada espacio tiene su equipo: cinta de correr y bicicleta en el gimnasio, sacos
+// de dormir sujetos a la pared (en Marte, literas), cámara de cultivo con luz rosada de LED
+// rojos y azules, camilla en la enfermería y una mesa común en el centro para comer y conversar.
+// Sin gravedad, algunos objetos sueltos flotan por el módulo.
 import { useMemo, useRef, type ReactNode } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { Html } from '@react-three/drei'
+import { Html, RoundedBox } from '@react-three/drei'
 import * as THREE from 'three'
 import type { RoomState } from '@shared/types'
-import { ESTACION_BY_ID, INTERIOR } from './mapa'
+import { ESTACION_BY_ID, INTERIOR, PUNTOS } from './mapa'
+import { Ventana } from './Ventana'
 
 const L = INTERIOR.x1 - INTERIOR.x0
 const A = INTERIOR.z1 - INTERIOR.z0
 const H = INTERIOR.alto
-const PARED = '#c9d1dc'
-const SUELO = '#3b424e'
+/** Altura a la que empieza el chaflán entre pared y techo. */
+const HP = 2.45
+
+/** Sin gravedad: el viaje y la órbita de Marte. */
+export const enMicrogravedad = (sala: RoomState) => sala.fase === 'transito' || (sala.fase === 'llegada' && sala.subfase !== 'descenso')
 
 /** Rótulo flotante de una estación. */
 export function Rotulo({ texto, y = 2.75, activo, destacado }: { texto: string; y?: number; activo: boolean; destacado: boolean }) {
@@ -27,7 +38,7 @@ export function Marca({ activo, destacado, radio = 0.8 }: { activo: boolean; des
   useFrame(({ clock }) => {
     if (!ref.current) return
     const m = ref.current.material as THREE.MeshBasicMaterial
-    m.opacity = activo ? 0.9 : destacado ? 0.45 + Math.sin(clock.elapsedTime * 4) * 0.3 : 0.16
+    m.opacity = activo ? 0.9 : destacado ? 0.45 + Math.sin(clock.elapsedTime * 4) * 0.3 : 0.14
     ref.current.scale.setScalar(destacado && !activo ? 1 + Math.sin(clock.elapsedTime * 4) * 0.08 : 1)
   })
   return (
@@ -35,6 +46,79 @@ export function Marca({ activo, destacado, radio = 0.8 }: { activo: boolean; des
       <ringGeometry args={[radio * 0.78, radio, 40]} />
       <meshBasicMaterial color={activo ? '#4fc3f7' : destacado ? '#f5b942' : '#8aa0bd'} transparent opacity={0.3} depthWrite={false} />
     </mesh>
+  )
+}
+
+// ---------- Materiales compartidos ----------
+
+const MAT = {
+  panel: new THREE.MeshStandardMaterial({ color: '#dcd8cc', roughness: 0.78, metalness: 0.05 }),
+  panelClaro: new THREE.MeshStandardMaterial({ color: '#eceae3', roughness: 0.7, metalness: 0.05 }),
+  panelGris: new THREE.MeshStandardMaterial({ color: '#b9bec6', roughness: 0.6, metalness: 0.2 }),
+  junta: new THREE.MeshStandardMaterial({ color: '#8e949c', roughness: 0.5, metalness: 0.4 }),
+  metal: new THREE.MeshStandardMaterial({ color: '#c7ccd3', roughness: 0.3, metalness: 0.8 }),
+  pasamanos: new THREE.MeshStandardMaterial({ color: '#7f97b8', roughness: 0.4, metalness: 0.6 }),
+  suelo: new THREE.MeshStandardMaterial({ color: '#4a505a', roughness: 0.85, metalness: 0.15 }),
+  sueloRaya: new THREE.MeshStandardMaterial({ color: '#3a3f47', roughness: 0.9 }),
+  oscuro: new THREE.MeshStandardMaterial({ color: '#1f242b', roughness: 0.6, metalness: 0.3 }),
+  bolsa: new THREE.MeshStandardMaterial({ color: '#f1f0ea', roughness: 0.95 }),
+  cinta: new THREE.MeshStandardMaterial({ color: '#2a2e33', roughness: 0.95 }),
+  cable: new THREE.MeshStandardMaterial({ color: '#3d4c63', roughness: 0.7 }),
+  cableNaranja: new THREE.MeshStandardMaterial({ color: '#d9822b', roughness: 0.7 }),
+  led: new THREE.MeshBasicMaterial({ color: '#fff4e2' }),
+  saco: new THREE.MeshStandardMaterial({ color: '#4f6f9a', roughness: 0.92 }),
+  sacoCierre: new THREE.MeshStandardMaterial({ color: '#2f4467', roughness: 0.9 }),
+  colchon: new THREE.MeshStandardMaterial({ color: '#d8dee6', roughness: 0.95 }),
+  planta: new THREE.MeshStandardMaterial({ color: '#3c9a4a', roughness: 0.8 }),
+  plantaClara: new THREE.MeshStandardMaterial({ color: '#69b84f', roughness: 0.8 }),
+  cristal: new THREE.MeshStandardMaterial({ color: '#cfe8ff', roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.18, depthWrite: false }),
+}
+
+function Pantalla({ x = 0, y = 1.45, z = 0, ancho = 0.9, alto = 0.55, color = '#3ddc97', intensidad = 0.85 }: { x?: number; y?: number; z?: number; ancho?: number; alto?: number; color?: string; intensidad?: number }) {
+  return (
+    <group position={[x, y, z]}>
+      <mesh material={MAT.oscuro}>
+        <boxGeometry args={[ancho + 0.06, alto + 0.06, 0.05]} />
+      </mesh>
+      <mesh position={[0, 0, 0.027]}>
+        <planeGeometry args={[ancho, alto]} />
+        <meshStandardMaterial color="#071019" emissive={color} emissiveIntensity={intensidad} roughness={0.3} />
+      </mesh>
+      {/* líneas de datos */}
+      {[0.28, 0.08, -0.12].map((f, i) => (
+        <mesh key={i} position={[-ancho * 0.1, alto * f, 0.03]}>
+          <planeGeometry args={[ancho * (0.7 - i * 0.15), alto * 0.05]} />
+          <meshBasicMaterial color="#e8fff4" transparent opacity={0.55} />
+        </mesh>
+      ))}
+    </group>
+  )
+}
+
+/** Portátil sujeto con velcro, como los de la Estación Espacial. */
+function Portatil({ x, y, z = 0.05, giro = 0 }: { x: number; y: number; z?: number; giro?: number }) {
+  return (
+    <group position={[x, y, z]} rotation={[0, giro, 0]}>
+      <mesh material={MAT.oscuro} position={[0, 0, 0.1]}>
+        <boxGeometry args={[0.36, 0.02, 0.24]} />
+      </mesh>
+      <mesh position={[0, 0.12, -0.01]} rotation={[-0.25, 0, 0]} material={MAT.oscuro}>
+        <boxGeometry args={[0.36, 0.24, 0.015]} />
+      </mesh>
+      <mesh position={[0, 0.12, 0.0]} rotation={[-0.25, 0, 0]}>
+        <planeGeometry args={[0.32, 0.2]} />
+        <meshBasicMaterial color="#7cc4ff" />
+      </mesh>
+    </group>
+  )
+}
+
+/** Bolsa blanca de transporte de carga. */
+function Bolsa({ p, t = [0.5, 0.32, 0.4] }: { p: [number, number, number]; t?: [number, number, number] }) {
+  return (
+    <RoundedBox args={t} radius={0.05} smoothness={2} position={p} material={MAT.bolsa} castShadow>
+      <meshStandardMaterial attach="material" color="#f1f0ea" roughness={0.95} />
+    </RoundedBox>
   )
 }
 
@@ -46,21 +130,30 @@ interface PuestoProps {
   children?: ReactNode
 }
 
-/** Armario de equipos contra la pared, con su rótulo y su marca en el suelo. */
+/** Bastidor de equipos contra la pared, con su rótulo y su marca en el suelo. */
 function Puesto({ id, cerca, destacadas, color, children }: PuestoProps) {
   const e = ESTACION_BY_ID[id]
   const lado = Math.sign(e.z) // -1 pared norte, +1 pared sur
   return (
     <group position={[e.x, 0, e.z]}>
       <group rotation={[0, lado > 0 ? Math.PI : 0, 0]}>
-        {/* bastidor */}
-        <mesh position={[0, 1.15, -0.28]} castShadow>
-          <boxGeometry args={[2.5, 2.3, 0.5]} />
-          <meshStandardMaterial color="#aeb7c4" roughness={0.6} metalness={0.25} />
-        </mesh>
+        {/* bastidor con tapa frontal y juntas */}
+        <RoundedBox args={[2.5, 2.3, 0.5]} radius={0.04} smoothness={2} position={[0, 1.15, -0.28]} castShadow receiveShadow>
+          <meshStandardMaterial color="#d3d0c6" roughness={0.75} metalness={0.05} />
+        </RoundedBox>
+        {[-1.24, 1.24].map((x) => (
+          <mesh key={x} position={[x, 1.15, 0.0]} material={MAT.junta}>
+            <boxGeometry args={[0.04, 2.3, 0.04]} />
+          </mesh>
+        ))}
+        {/* franja de color de la estación, iluminada */}
         <mesh position={[0, 2.38, -0.2]}>
-          <boxGeometry args={[2.5, 0.16, 0.56]} />
-          <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.35} />
+          <boxGeometry args={[2.5, 0.12, 0.56]} />
+          <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.45} />
+        </mesh>
+        {/* pasamanos sobre el bastidor */}
+        <mesh position={[0, 2.1, 0.06]} rotation={[0, 0, Math.PI / 2]} material={MAT.pasamanos}>
+          <cylinderGeometry args={[0.022, 0.022, 1.6, 8]} />
         </mesh>
         {children}
       </group>
@@ -72,31 +165,29 @@ function Puesto({ id, cerca, destacadas, color, children }: PuestoProps) {
   )
 }
 
-function Pantalla({ x = 0, y = 1.45, ancho = 0.9, alto = 0.55, color = '#3ddc97', intensidad = 0.9 }: { x?: number; y?: number; ancho?: number; alto?: number; color?: string; intensidad?: number }) {
-  return (
-    <mesh position={[x, y, 0]}>
-      <boxGeometry args={[ancho, alto, 0.04]} />
-      <meshStandardMaterial color="#0b1220" emissive={color} emissiveIntensity={intensidad} />
-    </mesh>
-  )
-}
-
 const tono = (malo: boolean, regular: boolean) => (malo ? '#ef5350' : regular ? '#f5b942' : '#3ddc97')
 
-function Estaciones({ sala, cerca, destacadas }: { sala: RoomState; cerca: string | null; destacadas: string[] }) {
+function Estaciones({ sala, cerca, destacadas, micro }: { sala: RoomState; cerca: string | null; destacadas: string[]; micro: boolean }) {
   const c = sala.cabina
   const e = sala.energia
   const bateria = e.capacidad ? e.bateria / e.capacidad : 0
   const sis = (id: string) => sala.sistemas.find((s) => s.id === id)!
   const comun = { cerca, destacadas }
+  const plantas = Math.round((sala.huerto.progreso / 100) * 12)
   return (
     <>
       <Puesto id="soporte" color="#4fc3f7" {...comun}>
         <Pantalla x={-0.6} color={tono(c.ppO2 < 18 || c.ppCO2 > 1, c.ppO2 < 19.5 || c.ppCO2 > 0.4)} />
         {[0.25, 0.65, 1.0].map((x, i) => (
-          <mesh key={x} position={[x, 0.95, 0.06]}>
-            <cylinderGeometry args={[0.16, 0.16, 1.5, 14]} />
-            <meshStandardMaterial color={['#dfe6ee', '#9fd3f5', '#f2c6a0'][i]} metalness={0.5} roughness={0.35} />
+          <mesh key={x} position={[x, 0.95, 0.06]} castShadow>
+            <cylinderGeometry args={[0.15, 0.15, 1.45, 18]} />
+            <meshStandardMaterial color={['#e6ebf1', '#a9d6f5', '#f2c6a0'][i]} metalness={0.45} roughness={0.35} />
+          </mesh>
+        ))}
+        {/* tuberías */}
+        {[1.75, 1.85].map((y, i) => (
+          <mesh key={y} position={[0.4, y, 0.04]} rotation={[0, 0, Math.PI / 2]} material={i ? MAT.cableNaranja : MAT.metal}>
+            <cylinderGeometry args={[0.025, 0.025, 1.6, 8]} />
           </mesh>
         ))}
         <Pantalla x={-0.6} y={0.75} alto={0.3} color={tono(!sis('cdra').operativo || !sis('oga').operativo, !sis('wrs').operativo)} intensidad={0.6} />
@@ -104,89 +195,113 @@ function Estaciones({ sala, cerca, destacadas }: { sala: RoomState; cerca: strin
 
       <Puesto id="energia" color="#f5b942" {...comun}>
         <Pantalla x={-0.55} color={tono(bateria < 0.15, bateria < 0.4)} />
-        {/* barras de batería */}
         {Array.from({ length: 6 }, (_, i) => (
           <mesh key={i} position={[0.25 + (i % 3) * 0.32, 1.0 + Math.floor(i / 3) * 0.62, 0.02]}>
             <boxGeometry args={[0.24, 0.5, 0.06]} />
             <meshStandardMaterial color="#111827" emissive={bateria * 6 > i ? '#3ddc97' : '#1f2937'} emissiveIntensity={bateria * 6 > i ? 0.9 : 0.1} />
           </mesh>
         ))}
+        {/* cuadro de interruptores */}
+        {Array.from({ length: 8 }, (_, i) => (
+          <mesh key={`i${i}`} position={[-0.85 + (i % 4) * 0.12, 0.55 + Math.floor(i / 4) * 0.12, 0.03]} material={i % 3 ? MAT.panelGris : MAT.cableNaranja}>
+            <boxGeometry args={[0.07, 0.07, 0.04]} />
+          </mesh>
+        ))}
       </Puesto>
 
       <Puesto id="almacen" color="#66bb6a" {...comun}>
-        {Array.from({ length: 12 }, (_, i) => (
-          <mesh key={i} position={[-0.9 + (i % 4) * 0.6, 0.5 + Math.floor(i / 4) * 0.62, 0.02]}>
-            <boxGeometry args={[0.52, 0.54, 0.06]} />
-            <meshStandardMaterial color={i % 5 === 0 ? '#8fa3b8' : '#d5dbe3'} roughness={0.7} />
+        {/* bolsas de carga apiladas y sujetas con cinchas */}
+        {Array.from({ length: 9 }, (_, i) => (
+          <Bolsa key={i} p={[-0.8 + (i % 3) * 0.55, 0.3 + Math.floor(i / 3) * 0.6, 0.12]} />
+        ))}
+        {[0.9, 1.5].map((y) => (
+          <mesh key={y} position={[-0.25, y, 0.33]} material={MAT.cable}>
+            <boxGeometry args={[1.7, 0.04, 0.01]} />
           </mesh>
         ))}
-        <mesh position={[0.7, 0.3, 0.5]} castShadow>
-          <boxGeometry args={[0.6, 0.6, 0.6]} />
-          <meshStandardMaterial color="#b98b52" roughness={0.9} />
-        </mesh>
+        <Portatil x={0.75} y={1.25} />
+        <Bolsa p={[0.75, 0.3, 0.45]} t={[0.55, 0.5, 0.55]} />
       </Puesto>
 
       <Puesto id="laboratorio" color="#ab47bc" {...comun}>
-        <Pantalla x={-0.65} color="#c084fc" />
-        {/* estantes del huerto: se llenan de verde al avanzar */}
-        {[0.7, 1.3, 1.9].map((y, i) => (
-          <group key={y} position={[0.45, y, 0.12]}>
-            <mesh>
-              <boxGeometry args={[1.2, 0.05, 0.4]} />
-              <meshStandardMaterial color="#6b7280" />
-            </mesh>
-            {sala.huerto.progreso > i * 33 && (
-              <mesh position={[0, 0.16, 0]}>
-                <boxGeometry args={[1.1, 0.26, 0.32]} />
-                <meshStandardMaterial color={sala.huerto.establecido ? '#2e9e4f' : '#7ca36b'} emissive="#14532d" emissiveIntensity={sala.huerto.establecido ? 0.5 : 0.15} roughness={0.9} />
-              </mesh>
-            )}
-          </group>
+        <Pantalla x={-0.75} y={1.55} ancho={0.6} alto={0.4} color="#c084fc" />
+        {/* guantera de experimentos */}
+        <mesh position={[-0.75, 0.85, 0.1]} material={MAT.cristal}>
+          <boxGeometry args={[0.8, 0.55, 0.45]} />
+        </mesh>
+        {[-0.95, -0.55].map((x) => (
+          <mesh key={x} position={[x, 0.85, 0.33]} rotation={[Math.PI / 2, 0, 0]} material={MAT.oscuro}>
+            <torusGeometry args={[0.08, 0.015, 6, 16]} />
+          </mesh>
         ))}
+        {/* cámara de cultivo: los LED rojos y azules dan luz rosada */}
+        <group position={[0.5, 0, 0.1]}>
+          <mesh position={[0, 1.2, -0.02]}>
+            <boxGeometry args={[1.2, 1.5, 0.45]} />
+            <meshStandardMaterial color="#2b2030" roughness={0.8} />
+          </mesh>
+          <mesh position={[0, 1.93, 0.05]}>
+            <boxGeometry args={[1.05, 0.04, 0.3]} />
+            <meshBasicMaterial color="#ff7ad9" />
+          </mesh>
+          <pointLight position={[0, 1.6, 0.4]} color="#ff6ad5" intensity={sala.huerto.progreso > 0 ? 2.5 : 0} distance={2.5} decay={2} />
+          {Array.from({ length: plantas }, (_, i) => (
+            <group key={i} position={[-0.42 + (i % 6) * 0.17, 0.62 + Math.floor(i / 6) * 0.62, 0.05]}>
+              <mesh material={i % 2 ? MAT.planta : MAT.plantaClara} position={[0, 0.1, 0]}>
+                <coneGeometry args={[0.07, sala.huerto.establecido ? 0.26 : 0.16, 6]} />
+              </mesh>
+              <mesh material={MAT.plantaClara} position={[0, 0.17, 0]} scale={[1, 0.6, 1]}>
+                <sphereGeometry args={[0.06, 8, 6]} />
+              </mesh>
+            </group>
+          ))}
+        </group>
       </Puesto>
 
       <Puesto id="enfermeria" color="#ef5350" {...comun}>
-        <Pantalla x={0.6} color="#fb7185" />
-        <mesh position={[-0.35, 0.55, 0.55]} castShadow>
-          <boxGeometry args={[1.5, 0.22, 0.75]} />
+        <Pantalla x={0.65} color="#fb7185" />
+        {/* camilla con sujeciones */}
+        <RoundedBox args={[1.5, 0.16, 0.72]} radius={0.05} smoothness={2} position={[-0.35, 0.62, 0.55]} castShadow>
           <meshStandardMaterial color="#f1f5f9" roughness={0.9} />
+        </RoundedBox>
+        <mesh position={[-0.35, 0.3, 0.55]} material={MAT.panelGris}>
+          <boxGeometry args={[1.2, 0.5, 0.55]} />
         </mesh>
-        <mesh position={[-0.35, 0.25, 0.55]}>
-          <boxGeometry args={[1.3, 0.45, 0.6]} />
-          <meshStandardMaterial color="#64748b" />
+        {[-0.75, 0.05].map((x) => (
+          <mesh key={x} position={[x, 0.71, 0.55]} material={MAT.cableNaranja}>
+            <boxGeometry args={[0.06, 0.02, 0.74]} />
+          </mesh>
+        ))}
+        {/* botiquín con la cruz */}
+        <mesh position={[0.65, 0.75, 0.04]}>
+          <boxGeometry args={[0.5, 0.4, 0.08]} />
+          <meshStandardMaterial color="#f8fafc" roughness={0.6} />
+        </mesh>
+        <mesh position={[0.65, 0.75, 0.085]}>
+          <boxGeometry args={[0.24, 0.07, 0.01]} />
+          <meshBasicMaterial color="#e11d48" />
+        </mesh>
+        <mesh position={[0.65, 0.75, 0.085]}>
+          <boxGeometry args={[0.07, 0.24, 0.01]} />
+          <meshBasicMaterial color="#e11d48" />
         </mesh>
       </Puesto>
 
       <Puesto id="ejercicio" color="#ffa726" {...comun}>
-        <mesh position={[0, 0.16, 0.65]} castShadow>
-          <boxGeometry args={[0.8, 0.2, 1.5]} />
-          <meshStandardMaterial color="#1f2937" roughness={0.6} />
+        <Pantalla x={0.6} y={1.6} ancho={0.6} alto={0.38} color="#fbbf24" />
+        {/* barra de sentadillas con resistencia por vacío, como la de la Estación Espacial */}
+        <mesh position={[-0.6, 1.3, 0.1]} rotation={[0, 0, Math.PI / 2]} material={MAT.metal}>
+          <cylinderGeometry args={[0.03, 0.03, 1.1, 10]} />
         </mesh>
-        {[-0.38, 0.38].map((x) => (
-          <mesh key={x} position={[x, 0.75, 0.05]}>
-            <cylinderGeometry args={[0.035, 0.035, 1.2, 8]} />
-            <meshStandardMaterial color="#e2e8f0" metalness={0.8} roughness={0.25} />
+        {[-1.05, -0.15].map((x) => (
+          <mesh key={x} position={[x, 0.8, 0.1]} material={MAT.metal}>
+            <cylinderGeometry args={[0.05, 0.05, 1.0, 10]} />
           </mesh>
         ))}
-        <mesh position={[0, 1.32, 0.05]} rotation={[0, 0, Math.PI / 2]}>
-          <cylinderGeometry args={[0.035, 0.035, 0.8, 8]} />
-          <meshStandardMaterial color="#e2e8f0" metalness={0.8} roughness={0.25} />
-        </mesh>
       </Puesto>
 
       <Puesto id="literas" color="#7c8cf8" {...comun}>
-        {[0.55, 1.5].map((y) => (
-          <group key={y} position={[0, y, 0.25]}>
-            <mesh castShadow>
-              <boxGeometry args={[2.2, 0.16, 0.85]} />
-              <meshStandardMaterial color="#e2e8f0" roughness={0.95} />
-            </mesh>
-            <mesh position={[-0.85, 0.14, 0]}>
-              <boxGeometry args={[0.4, 0.12, 0.6]} />
-              <meshStandardMaterial color="#94a3b8" />
-            </mesh>
-          </group>
-        ))}
+        <Pantalla x={-0.95} y={2.0} ancho={0.4} alto={0.22} color="#a5b4fc" intensidad={0.4} />
       </Puesto>
 
       <Puesto id="refugio" color="#38bdf8" {...comun}>
@@ -194,12 +309,154 @@ function Estaciones({ sala, cerca, destacadas }: { sala: RoomState; cerca: strin
         {Array.from({ length: 1 + sala.blindaje }, (_, i) => (
           <mesh key={i} position={[0, 1.1, 0.1 + i * 0.14]}>
             <boxGeometry args={[2.3 - i * 0.08, 2.0, 0.1]} />
-            <meshStandardMaterial color="#1d4ed8" transparent opacity={0.35} roughness={0.15} metalness={0.2} />
+            <meshStandardMaterial color="#1d4ed8" transparent opacity={0.32} roughness={0.15} metalness={0.2} />
           </mesh>
         ))}
-        <Pantalla x={0} y={1.7} ancho={0.7} alto={0.3} color={tono(Boolean(sala.ambiente.tormentaSolar), false)} />
+        <Pantalla x={0} y={1.75} ancho={0.7} alto={0.3} color={tono(Boolean(sala.ambiente.tormentaSolar), false)} />
       </Puesto>
+
+      <Gimnasio micro={micro} />
+      <Dormitorio micro={micro} />
+      <Mesa cerca={cerca} destacadas={destacadas} />
     </>
+  )
+}
+
+/** Cinta de correr y bicicleta estática, frente al bastidor del gimnasio. */
+function Gimnasio({ micro }: { micro: boolean }) {
+  const { cinta, bici } = PUNTOS
+  return (
+    <group>
+      {/* cinta: base, banda, barandillas y consola */}
+      <group position={[cinta.x, 0, cinta.z]} rotation={[0, cinta.giro + Math.PI / 2, 0]}>
+        <RoundedBox args={[0.7, 0.14, 1.7]} radius={0.04} smoothness={2} position={[0, 0.07, 0]} castShadow>
+          <meshStandardMaterial color="#3b4048" roughness={0.6} metalness={0.3} />
+        </RoundedBox>
+        <mesh position={[0, 0.145, 0]} material={MAT.cinta}>
+          <boxGeometry args={[0.52, 0.01, 1.55]} />
+        </mesh>
+        {[-0.33, 0.33].map((x) => (
+          <mesh key={x} position={[x, 0.55, -0.55]} material={MAT.metal}>
+            <cylinderGeometry args={[0.02, 0.02, 0.85, 8]} />
+          </mesh>
+        ))}
+        <mesh position={[0, 0.98, -0.7]} rotation={[-0.5, 0, 0]} material={MAT.oscuro}>
+          <boxGeometry args={[0.55, 0.3, 0.05]} />
+        </mesh>
+        {/* sin gravedad hay que sujetarse a la cinta con un arnés y cuerdas elásticas */}
+        {micro &&
+          [-0.25, 0.25].map((x) => (
+            <mesh key={x} position={[x, 0.75, 0.1]} rotation={[0.25, 0, 0]} material={MAT.cableNaranja}>
+              <cylinderGeometry args={[0.008, 0.008, 1.2, 4]} />
+            </mesh>
+          ))}
+      </group>
+      {/* bicicleta: cuadro, sillín (en Marte), manillar y pedales */}
+      <group position={[bici.x, 0, bici.z]} rotation={[0, bici.giro + Math.PI / 2, 0]}>
+        <mesh position={[0, 0.06, 0]} material={MAT.oscuro}>
+          <boxGeometry args={[0.45, 0.12, 0.9]} />
+        </mesh>
+        <mesh position={[0, 0.42, -0.05]} rotation={[0.35, 0, 0]} material={MAT.metal}>
+          <cylinderGeometry args={[0.035, 0.035, 0.75, 8]} />
+        </mesh>
+        <mesh position={[0, 0.3, -0.25]} rotation={[0, 0, Math.PI / 2]} material={MAT.oscuro}>
+          <cylinderGeometry args={[0.2, 0.2, 0.06, 20]} />
+        </mesh>
+        {!micro && (
+          <mesh position={[0, 0.66, 0.28]} material={MAT.oscuro}>
+            <boxGeometry args={[0.2, 0.05, 0.3]} />
+          </mesh>
+        )}
+        <mesh position={[0, 0.98, -0.42]} rotation={[0, 0, Math.PI / 2]} material={MAT.metal}>
+          <cylinderGeometry args={[0.02, 0.02, 0.5, 8]} />
+        </mesh>
+      </group>
+    </group>
+  )
+}
+
+/** Sin gravedad se duerme en sacos sujetos a la pared; en Marte, en literas. */
+function Dormitorio({ micro }: { micro: boolean }) {
+  if (micro) {
+    return (
+      <group>
+        {PUNTOS.sacos.map((s, i) => (
+          <group key={i} position={[s.x, 0, 2.62]}>
+            {/* el saco vacío cuelga de la pared */}
+            <mesh position={[0, 1.15, 0]} scale={[0.23, 0.55, 0.12]} material={MAT.saco}>
+              <capsuleGeometry args={[1, 1, 6, 12]} />
+            </mesh>
+            <mesh position={[0.08, 1.15, 0.11]} material={MAT.sacoCierre}>
+              <boxGeometry args={[0.02, 1.2, 0.01]} />
+            </mesh>
+            <mesh position={[0, 2.05, 0.02]} rotation={[0, 0, Math.PI / 2]} material={MAT.pasamanos}>
+              <cylinderGeometry args={[0.018, 0.018, 0.4, 8]} />
+            </mesh>
+            {/* luz de lectura */}
+            <mesh position={[0, 2.25, 0.02]}>
+              <boxGeometry args={[0.12, 0.04, 0.03]} />
+              <meshBasicMaterial color="#ffe9b8" />
+            </mesh>
+          </group>
+        ))}
+      </group>
+    )
+  }
+  return (
+    <group>
+      {PUNTOS.literas.map((l, i) => (
+        <group key={i} position={[l.x, l.y, 2.35]}>
+          <RoundedBox args={[0.85, 0.14, 1.75]} radius={0.04} smoothness={2} position={[0, 0, 0.05]} castShadow>
+            <meshStandardMaterial color="#d8dee6" roughness={0.95} />
+          </RoundedBox>
+          <mesh position={[0, -0.09, 0.05]} material={MAT.panelGris}>
+            <boxGeometry args={[0.9, 0.05, 1.8]} />
+          </mesh>
+          <mesh position={[0, 0.1, 0.72]} material={MAT.saco}>
+            <boxGeometry args={[0.45, 0.08, 0.25]} />
+          </mesh>
+        </group>
+      ))}
+      {[0.12, 1.08, 2.12, 3.1].map((x) => (
+        <mesh key={x} position={[x, 0.95, 2.35]} material={MAT.metal}>
+          <boxGeometry args={[0.05, 1.9, 0.05]} />
+        </mesh>
+      ))}
+    </group>
+  )
+}
+
+/** Mesa común: donde la tripulación come y conversa. */
+function Mesa({ cerca, destacadas }: { cerca: string | null; destacadas: string[] }) {
+  const e = ESTACION_BY_ID.comedor
+  return (
+    <group position={[e.x, 0, e.z]}>
+      <mesh position={[0, 0.96, 0]} castShadow receiveShadow>
+        <cylinderGeometry args={[0.6, 0.6, 0.05, 36]} />
+        <meshStandardMaterial color="#cfd5dc" roughness={0.5} metalness={0.25} />
+      </mesh>
+      <mesh position={[0, 0.48, 0]} material={MAT.metal}>
+        <cylinderGeometry args={[0.07, 0.12, 0.95, 12]} />
+      </mesh>
+      {/* bolsas de comida y bebida sujetas con velcro */}
+      {[
+        [0.22, 0.12, '#f59e0b'],
+        [-0.2, 0.2, '#ef4444'],
+        [0.05, -0.28, '#22c55e'],
+        [-0.3, -0.12, '#3b82f6'],
+      ].map(([x, z, col], i) => (
+        <mesh key={i} position={[x as number, 1.02, z as number]} rotation={[0, i, 0]}>
+          <boxGeometry args={[0.12, 0.05, 0.16]} />
+          <meshStandardMaterial color={col as string} roughness={0.7} />
+        </mesh>
+      ))}
+      <mesh position={[0.32, 1.05, -0.3]}>
+        <cylinderGeometry args={[0.035, 0.035, 0.12, 10]} />
+        <meshStandardMaterial color="#e2e8f0" roughness={0.4} />
+      </mesh>
+      <Marca activo={cerca === 'comedor'} destacado={destacadas.includes('comedor')} radio={1.05} />
+      <Rotulo texto={e.nombre} y={1.6} activo={cerca === 'comedor'} destacado={destacadas.includes('comedor')} />
+    </group>
   )
 }
 
@@ -208,27 +465,25 @@ function Puente({ cerca, destacadas }: { cerca: string | null; destacadas: strin
   const e = ESTACION_BY_ID.puente
   return (
     <group position={[e.x, 0, e.z]}>
-      <mesh position={[0, 0.5, 0]} castShadow>
-        <boxGeometry args={[0.9, 1.0, 2.6]} />
+      <RoundedBox args={[0.9, 1.0, 2.6]} radius={0.05} smoothness={2} position={[0, 0.5, 0]} castShadow>
         <meshStandardMaterial color="#8793a5" metalness={0.35} roughness={0.5} />
-      </mesh>
-      <mesh position={[0.1, 1.06, 0]} rotation={[0, 0, 0.35]}>
-        <boxGeometry args={[0.6, 0.06, 2.4]} />
-        <meshStandardMaterial color="#0b1220" emissive="#38bdf8" emissiveIntensity={0.7} />
-      </mesh>
+      </RoundedBox>
+      {[-0.8, 0, 0.8].map((z, i) => (
+        <mesh key={z} position={[0.12, 1.08, z]} rotation={[0, Math.PI / 2, 0.35]}>
+          <planeGeometry args={[0.7, 0.42]} />
+          <meshStandardMaterial color="#071019" emissive={['#38bdf8', '#3ddc97', '#f5b942'][i]} emissiveIntensity={0.8} />
+        </mesh>
+      ))}
       {[-0.9, 0.9].map((z) => (
         <group key={z} position={[1.35, 0, z]}>
-          <mesh position={[0, 0.45, 0]} castShadow>
+          <mesh position={[0, 0.45, 0]} castShadow material={MAT.oscuro}>
             <boxGeometry args={[0.55, 0.12, 0.55]} />
-            <meshStandardMaterial color="#1f2937" />
           </mesh>
-          <mesh position={[0.25, 0.9, 0]}>
+          <mesh position={[0.25, 0.9, 0]} material={MAT.oscuro}>
             <boxGeometry args={[0.1, 0.9, 0.55]} />
-            <meshStandardMaterial color="#1f2937" />
           </mesh>
-          <mesh position={[0, 0.22, 0]}>
+          <mesh position={[0, 0.22, 0]} material={MAT.metal}>
             <cylinderGeometry args={[0.06, 0.2, 0.44, 10]} />
-            <meshStandardMaterial color="#64748b" metalness={0.7} />
           </mesh>
         </group>
       ))}
@@ -247,16 +502,15 @@ function Esclusa({ sala, cerca, destacadas }: { sala: RoomState; cerca: string |
   const color = s.integridad <= 15 ? '#ef5350' : enMarte ? '#3ddc97' : '#64748b'
   return (
     <group position={[e.x, 0, e.z]}>
-      <mesh position={[0.45, 1.25, 0]} rotation={[0, 0, Math.PI / 2]}>
-        <cylinderGeometry args={[1.05, 1.05, 0.25, 28]} />
-        <meshStandardMaterial color="#6b7686" metalness={0.6} roughness={0.35} />
+      {/* escotilla cuadrada de esquinas redondeadas, como las de la Estación Espacial */}
+      <RoundedBox args={[0.25, 1.6, 1.6]} radius={0.18} smoothness={3} position={[0.45, 1.25, 0]}>
+        <meshStandardMaterial color="#9aa3ae" metalness={0.55} roughness={0.35} />
+      </RoundedBox>
+      <mesh position={[0.31, 1.25, 0]} rotation={[0, Math.PI / 2, 0]} material={MAT.metal}>
+        <torusGeometry args={[0.18, 0.03, 8, 20]} />
       </mesh>
-      <mesh position={[0.3, 1.25, 0]} rotation={[0, 0, Math.PI / 2]}>
-        <torusGeometry args={[0.55, 0.06, 8, 24]} />
-        <meshStandardMaterial color="#cbd5e1" metalness={0.8} roughness={0.2} />
-      </mesh>
-      <mesh position={[0.3, 2.5, 0]}>
-        <boxGeometry args={[0.08, 0.14, 0.5]} />
+      <mesh position={[0.31, 2.2, 0]}>
+        <boxGeometry args={[0.04, 0.12, 0.5]} />
         <meshStandardMaterial color="#0b1220" emissive={color} emissiveIntensity={1} />
       </mesh>
       <group position={[-0.9, 0, 0]}>
@@ -267,130 +521,192 @@ function Esclusa({ sala, cerca, destacadas }: { sala: RoomState; cerca: string |
   )
 }
 
-/** Paredes, suelo y techo. La pared delantera tiene el ventanal. */
+/** Suelo, paredes, chaflanes y techo, con anillos de estructura, pasamanos, cables y luces. */
 function Casco() {
-  const pared = <meshStandardMaterial color={PARED} roughness={0.85} metalness={0.05} />
+  const tramos = useMemo(() => {
+    // Huecos de pared entre estaciones, que se cubren con bastidores genéricos.
+    const ocupados = [-4.6, -1.5, 1.6, 4.7]
+    const lista: number[] = []
+    for (let x = INTERIOR.x0 + 0.9; x < INTERIOR.x1 - 0.6; x += 0.62) if (!ocupados.some((o) => Math.abs(o - x) < 1.6)) lista.push(x)
+    return lista
+  }, [])
   return (
     <group>
-      <mesh position={[0, -0.05, 0]} receiveShadow>
+      {/* suelo con juntas */}
+      <mesh position={[0, -0.05, 0]} receiveShadow material={MAT.suelo}>
         <boxGeometry args={[L, 0.1, A]} />
-        <meshStandardMaterial color={SUELO} roughness={0.8} />
       </mesh>
-      {/* franja del pasillo */}
-      <mesh position={[0, 0.005, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[L - 1.2, 0.18]} />
-        <meshBasicMaterial color="#f5b942" transparent opacity={0.5} />
-      </mesh>
-      <mesh position={[0, H + 0.05, 0]}>
-        <boxGeometry args={[L, 0.1, A]} />
-        {pared}
-      </mesh>
-      {[-1, 1].map((s) => (
-        <mesh key={s} position={[0, H / 2, s * (A / 2 + 0.05)]}>
-          <boxGeometry args={[L, H, 0.1]} />
-          {pared}
+      {Array.from({ length: 15 }, (_, i) => (
+        <mesh key={i} position={[INTERIOR.x0 + 1.2 * (i + 0.5), 0.003, 0]} rotation={[-Math.PI / 2, 0, 0]} material={MAT.sueloRaya}>
+          <planeGeometry args={[0.03, A]} />
         </mesh>
+      ))}
+      <mesh position={[0, 0.006, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[L - 1.2, 0.12]} />
+        <meshBasicMaterial color="#f5b942" transparent opacity={0.35} />
+      </mesh>
+      {/* paredes laterales */}
+      {[-1, 1].map((s) => (
+        <mesh key={s} position={[0, HP / 2, s * (A / 2 + 0.05)]} material={MAT.panelClaro} receiveShadow>
+          <boxGeometry args={[L, HP, 0.1]} />
+        </mesh>
+      ))}
+      {/* bastidores genéricos en los huecos */}
+      {[-1, 1].map((s) =>
+        tramos.map((x) => (
+          <group key={`${s}${x}`} position={[x, 0, s * (A / 2 - 0.12)]}>
+            <mesh position={[0, 1.15, 0]} material={MAT.panel}>
+              <boxGeometry args={[0.58, 2.2, 0.16]} />
+            </mesh>
+            <mesh position={[0, 1.6, -s * 0.085]} material={MAT.panelGris}>
+              <boxGeometry args={[0.4, 0.3, 0.02]} />
+            </mesh>
+          </group>
+        )),
+      )}
+      {/* chaflanes entre pared y techo, con tiras de luz LED */}
+      {[-1, 1].map((s) => (
+        <group key={s}>
+          <mesh position={[0, HP + 0.27, s * (A / 2 - 0.3)]} rotation={[s * Math.PI * 0.25, 0, 0]} material={MAT.panelClaro}>
+            <boxGeometry args={[L, 0.1, 0.85]} />
+          </mesh>
+          <mesh position={[0, HP + 0.24, s * (A / 2 - 0.36)]} rotation={[s * Math.PI * 0.25, 0, 0]} material={MAT.led}>
+            <boxGeometry args={[L - 1, 0.12, 0.08]} />
+          </mesh>
+          {/* bandeja de cables */}
+          <mesh position={[0, HP - 0.06, s * (A / 2 - 0.08)]} rotation={[0, 0, Math.PI / 2]} material={MAT.cable}>
+            <cylinderGeometry args={[0.04, 0.04, L, 8]} />
+          </mesh>
+          <mesh position={[0, HP - 0.15, s * (A / 2 - 0.06)]} rotation={[0, 0, Math.PI / 2]} material={MAT.cableNaranja}>
+            <cylinderGeometry args={[0.018, 0.018, L, 6]} />
+          </mesh>
+          {/* pasamanos a lo largo de la pared */}
+          <mesh position={[0, 1.02, s * (A / 2 - 0.42)]} rotation={[0, 0, Math.PI / 2]} material={MAT.pasamanos}>
+            <cylinderGeometry args={[0.02, 0.02, L - 2, 8]} />
+          </mesh>
+        </group>
+      ))}
+      {/* techo con paneles de luz */}
+      <mesh position={[0, H + 0.05, 0]} material={MAT.panelClaro}>
+        <boxGeometry args={[L, 0.1, A - 1.1]} />
+      </mesh>
+      {[-6, -2, 2, 6].map((x) => (
+        <mesh key={x} position={[x, H - 0.01, 0]} material={MAT.led}>
+          <boxGeometry args={[2.0, 0.03, 0.6]} />
+        </mesh>
+      ))}
+      {/* anillos de estructura que dividen el módulo */}
+      {[-3.05, 3.15].map((x) => (
+        <group key={x} position={[x, 0, 0]}>
+          {[-1, 1].map((s) => (
+            <mesh key={s} position={[0, HP / 2, s * (A / 2 - 0.05)]} material={MAT.junta}>
+              <boxGeometry args={[0.16, HP, 0.2]} />
+            </mesh>
+          ))}
+          <mesh position={[0, H - 0.04, 0]} material={MAT.junta}>
+            <boxGeometry args={[0.16, 0.14, A - 0.9]} />
+          </mesh>
+        </group>
       ))}
       {/* pared trasera (esclusa) */}
-      <mesh position={[L / 2 + 0.05, H / 2, 0]}>
+      <mesh position={[L / 2 + 0.05, H / 2, 0]} material={MAT.panelClaro}>
         <boxGeometry args={[0.1, H, A]} />
-        {pared}
       </mesh>
-      {/* pared delantera con ventanal de 5 × 1.9 m */}
-      <mesh position={[-L / 2 - 0.05, 0.4, 0]}>
+      {/* pared delantera con el ventanal de 5 × 1.9 m */}
+      <mesh position={[-L / 2 - 0.05, 0.4, 0]} material={MAT.panelClaro}>
         <boxGeometry args={[0.1, 0.8, A]} />
-        {pared}
       </mesh>
-      <mesh position={[-L / 2 - 0.05, 2.85, 0]}>
+      <mesh position={[-L / 2 - 0.05, 2.85, 0]} material={MAT.panelClaro}>
         <boxGeometry args={[0.1, 0.3, A]} />
-        {pared}
       </mesh>
       {[-1, 1].map((s) => (
-        <mesh key={s} position={[-L / 2 - 0.05, 1.75, s * 2.85]}>
+        <mesh key={s} position={[-L / 2 - 0.05, 1.75, s * 2.85]} material={MAT.panelClaro}>
           <boxGeometry args={[0.1, 1.9, 0.7]} />
-          {pared}
         </mesh>
       ))}
-      <mesh position={[-L / 2 - 0.02, 1.75, 0]}>
-        <boxGeometry args={[0.03, 1.9, 5]} />
-        <meshStandardMaterial color="#9fd8ff" transparent opacity={0.08} roughness={0.05} metalness={0.4} />
+      {/* marco del ventanal y el cristal */}
+      <mesh position={[-L / 2 + 0.01, 1.75, 0]} rotation={[0, Math.PI / 2, 0]} material={MAT.junta}>
+        <torusGeometry args={[0.001, 0.001, 2, 4]} />
       </mesh>
-      {/* tiras de luz del techo */}
-      {[-6, -2, 2, 6].map((x) => (
-        <mesh key={x} position={[x, H - 0.02, 0]}>
-          <boxGeometry args={[2.4, 0.04, 0.5]} />
-          <meshBasicMaterial color="#f8fbff" />
+      {[0.8, 2.7].map((y) => (
+        <mesh key={y} position={[-L / 2 + 0.02, y, 0]} material={MAT.junta}>
+          <boxGeometry args={[0.08, 0.08, 5.1]} />
         </mesh>
       ))}
+      {[-2.5, 2.5].map((z) => (
+        <mesh key={z} position={[-L / 2 + 0.02, 1.75, z]} material={MAT.junta}>
+          <boxGeometry args={[0.08, 1.98, 0.08]} />
+        </mesh>
+      ))}
+      <mesh position={[-L / 2 - 0.02, 1.75, 0]} rotation={[0, Math.PI / 2, 0]}>
+        <planeGeometry args={[5, 1.9]} />
+        <meshStandardMaterial color="#9fd8ff" transparent opacity={0.05} roughness={0.02} metalness={0.5} depthWrite={false} />
+      </mesh>
     </group>
   )
 }
 
-/** Lo que se ve por el ventanal: el espacio durante el viaje o Marte al llegar. */
-function Vista({ sala }: { sala: RoomState }) {
-  const estrellas = useMemo(() => {
-    const n = 1400
-    const arr = new Float32Array(n * 3)
-    for (let i = 0; i < n; i++) {
-      const th = Math.random() * Math.PI * 2
-      const ph = Math.acos(2 * Math.random() - 1)
-      arr[i * 3] = 380 * Math.sin(ph) * Math.cos(th)
-      arr[i * 3 + 1] = 380 * Math.cos(ph)
-      arr[i * 3 + 2] = 380 * Math.sin(ph) * Math.sin(th)
-    }
-    return arr
-  }, [])
-  const marte = useRef<THREE.Mesh>(null)
-  const giro = useRef<THREE.Group>(null)
-  useFrame((_, dt) => {
-    if (marte.current) marte.current.rotation.y += dt * 0.01
-    if (giro.current) giro.current.rotation.x += dt * 0.004
+/** Objetos sueltos que flotan sin gravedad: una lista de tareas, un bolígrafo, una bolsa y una gota de agua. */
+function ObjetosFlotantes() {
+  const objetos = useMemo(
+    () =>
+      [
+        { tipo: 'hoja', p: new THREE.Vector3(-3.4, 1.9, 0.8), v: new THREE.Vector3(0.07, 0.02, -0.04), giro: new THREE.Vector3(0.3, 0.5, 0.2) },
+        { tipo: 'boli', p: new THREE.Vector3(2.4, 1.6, -0.9), v: new THREE.Vector3(-0.05, -0.015, 0.03), giro: new THREE.Vector3(0.8, 0.2, 0.6) },
+        { tipo: 'bolsa', p: new THREE.Vector3(5.6, 2.1, 0.4), v: new THREE.Vector3(-0.03, 0.01, 0.02), giro: new THREE.Vector3(0.1, 0.25, 0.15) },
+        { tipo: 'gota', p: new THREE.Vector3(-1.0, 1.75, -0.3), v: new THREE.Vector3(0.04, 0.012, 0.025), giro: new THREE.Vector3(0, 0, 0) },
+      ] as const,
+    [],
+  )
+  const refs = useRef<(THREE.Object3D | null)[]>([])
+  useFrame(({ clock }, dtBruto) => {
+    const dt = Math.min(0.05, dtBruto)
+    objetos.forEach((o, i) => {
+      const obj = refs.current[i]
+      if (!obj) return
+      o.p.addScaledVector(o.v, dt)
+      // Rebotan suavemente en las paredes del pasillo.
+      if (o.p.x < INTERIOR.pasilloX0 || o.p.x > INTERIOR.pasilloX1) o.v.x *= -1
+      if (Math.abs(o.p.z) > 1.8) o.v.z *= -1
+      if (o.p.y < 1.1 || o.p.y > 2.5) o.v.y *= -1
+      obj.position.copy(o.p)
+      obj.rotation.x += o.giro.x * dt
+      obj.rotation.y += o.giro.y * dt
+      obj.rotation.z += o.giro.z * dt
+      // La gota de agua tiembla: la tensión superficial la mantiene redonda.
+      if (o.tipo === 'gota') obj.scale.set(1 + Math.sin(clock.elapsedTime * 7) * 0.08, 1 - Math.sin(clock.elapsedTime * 7) * 0.08, 1)
+    })
   })
-  const enMarte = sala.tAterrizaje > 0
-  if (enMarte) {
-    const noche = sala.ambiente.hora < 5.5 || sala.ambiente.hora > 19.5
-    return (
-      <group>
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[-80, -0.6, 0]}>
-          <planeGeometry args={[220, 260]} />
-          <meshStandardMaterial color={noche ? '#3b1c12' : '#b4542f'} roughness={1} />
-        </mesh>
-        {[[-40, 3, -18, 9], [-60, 5, 22, 14], [-90, 8, -40, 22], [-30, 2, 30, 6]].map(([x, y, z, r], i) => (
-          <mesh key={i} position={[x, y - r * 0.8, z]}>
-            <sphereGeometry args={[r, 16, 12]} />
-            <meshStandardMaterial color={noche ? '#2f1710' : '#9c4526'} roughness={1} />
-          </mesh>
-        ))}
-      </group>
-    )
-  }
-  const v = sala.vuelo
-  const enOrbita = sala.fase === 'llegada'
-  const radioTierra = Math.max(0.5, 40 / (1 + v.distTierra * 10))
-  const radioMarte = enOrbita ? 190 : Math.max(0.45, 34 / (1 + v.distMarte * 7))
   return (
     <group>
-      <group ref={giro}>
-        <points>
-          <bufferGeometry>
-            <bufferAttribute attach="attributes-position" args={[estrellas, 3]} />
-          </bufferGeometry>
-          <pointsMaterial size={1.3} color="#dbe7ff" sizeAttenuation />
-        </points>
-      </group>
-      {/* el Sol, a un lado */}
-      <mesh position={[-200, 90, -260]}>
-        <sphereGeometry args={[9 / v.distSol, 20, 20]} />
-        <meshBasicMaterial color="#fff6d8" />
-      </mesh>
-      <mesh position={[-240, 30, -70]}>
-        <sphereGeometry args={[radioTierra, 28, 28]} />
-        <meshStandardMaterial color="#2f6fb0" emissive="#123a66" emissiveIntensity={0.5} roughness={0.8} />
-      </mesh>
-      <mesh ref={marte} position={enOrbita ? [-150, -150, 20] : [-260, 14, 40]}>
-        <sphereGeometry args={[radioMarte, 48, 48]} />
-        <meshStandardMaterial color="#c1440e" emissive="#3a1206" emissiveIntensity={0.55} roughness={0.95} />
-      </mesh>
+      {objetos.map((o, i) => (
+        <group key={i} ref={(el) => (refs.current[i] = el)}>
+          {o.tipo === 'hoja' && (
+            <mesh>
+              <boxGeometry args={[0.21, 0.003, 0.29]} />
+              <meshStandardMaterial color="#f8fafc" roughness={0.9} />
+            </mesh>
+          )}
+          {o.tipo === 'boli' && (
+            <mesh rotation={[0, 0, Math.PI / 2]}>
+              <cylinderGeometry args={[0.006, 0.006, 0.14, 6]} />
+              <meshStandardMaterial color="#1d4ed8" roughness={0.4} />
+            </mesh>
+          )}
+          {o.tipo === 'bolsa' && (
+            <mesh>
+              <boxGeometry args={[0.14, 0.04, 0.2]} />
+              <meshStandardMaterial color="#f59e0b" roughness={0.7} />
+            </mesh>
+          )}
+          {o.tipo === 'gota' && (
+            <mesh>
+              <sphereGeometry args={[0.035, 16, 12]} />
+              <meshStandardMaterial color="#bfe6ff" roughness={0.02} metalness={0.1} transparent opacity={0.65} />
+            </mesh>
+          )}
+        </group>
+      ))}
     </group>
   )
 }
@@ -401,29 +717,31 @@ export function Interior({ sala, cerca, destacadas }: { sala: RoomState; cerca: 
   useFrame(({ clock }) => {
     if (luzAlerta.current) luzAlerta.current.intensity = alerta ? 6 + Math.sin(clock.elapsedTime * 6) * 5 : 0
   })
+  const micro = enMicrogravedad(sala)
   const enMarte = sala.tAterrizaje > 0
   const hora = sala.ambiente.hora
+  // Ciclo de luz: de noche las luces bajan, como en la Estación Espacial, para dormir mejor.
   const noche = hora >= 22 || hora < 6
   // Sin energía, la base queda a oscuras con luz de emergencia.
   const apagon = sala.energia.cortes.length >= 4
-  const luz = apagon ? 0.12 : noche ? 0.4 : 1
-  const cielo = !enMarte ? '#02040a' : hora < 5.5 || hora > 19.5 ? '#0b0a14' : sala.ambiente.tormentaPolvo ? '#8a4a2c' : '#c98a62'
+  const luz = apagon ? 0.12 : noche ? 0.45 : 1
   return (
     <group>
-      <color attach="background" args={[cielo]} />
-      <ambientLight intensity={0.55 * luz + 0.08} />
-      <hemisphereLight args={['#ffffff', '#3b424e', 0.35 * luz]} />
-      {[-6, 0, 6].map((x) => (
-        <pointLight key={x} position={[x, 2.6, 0]} intensity={9 * luz} distance={11} decay={2} color={apagon ? '#ff6b6b' : '#fff5e6'} />
+      <color attach="background" args={['#02040a']} />
+      <ambientLight intensity={0.22 * luz + 0.05} />
+      <hemisphereLight args={['#eef4ff', '#3a3f48', 0.75 * luz]} />
+      {[-6, -2, 2, 6].map((x) => (
+        <pointLight key={x} position={[x, 2.6, 0]} intensity={7 * luz} distance={9} decay={2} color={apagon ? '#ff6b6b' : noche ? '#ffd6a8' : '#fff6ea'} />
       ))}
       <pointLight ref={luzAlerta} position={[0, 2.5, 0]} color="#ff3b30" distance={22} intensity={0} />
       {/* luz que entra por el ventanal */}
-      <directionalLight position={[-30, 12, 6]} intensity={enMarte ? (noche ? 0.05 : 0.9) : 0.7} color={enMarte ? '#ffd9b8' : '#ffffff'} />
+      <directionalLight position={[-30, 12, 6]} intensity={enMarte ? (noche ? 0.05 : 0.8) : 0.55} color={enMarte ? '#ffd9b8' : '#ffffff'} />
       <Casco />
-      <Vista sala={sala} />
+      <Ventana sala={sala} />
       <Puente cerca={cerca} destacadas={destacadas} />
-      <Estaciones sala={sala} cerca={cerca} destacadas={destacadas} />
+      <Estaciones sala={sala} cerca={cerca} destacadas={destacadas} micro={micro} />
       <Esclusa sala={sala} cerca={cerca} destacadas={destacadas} />
+      {micro && <ObjetosFlotantes />}
     </group>
   )
 }

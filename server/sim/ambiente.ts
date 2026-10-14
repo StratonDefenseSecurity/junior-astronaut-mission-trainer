@@ -1,6 +1,7 @@
 // Ambiente exterior: clima de Marte (datos de Curiosity), polvo (modelo propio) y clima
 // espacial (eventos reales de 2024 según DONKI).
 import { C } from '../../shared/ciencia.js'
+import { escenarioDe } from '../../shared/escenarios.js'
 import { HORA_ATERRIZAJE, SITE_BY_ID, type RoomState, type Zona } from '../../shared/types.js'
 import { CLIMA_ESPACIAL } from '../datos/climaEspacial.js'
 import { CLIMA_MARTE } from '../datos/climaMarte.js'
@@ -12,6 +13,20 @@ const PARTICULAS = CLIMA_ESPACIAL.particulas as [number, number, boolean, string
 const DIAS_ANIO = 366
 
 export const enSuperficie = (room: RoomState) => room.tAterrizaje > 0 && room.t >= room.tAterrizaje
+
+/** Índice del registro de Curiosity cuya estación (Ls) es la más parecida a `ls`. */
+export function indiceClimaParaLs(ls: number): number {
+  let mejor = 0
+  let distancia = 999
+  for (let i = 0; i < SOLES.length; i++) {
+    const d = Math.abs(((SOLES[i][4] - ls + 540) % 360) - 180)
+    if (d < distancia) {
+      distancia = d
+      mejor = i
+    }
+  }
+  return mejor
+}
 
 /** Segundos desde la medianoche local del sol del aterrizaje. */
 const segundosLocales = (room: RoomState) => room.t - room.tAterrizaje + (HORA_ATERRIZAJE / 24) * C.SOL_S
@@ -93,7 +108,7 @@ export function sorteoTormentaPolvo(room: RoomState): { soles: number; tau: numb
   const a = room.ambiente
   if (a.tormentaPolvo || a.sol < 2) return null
   const ls = registroDelSol(room, a.sol)[4]
-  const prob = ls >= 180 ? 0.07 : 0.02
+  const prob = Math.min(0.5, (ls >= 180 ? 0.07 : 0.02) * escenarioDe(room.escenario).mod.polvo)
   if (azar(room) >= prob) return null
   const soles = 2 + Math.floor(azar(room) * 4)
   const tau = Math.round((2 + azar(room) * 2) * 10) / 10
@@ -170,6 +185,7 @@ export function tasaDeDosis(room: RoomState, zona: Zona, enRefugio: boolean): nu
   // Los rayos cósmicos casi no se frenan con blindaje; una pared gruesa quita un poco.
   if (zona === 'nave') gcr *= superficie ? 0.85 : 1
   if (enRefugio) gcr *= 1 - 0.1 * capas
+  gcr *= escenarioDe(room.escenario).mod.gcr
   let total = gcr
   const ts = room.ambiente.tormentaSolar
   if (ts) {

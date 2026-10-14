@@ -1,12 +1,14 @@
 // Pantalla de juego: el mundo 3D al centro y, alrededor, mi estado, los integrantes, los
 // puntos críticos y el registro, como en el boceto del equipo.
 import { useEffect } from 'react'
-import { Emergencia, Interaccion, Resultado, VotoRapido } from '../hud/Avisos'
+import { Emergencia, Interaccion, Resultado, Transmision, VotoRapido } from '../hud/Avisos'
 import { PanelEstacion } from '../hud/Estacion'
 import { Lateral } from '../hud/Lateral'
 import { BarraSuperior, MiEstado, PuntosCriticos, Registro, Telemetria, Tripulacion } from '../hud/Paneles'
 import { Mundo } from '../mundo/Mundo'
+import { useSonidoJuego } from '../mundo/Sonidos'
 import { useStore, useYo } from '../store'
+import type { Player, RoomState } from '@shared/types'
 
 export function JuegoScreen() {
   const sala = useStore((s) => s.sala)!
@@ -23,13 +25,19 @@ export function JuegoScreen() {
     if (enBase) abrir('principal')
   }, [enBase, abrir])
 
-  if (!yo) {
-    return (
-      <div className="center-screen">
-        <p className="muted">No formas parte de esta misión.</p>
-      </div>
-    )
-  }
+  return yo ? <JuegoConJugador sala={sala} yo={yo} ocultos={ocultos} cinematica={cinematica} /> : <SinJugador />
+}
+
+function SinJugador() {
+  return (
+    <div className="center-screen">
+      <p className="muted">No formas parte de esta misión.</p>
+    </div>
+  )
+}
+
+function JuegoConJugador({ sala, yo, ocultos, cinematica }: { sala: RoomState; yo: Player; ocultos: boolean; cinematica: boolean }) {
+  useSonidoJuego(sala, yo)
   return (
     <div className="juego">
       <Mundo sala={sala} yo={yo} />
@@ -50,6 +58,7 @@ export function JuegoScreen() {
       {cinematica && <Telemetria sala={sala} yo={yo} />}
       {!cinematica && <PanelEstacion sala={sala} yo={yo} />}
       {!cinematica && !sala.resultado && <Interaccion />}
+      <Transmision sala={sala} />
       <VotoRapido sala={sala} yo={yo} />
       <Emergencia sala={sala} yo={yo} />
       <Resultado sala={sala} />

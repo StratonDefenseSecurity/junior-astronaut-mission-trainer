@@ -11,8 +11,12 @@ import {
   SITE_BY_ID,
   SUPPLIES,
   TAREAS_ENSAMBLAJE,
+  PEINADOS,
   TRAJE_COLORES,
+  TRAJE_PELOS,
+  TRAJE_PIELES,
   TRAJE_VISORES,
+  TRANSITO_INICIO_S,
   TRAYECTORIA_BY_ID,
   capacidadCarga,
   masaTotal,
@@ -38,9 +42,11 @@ import {
 } from '../shared/types.js'
 import { conRol, conectados, jugador, limitar, log, presentes, puedeActuar, rid, rolPresente, sis, tripulacion } from './base.js'
 import { UMBRAL_AVERIA, aplicarAlternativa } from './emergencies.js'
-import { ALTERNATIVAS, cargaRecomendada } from '../shared/plan.js'
-import { ahora, fijarAhora, semilla } from './reloj.js'
-import { enSuperficie, iniciarClimaEspacial } from './sim/ambiente.js'
+import { CIUDAD_BY_ID, ESCENARIOS, ESCENARIO_BY_ID, escenarioDe, fechaDeMision, type EscenarioId } from '../shared/escenarios.js'
+import { lsMarte } from '../shared/astronomia.js'
+import { ALTERNATIVAS, cargaRecomendada, minimoDe } from '../shared/plan.js'
+import { ahora, azar, fijarAhora, semilla } from './reloj.js'
+import { enSuperficie, indiceClimaParaLs, iniciarClimaEspacial } from './sim/ambiente.js'
 import { iniciarDescenso, pasoSimulacion, refrescar } from './sim/paso.js'
 
 export { jugador } from './base.js'
@@ -72,9 +78,13 @@ export function crearSala(codigo: string, hostId: string, modoDecision: Decision
     tFase: 0,
     diaLanzamiento: 1 + (Math.abs(rng) % 80),
     indiceClima: Math.abs(rng >> 3) % 669,
+    escenario: 'primeraBase',
+    escenarioElegido: 'azar',
+    nombreMision: '',
+    guion: [],
     perfil: 'estandar',
     trayectoria: 'estandar',
-    mision: { objetivo: '', solesObjetivo: 20, muestrasObjetivo: 5, muestrasAnalizadas: 0, diasTransito: 210 },
+    mision: { objetivo: '', solesObjetivo: 20, muestrasObjetivo: 5, muestrasAnalizadas: 0, diasTransito: 210, aguaExtraida: 0, aguaObjetivo: 0 },
     cargamento: Object.fromEntries(SUPPLIES.map((s) => [s.id, s.min])) as Loadout,
     masa: 0,
     capacidad: 0,
@@ -134,17 +144,23 @@ export function nuevoJugador(id: string, nombre: string): Player {
     paso: 0,
     listo: false,
     aportes: 0,
+    hogar: null,
     muestras: 0,
   }
 }
 
 function aplicarPerfil(room: RoomState) {
   const p = PERFIL_BY_ID[room.perfil]
-  const bono = room.sitio ? SITE_BY_ID[room.sitio].bonoCiencia : 0
+  const esc = escenarioDe(room.escenario)
+  const sitio = room.sitio ?? esc.sitio ?? null
+  const bono = sitio ? SITE_BY_ID[sitio].bonoCiencia : 0
   room.mision.solesObjetivo = p.soles
-  room.mision.muestrasObjetivo = Math.max(1, p.muestras - bono)
+  room.mision.muestrasObjetivo = Math.max(1, p.muestras + (esc.objetivo?.muestrasExtra ?? 0) - bono)
+  room.mision.aguaObjetivo = (esc.objetivo?.aguaPorSol ?? 0) * p.soles
   room.mision.diasTransito = TRAYECTORIA_BY_ID[room.trayectoria].dias
-  room.mision.objetivo = `Llegar a Marte, montar la base y mantener viva a la tripulación durante ${p.soles} soles, analizando ${room.mision.muestrasObjetivo} muestras del terreno.`
+  const donde = esc.sitio ? `aterrizar en ${SITE_BY_ID[esc.sitio].nombre}, ` : ''
+  const agua = room.mision.aguaObjetivo ? ` y sacando ${room.mision.aguaObjetivo} kg de agua del hielo` : ''
+  room.mision.objetivo = `Llegar a Marte, ${donde}montar la base y mantener viva a la tripulación durante ${p.soles} soles, analizando ${room.mision.muestrasObjetivo} muestras del terreno${agua}.`
   room.capacidad = capacidadCarga(tripulantesPlan(room), room.trayectoria)
 }
 
@@ -172,12 +188,44 @@ export function elegirTraje(room: RoomState, id: string, traje: Partial<Traje>):
   const j = jugador(room, id)
   if (!j) return 'Jugador no encontrado.'
   if (room.fase !== 'lobby' && room.fase !== 'contexto') return 'El traje se elige antes del lanzamiento.'
-  const color = (v: unknown, lista: string[], actual: string) => (typeof v === 'string' && lista.includes(v) ? v : actual)
+  const color = (v: unknown, lista: readonly string[], actual: string) => (typeof v === 'string' && lista.includes(v) ? v : actual)
+  const previo = { ...trajePorDefecto(), ...j.traje }
   j.traje = {
-    color: color(traje.color, TRAJE_COLORES, j.traje.color),
-    acento: color(traje.acento, TRAJE_COLORES, j.traje.acento),
-    visor: color(traje.visor, TRAJE_VISORES, j.traje.visor),
+    color: color(traje.color, TRAJE_COLORES, previo.color),
+    acento: color(traje.acento, TRAJE_COLORES, previo.acento),
+    visor: color(traje.visor, TRAJE_VISORES, previo.visor),
+    piel: color(traje.piel, TRAJE_PIELES, previo.piel),
+    pelo: color(traje.pelo, TRAJE_PELOS, previo.pelo),
+    peinado: color(traje.peinado, PEINADOS.map((x) => x.id), previo.peinado) as Traje['peinado'],
   }
+  return null
+}
+
+/** Quien creó la sala elige la situación, o la deja al azar. */
+export function elegirEscenario(room: RoomState, id: string, valor: string): string | null {
+  if (room.fase !== 'lobby') return 'La situación se decide antes de empezar.'
+  if (id !== room.hostId) return 'La situación la elige quien creó la sala.'
+  if (valor !== 'azar' && !ESCENARIO_BY_ID[valor as EscenarioId]) return 'Situación desconocida.'
+  room.escenarioElegido = valor
+  return null
+}
+
+/** Ciudad de origen de cada tripulante: se marca en la Tierra y recibe mensajes de casa. */
+export function elegirHogar(room: RoomState, id: string, ciudad: string | null): string | null {
+  const j = jugador(room, id)
+  if (!j) return 'Jugador no encontrado.'
+  if (room.fase !== 'lobby' && room.fase !== 'contexto') return 'El hogar se elige antes del lanzamiento.'
+  if (ciudad !== null && !CIUDAD_BY_ID[ciudad as keyof typeof CIUDAD_BY_ID]) return 'Ciudad desconocida.'
+  j.hogar = ciudad
+  return null
+}
+
+/** El comandante bautiza la misión. */
+export function nombrarMision(room: RoomState, id: string, nombre: string): string | null {
+  if (room.fase !== 'contexto') return 'La misión se bautiza antes del lanzamiento.'
+  const j = jugador(room, id)
+  if (!j || !puedeActuar(room, j, ['comandante'])) return 'El nombre de la misión lo pone el comandante.'
+  room.nombreMision = nombre.replace(/[\u0000-\u001f<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 28)
   return null
 }
 
@@ -192,6 +240,10 @@ export function iniciarMision(room: RoomState, id: string): string | null {
     j.listo = false
   }
   room.fase = 'contexto'
+  // La situación: la elegida o una al azar, con la semilla de la sala.
+  room.escenario = room.escenarioElegido !== 'azar' && ESCENARIO_BY_ID[room.escenarioElegido as EscenarioId]
+    ? room.escenarioElegido
+    : ESCENARIOS[Math.floor(azar(room) * ESCENARIOS.length)].id
   aplicarPerfil(room)
   room.cargamento = cargaRecomendada(room, 1.15)
   room.masa = masaTotal(room.cargamento)
@@ -225,7 +277,7 @@ export function ajustarCargamento(room: RoomState, cambios: Partial<Loadout>): s
   if (error) return error
   for (const s of SUPPLIES) {
     const v = cambios[s.id]
-    if (typeof v === 'number' && Number.isFinite(v)) room.cargamento[s.id] = limitar(Math.round(v), s.min, s.max)
+    if (typeof v === 'number' && Number.isFinite(v)) room.cargamento[s.id] = limitar(Math.round(v), Math.max(s.min, minimoDe(room, s.id)), s.max)
   }
   room.masa = masaTotal(room.cargamento)
   return null
@@ -288,6 +340,11 @@ export function lanzar(room: RoomState, id: string): string | null {
   if (room.masa > capacidad) return `La carga pesa ${room.masa.toFixed(1)} t y la nave admite ${capacidad.toFixed(1)} t.`
   const faltan = conectados(room).filter((o) => o.id !== id && !o.listo)
   if (faltan.length) return `Faltan por confirmar: ${faltan.map((o) => o.nombre).join(', ')}.`
+  const esc = escenarioDe(room.escenario)
+  for (const [k, v] of Object.entries(esc.cargaMinima ?? {})) {
+    const sup = SUPPLIES.find((x) => x.id === k)
+    if (sup && room.cargamento[sup.id] < (v ?? 0)) return `Esta misión necesita llevar: ${sup.nombre.toLowerCase()}.`
+  }
   // Quien se fue sin elegir rol no viaja.
   room.jugadores = viajan
   room.capacidad = capacidad
@@ -307,10 +364,28 @@ export function lanzar(room: RoomState, id: string): string | null {
   room.tFase = room.t
   room.escalaDeseada = 10
   room.reloj = ahora()
+  // La fecha real de la situación decide la estación de Marte al llegar y, con ella, qué parte
+  // del año medido por Curiosity se usa como clima.
+  const llegada = fechaDeMision(esc, TRANSITO_INICIO_S + room.mision.diasTransito * 86400)
+  room.indiceClima = indiceClimaParaLs(lsMarte(llegada))
+  if (esc.diaClimaEspacial) room.diaLanzamiento = esc.diaClimaEspacial
+  room.guion = prepararGuion(room)
   iniciarClimaEspacial(room)
   log(room, `Lanzamiento autorizado por ${j.nombre}. Carga de ${room.masa.toFixed(1)} t, viaje de ${room.mision.diasTransito} días.`, 'ok')
   refrescar(room)
   return null
+}
+
+/** Los sucesos de la situación más uno al azar en el viaje y otro en la superficie. */
+function prepararGuion(room: RoomState): RoomState['guion'] {
+  const guion: RoomState['guion'] = escenarioDe(room.escenario).guion.map((g) => ({ ...g, hecho: false }))
+  const viaje = 0.2 + azar(room) * 0.6
+  const tipo = (['fuga', 'fallo', 'medico'] as const)[Math.floor(azar(room) * 3)]
+  const sistema = (['oga', 'cdra', 'wrs', 'termico'] as const)[Math.floor(azar(room) * 4)]
+  guion.push({ viaje, tipo, datos: tipo === 'fallo' ? { sistema } : undefined, hecho: false })
+  const sol = 2 + Math.floor(azar(room) * Math.max(1, room.mision.solesObjetivo - 3))
+  guion.push({ sol, tipo: 'fallo', datos: { sistema: azar(room) < 0.5 ? 'esclusa' : 'energia' }, hecho: false })
+  return guion
 }
 
 // ---------- Tiempo ----------
@@ -438,6 +513,8 @@ export function proponerUbicacion(room: RoomState, id: string, sitioId: string):
   if (!j || !puedeActuar(room, j, ['piloto', 'comandante'])) return 'El sitio lo proponen el piloto o el comandante.'
   const sitio = SITE_BY_ID[sitioId]
   if (!sitio) return 'Sitio inválido.'
+  const obligado = escenarioDe(room.escenario).sitio
+  if (obligado && obligado !== sitioId) return `Esta misión tiene que aterrizar en ${SITE_BY_ID[obligado].nombre}.`
   if (room.propuestas.some((p) => p.estado === 'pendiente' && p.tipo === 'ubicacion')) return 'Ya hay un sitio propuesto. Revisa las propuestas.'
   crearPropuesta(room, { tipo: 'ubicacion', titulo: `Aterrizar en ${sitio.nombre}`, descripcion: sitio.descripcion, payload: { sitioId }, proponente: id, rolesResponsables: ['piloto', 'comandante'] })
   return null

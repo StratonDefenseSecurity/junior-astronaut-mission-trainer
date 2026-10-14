@@ -3,7 +3,53 @@
 import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
+import { escenarioDe, fechaDeMision } from '@shared/escenarios'
 import { DESCENSO_S, type RoomState } from '@shared/types'
+import { Cielo } from './cielo/Cielo'
+import { orientacionSuperficie, vectorHelio } from './cielo/astro'
+import { SITIOS_MARTE } from './cieloMarte'
+import { Marte, Tierra } from './planetas'
+
+/** Cabo Cañaveral (Florida): el sitio de lanzamiento que se supone para la misión. */
+const CABO_CANAVERAL = { lat: 28.39, lon: -80.6 }
+
+/** El cielo real sobre el cohete: se va viendo a medida que el aire se hace tenue. */
+function CieloDespegue({ sala, brillo }: { sala: RoomState; brillo: number }) {
+  const fecha = useMemo(() => fechaDeMision(escenarioDe(sala.escenario), 0), [sala.escenario])
+  const orientacion = useMemo(() => orientacionSuperficie('Tierra', fecha, CABO_CANAVERAL.lat, CABO_CANAVERAL.lon), [fecha])
+  const observador = useMemo(() => vectorHelio('Tierra', fecha), [fecha])
+  return <Cielo fecha={fecha} observador={observador} orientacion={orientacion} brillo={brillo} ocultarCuerpos={['Tierra']} />
+}
+
+function TierraDebajo({ sala }: { sala: RoomState }) {
+  const fecha = useMemo(() => fechaDeMision(escenarioDe(sala.escenario), 0), [sala.escenario])
+  const q = useMemo(() => orientacionSuperficie('Tierra', fecha, CABO_CANAVERAL.lat, CABO_CANAVERAL.lon), [fecha])
+  return (
+    <group position={[0, -2000, 0]} quaternion={q}>
+      <Tierra radio={2000} fecha={fecha} detalle="alto" etiquetas={false} />
+    </group>
+  )
+}
+
+function MarteDebajo({ sala }: { sala: RoomState }) {
+  const fecha = useMemo(() => fechaDeMision(escenarioDe(sala.escenario), sala.tFase), [sala.escenario, sala.tFase])
+  const sitio = SITIOS_MARTE[sala.sitio ?? 'gale'] ?? SITIOS_MARTE.gale
+  const q = useMemo(() => orientacionSuperficie('Marte', fecha, sitio.lat, sitio.lon), [fecha, sitio.lat])
+  return (
+    <group quaternion={q}>
+      <Marte radio={2000} fecha={fecha} detalle="alto" etiquetas={false} />
+    </group>
+  )
+}
+
+/** El cielo de Marte durante la entrada: negro y estrellado arriba, hasta que el polvo lo tiñe. */
+function CieloEntrada({ sala, brillo }: { sala: RoomState; brillo: number }) {
+  const fecha = useMemo(() => fechaDeMision(escenarioDe(sala.escenario), sala.tFase), [sala.escenario, sala.tFase])
+  const sitio = SITIOS_MARTE[sala.sitio ?? 'gale'] ?? SITIOS_MARTE.gale
+  const orientacion = useMemo(() => orientacionSuperficie('Marte', fecha, sitio.lat, sitio.lon), [fecha, sitio.lat])
+  const observador = useMemo(() => vectorHelio('Marte', fecha), [fecha])
+  return <Cielo fecha={fecha} observador={observador} orientacion={orientacion} brillo={brillo} etiquetas ocultarCuerpos={['Sol', 'Marte']} />
+}
 
 /** Tiempo de misión interpolado entre una consulta al servidor y la siguiente. */
 export function useTiempoSuave(sala: RoomState) {
@@ -64,6 +110,8 @@ export function Lanzamiento({ sala }: { sala: RoomState }) {
   const tiempo = useTiempoSuave(sala)
   const mundo = useRef<THREE.Group>(null)
   const primera = useRef<THREE.Group>(null)
+  // Por encima de unos 40 km el cielo ya es negro y se empiezan a ver las estrellas.
+  const brilloCielo = Math.min(0.75, Math.max(0, (sala.vuelo.altitud - 35) / 60))
   const cielo = useRef(new THREE.Color('#6aa5e8'))
   const negro = useMemo(() => new THREE.Color('#02040a'), [])
   const azul = useMemo(() => new THREE.Color('#6aa5e8'), [])
@@ -101,13 +149,11 @@ export function Lanzamiento({ sala }: { sala: RoomState }) {
     <group>
       <ambientLight intensity={0.55} />
       <directionalLight position={[30, 60, 20]} intensity={1.8} />
-      <Estrellas />
+      <CieloDespegue sala={sala} brillo={brilloCielo} />
       {/* la Tierra y la plataforma quedan abajo a medida que sube el cohete */}
       <group ref={mundo}>
-        <mesh position={[0, -2000, 0]}>
-          <sphereGeometry args={[2000, 96, 64]} />
-          <meshStandardMaterial color="#2f6fb0" roughness={0.9} />
-        </mesh>
+        {/* la Tierra real, con Cabo Cañaveral justo debajo de la plataforma */}
+        <TierraDebajo sala={sala} />
         <mesh position={[0, 0.2, 0]}>
           <cylinderGeometry args={[9, 11, 0.6, 32]} />
           <meshStandardMaterial color="#56606e" roughness={0.8} />
@@ -159,6 +205,7 @@ export function Lanzamiento({ sala }: { sala: RoomState }) {
 export function Descenso({ sala }: { sala: RoomState }) {
   const tiempo = useTiempoSuave(sala)
   const marte = useRef<THREE.Group>(null)
+  const brilloCielo = Math.min(0.8, Math.max(0, (sala.vuelo.altitud - 40) / 60))
   const capsula = useRef<THREE.Group>(null)
   const brillo = useRef<THREE.Mesh>(null)
   const paracaidas = useRef<THREE.Group>(null)
@@ -203,12 +250,9 @@ export function Descenso({ sala }: { sala: RoomState }) {
     <group>
       <ambientLight intensity={0.6} />
       <directionalLight position={[40, 50, 10]} intensity={1.7} color="#ffe6cf" />
-      <Estrellas />
+      <CieloEntrada sala={sala} brillo={brilloCielo} />
       <group ref={marte}>
-        <mesh>
-          <sphereGeometry args={[2000, 96, 64]} />
-          <meshStandardMaterial color="#b4542f" roughness={1} />
-        </mesh>
+        <MarteDebajo sala={sala} />
       </group>
       <group ref={capsula}>
         {/* escudo térmico */}
