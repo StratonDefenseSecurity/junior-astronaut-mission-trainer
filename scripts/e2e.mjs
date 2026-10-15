@@ -179,8 +179,12 @@ const bot = await llamar('bot', { codigo, v: sala.version, texto: '¿por qué mi
 comprobar(typeof bot.d.respuesta === 'string' && /latidos/.test(bot.d.respuesta), 'el asistente explica el pulso con datos propios')
 await paso(B, 'actividad', { actividad: 'ejercicio' }, 'B se pone a hacer ejercicio')
 comprobar(sala.jugadores[1].manual === 'ejercicio', 'la sesión de ejercicio queda registrada')
-await esperar(2500)
-await estado(A)
+// A un día por segundo la hora pasa enseguida; si salta una emergencia el tiempo baja a ×60 y
+// la hora tarda un minuto real.
+for (let i = 0; i < 50 && sala.jugadores[1].manual !== null; i++) {
+  await esperar(1500)
+  await estado(A)
+}
 comprobar(sala.jugadores[1].manual === null && sala.jugadores[1].incapacitado === 0, 'la sesión termina sola tras una hora de misión, sin agotar a nadie')
 
 if (!corto) {
@@ -194,7 +198,8 @@ if (!corto) {
     }
     for (const p of sala.propuestas.filter((x) => x.estado === 'pendiente')) await llamar('votar', { codigo, v: sala.version, id: p.id, aprueba: true }, A)
     for (const s of sala.sistemas) {
-      if (s.instalado && s.integridad < 50 && sala.rec.repuestos >= 2 && !(sala.tAterrizaje > 0 && (s.id === 'energia' || s.id === 'isru'))) {
+      // Los repuestos se guardan para el soporte vital: el huerto no se repara en el viaje.
+      if (s.instalado && s.integridad < 50 && sala.rec.repuestos >= 2 && s.id !== 'huerto' && !(sala.tAterrizaje > 0 && (s.id === 'energia' || s.id === 'isru'))) {
         await llamar('accion', { codigo, v: sala.version, id: 'reparar', payload: { sistema: s.id } }, B)
       }
     }
@@ -227,6 +232,10 @@ if (!corto) {
     comprobar(sala.huerto.diasCultivo > 100 && vivas.every((x) => x.crecimiento > 0), `el huerto creció ${Math.round(sala.huerto.diasCultivo)} días: ${vivas.length} plantas vivas`)
   }
   comprobar(sala.jugadores.every((j) => j.vit.salud > 50), `tripulación viva y con salud ${sala.jugadores.map((j) => Math.round(j.vit.salud)).join('/')}`)
+  if (sala.resultado) {
+    console.log(`  (resultado: ${sala.resultado.motivo})`)
+    for (const l of sala.registro.slice(-12)) console.log(`    día ${Math.round(l.t / 86400)} · ${l.texto}`)
+  }
 
   await paso(B, 'zona', { zona: 'exterior' }, 'no se puede salir antes de aterrizar', 400)
   await paso(A, 'ubicacion', { sitioId: 'gale' }, 'A propone y aprueba aterrizar en Gale')

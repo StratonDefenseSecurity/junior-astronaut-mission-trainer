@@ -283,7 +283,7 @@ export const api = {
   },
 }
 
-export async function httpAuth(ruta: 'registro' | 'ingresar', usuario: string, clave: string) {
+export async function httpAuth(ruta: 'registro' | 'ingresar' | 'invitado', usuario: string, clave: string) {
   const r = await fetch('/api/juego', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },

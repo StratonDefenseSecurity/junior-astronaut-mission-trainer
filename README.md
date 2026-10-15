@@ -2,13 +2,26 @@
 
 Juego 3D multijugador para el reto **"Build a Junior Astronaut Mission Trainer"** del NASA Space Apps Challenge 2026.
 
-Una tripulación de 2 a 6 estudiantes crea su cuenta y entra a una sala. La misión sigue el esquema que diseñó el equipo: primero se les da la situación que tienen que afrontar, después cada uno recibe su rol, se establece el objetivo y eligen los suministros. Cada jugador controla a su astronauta en tercera persona: vive el despegue, cruza el espacio dentro de la nave, aterriza y monta una base en Marte. El cuerpo de cada astronauta, el aire, el agua, la energía, el clima y la radiación se calculan con valores publicados por NASA.
+Se juega solo, con cinco tripulantes bot que ocupan los otros roles, o en grupo, con una tripulación de 2 a 6 estudiantes en una misma sala. Para empezar basta con escribir un nombre; la cuenta con clave es opcional. La misión sigue el esquema que diseñó el equipo: primero se les da la situación que tienen que afrontar, después cada uno recibe su rol, se establece el objetivo y eligen los suministros. Cada jugador controla a su astronauta en tercera persona: vive el despegue, cruza el espacio dentro de la nave, aterriza y monta una base en Marte. El cuerpo de cada astronauta, el aire, el agua, la energía, el clima y la radiación se calculan con valores publicados por NASA.
 
 **En línea:** https://mision-marte-trainer.nunesjaramilloluis.workers.dev
 
+## Demostración para el jurado (unos 10 minutos)
+
+1. Abrir el enlace, escribir un nombre y pulsar **Empezar**.
+2. Elegir **Un jugador con bots** y una situación, por ejemplo *Agua bajo el hielo*. Cinco bots completan la tripulación.
+3. En la contextualización, leer la situación real, tomar el rol de **comandante**, bautizar la misión y elegir los suministros. El asistente analiza para cuántos días alcanza cada cosa.
+4. Lanzar: cuenta regresiva, ascenso sobre Cabo Cañaveral con la Tierra de imágenes reales de la NASA debajo.
+5. En el viaje, acelerar el tiempo. Mirar por el ventanal: la Tierra y la Luna se alejan y Marte crece, en sus posiciones reales para la fecha. Los bots trabajan, avisan por el chat y proponen; el comandante aprueba en **Propuestas**. Si salta una emergencia, el tiempo frena solo.
+6. En la órbita de Marte, aprobar el sitio de aterrizaje y ver la entrada, el descenso y el aterrizaje con la cronología real de Perseverance.
+7. En la base, abrir la página principal con `M` y ver el montaje paso a paso: paneles orientados según la latitud, interruptores en orden, prueba de fugas de la esclusa. En el laboratorio, el huerto como el Veggie de la ISS.
+8. El botón **Fuentes** muestra de dónde sale cada dato real y qué es simplificación del juego.
+
+Para mostrarlo en una computadora sencilla, el botón **Gráficos** de la barra superior pasa a la calidad ligera.
+
 ## Cómo se juega
 
-1. **Sala.** Cuenta, código de sala de 6 caracteres, aspecto del personaje (piel, pelo, peinado, traje y visor) y ciudad de origen, que se marca en la Tierra y desde la que llegan mensajes de casa. Aquí todavía no hay roles. Quien crea la sala elige la situación o la deja al azar. Hacen falta al menos 2 jugadores.
+1. **Sala.** Se elige jugar solo con bots o en grupo. En grupo se comparte el código de sala de 6 caracteres, aspecto del personaje (piel, pelo, peinado, traje y visor) y ciudad de origen, que se marca en la Tierra y desde la que llegan mensajes de casa. Aquí todavía no hay roles. Quien crea la sala elige la situación o la deja al azar. En grupo hacen falta al menos 2 jugadores; solo, los bots completan la tripulación.
 2. **Contextualización.** Es una interfaz sencilla, de un paso por pantalla, y cada integrante avanza a su ritmo:
    1. *La situación.* Se le da a la tripulación una de seis situaciones, cada una con una fecha de lanzamiento real, su contexto verídico, su reto y sucesos propios: Primera base en Marte, El Sol en su máximo, Temporada de tormentas, Agua bajo el hielo, Rastros de un antiguo lago y Problema a bordo. Después vienen los datos comunes a cualquier viaje a Marte.
    2. *Asignación de roles.* Cada uno elige su rol entre los seis. El asistente dice qué consecuencias tiene. Hace falta un comandante.
@@ -24,6 +37,8 @@ Una tripulación de 2 a 6 estudiantes crea su cuenta y entra a una sala. La misi
 Durante el viaje no hay gravedad: los personajes flotan, se impulsan con inercia y hay objetos sueltos que flotan por el módulo. Cada espacio tiene su animación: correr en la cinta o pedalear en el gimnasio, dormir en el saco sujeto a la pared (en Marte, en la litera), teclear en las consolas y encogerse en el refugio. Por el ventanal se ve el cielo real de la fecha desde la posición real de la nave: la Tierra alejándose con la Luna, Marte creciendo, los planetas y las estrellas. De noche en Marte se ve la Tierra como un lucero.
 
 Hay sonido en todas las escenas y chat de voz por proximidad: dentro se oye más fuerte a quien está cerca, y por radio a quien está fuera con el traje. La mesa común del módulo es el lugar para reunirse a hablar. El centro de control y las familias envían mensajes durante el viaje, con el retraso real de la señal, y al terminar se descarga un certificado de la misión.
+
+En el modo de un jugador, los bots hacen el trabajo de su rol con las mismas reglas que una persona: caminan hasta cada estación, salen con el traje, siguen los procedimientos, proponen y votan, y avisan por el chat. Nunca hacen lo que le toca al rol de la persona; se lo recuerdan, y solo deciden por ella si una emergencia está por vencer.
 
 Al lado se ve siempre a los integrantes, con su oxígeno, su salud, su pulso y su progreso, y abajo los puntos críticos.
 
@@ -55,6 +70,9 @@ La lista completa, con enlaces, está en el juego (botón **Fuentes**) y en [sha
 - **El cielo y las fechas:** 5 044 estrellas reales del catálogo Hipparcos (XHIP), las 88 constelaciones de la IAU y la Vía Láctea; el Sol, la Luna y los planetas en su posición real para la fecha de la misión con astronomy-engine, validada contra JPL Horizons. La nave sigue una órbita de transferencia calculada con el problema de Lambert, y las ventanas de lanzamiento son las reales.
 - **La estación en Marte:** la fecha de llegada fija la estación marciana (Ls) y con ella el registro de Curiosity que se usa como clima.
 - **Constantes verificadas contra su fuente:** consumo de oxígeno y producción de CO2, agua y comida por persona, reciclaje de agua de la ISS, límite de CO2, capacidad del depurador y del generador de oxígeno de la ISS, radiación en crucero y en superficie, límite de dosis de carrera, datos de Marte, traje EMU, reactor Kilopower.
+- **Imágenes reales:** la Tierra con Blue Marble, las luces nocturnas de Black Marble 2016 y las nubes de NASA Earth Observatory; la Luna con los mapas LROC y LOLA del Scientific Visualization Studio de la NASA; Marte con el mosaico a color de las sondas Viking y el relieve del altímetro MOLA, del USGS. Los créditos están en [public/texturas/CREDITOS.md](public/texturas/CREDITOS.md) y se regeneran con `node scripts/texturas-reales.mjs`.
+- **Descenso:** entrada, paracaídas, escudo térmico, navegación por el terreno y grúa aérea siguen la cronología reconstruida del aterrizaje de Perseverance del 18 de febrero de 2021.
+- **Procedimientos:** el montaje y el huerto siguen la práctica real de la NASA: paneles enrollables ROSA, buses de energía de la ISS, pruebas de fugas por caída de presión, la grúa LSMS, el reactor Kilopower y los experimentos Veggie y APH de la ISS.
 - **Del juego:** las ecuaciones que combinan esos números, el tamaño del hábitat y de los equipos, las masas de los suministros, la dosis de cada tormenta solar, el modelo de polvo y los umbrales de daño. Se muestran al jugador como supuestos.
 
 ## Desarrollo
@@ -132,6 +150,7 @@ El despliegue anterior en Vercel sigue en el repositorio como alternativa (`npm 
 
 - El plan gratuito de Cloudflare admite 100 000 peticiones al día, tanto al Worker como a los Durable Objects, y se renueva a las 00:00 UTC. Con las consultas por WebSocket, cada jugador gasta unas 400 por hora de juego. Si un día se agotan, el juego deja de responder hasta el día siguiente.
 - Las cuentas y las salas creadas en el despliegue de Vercel no pasaron a Cloudflare: hay que registrarse de nuevo.
+- Todo el juego está en español.
 - El asistente responde por reglas, no con un modelo de lenguaje.
 - El movimiento de los compañeros se actualiza dos veces por segundo y se suaviza en pantalla.
 - No hay vista en primera persona.

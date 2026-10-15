@@ -1,6 +1,7 @@
 // El mundo 3D: elige la escena según la fase y la zona, mueve al personaje propio con la
 // cámara en tercera persona y dibuja a los compañeros donde están.
 import { Suspense, useEffect, useMemo, useRef } from 'react'
+import { useGraficos } from '../graficos'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { CIUDAD_BY_ID } from '@shared/escenarios'
@@ -404,10 +405,11 @@ export function Mundo({ sala, yo }: { sala: RoomState; yo: Player }) {
   }, [fase])
 
   const companeros = sala.jugadores.filter((j) => j.rol && j.id !== yo.id && j.zona === yo.zona)
+  const calidad = useGraficos((s) => s.calidad)
 
   return (
     <div className="mundo" {...(cinematica ? {} : camara)}>
-      <Canvas shadows dpr={[1, 1.5]} camera={{ position: [10, 3, 0], fov: 58, near: 0.1, far: 3200 }}>
+      <Canvas key={calidad} shadows={calidad === 'alta'} dpr={calidad === 'alta' ? [1, 1.5] : [0.75, 1]} camera={{ position: [10, 3, 0], fov: 58, near: 0.1, far: 3200 }}>
         <Suspense fallback={null}>
           <Depuracion />
           {sala.fase === 'lanzamiento' && <Lanzamiento sala={sala} />}

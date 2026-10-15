@@ -689,7 +689,14 @@ export function pasoSimulacion(room: RoomState) {
   // Pasos internos de 10 minutos de misión como máximo, para que la simulación sea estable.
   const n = escala <= 10 ? 2 : Math.ceil(escala / 600)
   const dt = escala / n
-  for (let i = 0; i < n && !room.resultado; i++) subpaso(room, dt)
+  const fase = room.fase + room.subfase
+  const alerta = hayEmergencia(room)
+  for (let i = 0; i < n && !room.resultado; i++) {
+    subpaso(room, dt)
+    // Si salta una emergencia o cambia la fase, el tiempo frena ya: el resto del paso no corre a
+    // la escala anterior (a ×86 400 un paso es un día entero sin poder reaccionar ni dormir).
+    if (room.fase + room.subfase !== fase || (!alerta && (hayEmergencia(room) || room.cola.length > 0))) break
+  }
   const crew = tripulacion(room)
   calcularAutonomia(room, crew)
   room.puntosCriticos = puntosCriticos(room, crew)

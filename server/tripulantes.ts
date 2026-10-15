@@ -564,11 +564,19 @@ const ESCALA_FASE: Partial<Record<RoomState['fase'], { valor: number; texto: str
   base: { valor: 3600, texto: 'Pongo el reloj a una hora por segundo.' },
 }
 
+/** Con un huerto que cuida una persona, el viaje va a seis horas por segundo: a un día por segundo no da tiempo a regarlo. */
+const ESCALA_HUERTO = { valor: 21600, texto: 'Pongo el reloj a seis horas por segundo para que el huerto se pueda cuidar.' }
+
 function mando(room: RoomState, j: Player, m: MemoriaBot) {
-  const objetivo = ESCALA_FASE[room.fase]
-  if (objetivo && !m.marcas[`escala:${room.fase}`] && madura(room, m, `escala:${room.fase}`, 3000, 6000)) {
+  const huertoDePersona = room.fase === 'transito' && room.cargamento.huerto > 0 && (deRol(room, 'cientifico') ?? { bot: true }).bot !== true
+  const objetivo = huertoDePersona && room.huerto.establecido ? ESCALA_HUERTO : ESCALA_FASE[room.fase]
+  const marca = `escala:${room.fase}:${objetivo?.valor}`
+  if (objetivo && !m.marcas[marca] && madura(room, m, marca, 3000, 6000)) {
+    m.marcas[marca] = ahora()
+    if (room.escalaDeseada > objetivo.valor || (room.escalaDeseada !== objetivo.valor && !m.marcas[`escala:${room.fase}`])) {
+      if (fijarEscala(room, j.id, objetivo.valor) === null) decir(room, j, objetivo.texto)
+    }
     m.marcas[`escala:${room.fase}`] = ahora()
-    if (room.escalaDeseada !== objetivo.valor && fijarEscala(room, j.id, objetivo.valor) === null) decir(room, j, objetivo.texto)
   }
   // Si la persona pilota y no propone sitio, el comandante lo propone tras un buen rato.
   if (room.fase === 'llegada' && room.subfase === 'orbita' && !room.propuestas.some((p) => p.estado === 'pendiente' && p.tipo === 'ubicacion')) {

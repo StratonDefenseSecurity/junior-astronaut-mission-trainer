@@ -160,7 +160,7 @@ const error = (status: number, texto: string) => responder({ status, json: JSON.
 const nodo = (env: Env, nombre: string) => env.NODO.get(env.NODO.idFromName(nombre))
 const CODIGO = /^[A-Z0-9]{6}$/
 /** Operaciones que no pertenecen a ninguna sala. */
-const DE_CUENTAS = new Set(['registro', 'ingresar', 'yo'])
+const DE_CUENTAS = new Set(['registro', 'ingresar', 'invitado', 'yo'])
 
 export default {
   async fetch(request, env): Promise<Response> {

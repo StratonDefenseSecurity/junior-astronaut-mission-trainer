@@ -2,6 +2,7 @@
 // críticos y registro. Siguen el boceto del equipo: el mundo al centro, los integrantes a un
 // lado con su oxígeno, salud y pulso, y los puntos críticos abajo.
 import { useState } from 'react'
+import { useGraficos } from '../graficos'
 import { C } from '@shared/ciencia'
 import { ESCALAS, ESCALA_MAXIMA, ROLES, ROLE_BY_ID, SITE_BY_ID, etiquetaTiempo, formatoHora, type Player, type RoomState } from '@shared/types'
 import { puede } from '../mundo/mapa'
@@ -120,8 +121,12 @@ export function BarraSuperior({ sala }: { sala: RoomState }) {
 export function BotonesAudio() {
   const s = useSonido()
   const v = useVoz()
+  const g = useGraficos()
   return (
     <>
+      <button className="chip" title="Calidad de los gráficos. Ligera va mejor en computadoras sencillas." onClick={g.alternar}>
+        {g.calidad === 'alta' ? 'Gráficos: alta' : 'Gráficos: ligera'}
+      </button>
       <button className="chip" title={s.silenciado ? 'Activar el sonido' : 'Silenciar'} onClick={() => (void sonido.activar(), sonido.silenciar(!s.silenciado))}>
         {s.silenciado ? 'Sonido: no' : 'Sonido'}
       </button>

@@ -140,6 +140,16 @@ async function ingresar(usuario: string, clave: string): Promise<Respuesta> {
   return ok({ token: firmar(u), usuario: u })
 }
 
+/**
+ * Entrar sin cuenta, solo con un nombre: para probar el juego o presentarlo sin registrarse.
+ * La sesión es la misma que la de una cuenta, pero no se puede recuperar con una clave.
+ */
+function invitado(nombre: string): Respuesta {
+  if (!/^[\wáéíóúñÁÉÍÓÚÑ .-]{3,20}$/.test(nombre)) return fallo(400, 'Escribe un nombre de 3 a 20 letras.')
+  const u = { id: `inv-${crypto.randomUUID()}`, nombre: nombre.replace(/\s+/g, ' ').trim() }
+  return ok({ token: firmar(u), usuario: u })
+}
+
 // ---------- Salas en esta instancia ----------
 
 interface Entrada {
@@ -438,6 +448,7 @@ async function despachar(c: Record<string, unknown>, autorizacion: string | unde
   const op = texto(c.op, 30)
   if (op === 'registro') return registro(texto(c.usuario, 40), String(c.clave ?? ''))
   if (op === 'ingresar') return ingresar(texto(c.usuario, 40), String(c.clave ?? ''))
+  if (op === 'invitado') return invitado(texto(c.usuario, 40))
 
   const usuario = verificar(autorizacion)
   if (!usuario) return fallo(401, 'Sesión inválida. Vuelve a ingresar.', { sinSesion: true })
