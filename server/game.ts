@@ -48,6 +48,7 @@ import { ALTERNATIVAS, cargaRecomendada, minimoDe } from '../shared/plan.js'
 import { ahora, azar, fijarAhora, semilla } from './reloj.js'
 import { enSuperficie, indiceClimaParaLs, iniciarClimaEspacial } from './sim/ambiente.js'
 import { iniciarDescenso, pasoSimulacion, refrescar } from './sim/paso.js'
+import { pasoTripulantes } from './tripulantes.js'
 
 export { jugador } from './base.js'
 
@@ -176,8 +177,15 @@ export function elegirRol(room: RoomState, id: string, rol: Role | null): string
   const j = jugador(room, id)
   if (!j) return 'Jugador no encontrado.'
   if (rol && !ROLE_BY_ID[rol]) return 'Rol inválido.'
-  if (rol && room.jugadores.some((o) => o.id !== id && o.rol === rol)) return 'Ese rol ya fue tomado.'
+  const ocupante = rol ? room.jugadores.find((o) => o.id !== id && o.rol === rol) : undefined
+  if (ocupante && (!ocupante.bot || j.bot)) return 'Ese rol ya fue tomado.'
   if (j.rol === rol) return null
+  if (ocupante) {
+    // Modo de un jugador: la persona elige primero, así que el bot le cede el rol y toma el suyo.
+    ocupante.rol = j.rol
+    ocupante.listo = false
+    if (!ocupante.rol) ocupante.paso = Math.min(ocupante.paso, 1)
+  }
   j.rol = rol
   j.listo = false
   if (!rol) j.paso = Math.min(j.paso, 1)
@@ -232,7 +240,8 @@ export function nombrarMision(room: RoomState, id: string, nombre: string): stri
 export function iniciarMision(room: RoomState, id: string): string | null {
   if (room.fase !== 'lobby') return 'La misión ya empezó.'
   if (id !== room.hostId) return 'Solo quien creó la sala puede iniciar.'
-  if (presentes(room).length < 2) return 'Se necesitan al menos 2 tripulantes en la sala.'
+  const solo = room.modoJuego === 'solo'
+  if (!solo && presentes(room).length < 2) return 'Se necesitan al menos 2 tripulantes en la sala.'
   room.jugadores = presentes(room)
   for (const j of room.jugadores) {
     j.rol = null
@@ -240,6 +249,11 @@ export function iniciarMision(room: RoomState, id: string): string | null {
     j.listo = false
   }
   room.fase = 'contexto'
+  // Los bots avanzan por la contextualización con el reloj de la sala.
+  if (solo) {
+    room.bots = {}
+    room.reloj = ahora()
+  }
   // La situación: la elegida o una al azar, con la semilla de la sala.
   room.escenario = room.escenarioElegido !== 'azar' && ESCENARIO_BY_ID[room.escenarioElegido as EscenarioId]
     ? room.escenarioElegido
@@ -526,21 +540,22 @@ function impedimento(j: Player): string | null {
   return null
 }
 
+/** Ya no se hace de un solo golpe: queda para quien todavía la llame. Ver server/procedimientos.ts. */
 export function hacerTarea(room: RoomState, id: string, tareaId: string): string | null {
-  if (room.fase !== 'ensamblaje') return 'No estamos montando la base.'
-  const j = jugador(room, id)
-  const tarea = TAREAS_ENSAMBLAJE.find((t) => t.id === tareaId)
-  if (!j || !tarea) return 'Tarea inválida.'
-  if (tarea.paso !== room.ensamblaje.paso) return tarea.paso < room.ensamblaje.paso ? 'Esa tarea ya está hecha.' : 'Aún no toca esa tarea.'
-  if (room.ensamblaje.hechas[tareaId]) return 'Esa tarea ya está hecha.'
-  const impedido = impedimento(j)
-  if (impedido) return impedido
-  if (!puedeActuar(room, j, tarea.roles)) return `Esa tarea es de ${tarea.roles.map((r) => ROLE_BY_ID[r].nombre).join(' o ')}.`
-  if (j.zona !== tarea.zona) return tarea.zona === 'exterior' ? 'Hay que salir con el traje para hacerla.' : 'Se hace dentro del hábitat.'
+  void room
+  void id
+  void tareaId
+  return 'Las tareas de la base se hacen paso a paso con su procedimiento, en su estación.'
+}
 
-  room.ensamblaje.hechas[tareaId] = id
-  j.aportes = (j.aportes ?? 0) + 1
-  j.vit.fatiga = limitar(j.vit.fatiga + (tarea.zona === 'exterior' ? 6 : 2), 0, 100)
+/**
+ * Marca hecha una tarea del montaje y, si era la última de su paso, avanza el montaje. Las tareas
+ * se hacen paso a paso con su procedimiento (server/procedimientos.ts), que llama aquí al terminar.
+ */
+export function completarTarea(room: RoomState, j: Player, tareaId: string) {
+  const tarea = TAREAS_ENSAMBLAJE.find((t) => t.id === tareaId)
+  if (!tarea || room.ensamblaje.hechas[tareaId]) return
+  room.ensamblaje.hechas[tareaId] = j.id
   log(room, `${j.nombre} completó: ${tarea.titulo.toLowerCase()}.`, 'ok')
   if (tareaId === 'soporte') {
     const hielo = SITE_BY_ID[room.sitio ?? 'gale'].hielo
@@ -557,8 +572,6 @@ export function hacerTarea(room: RoomState, id: string, tareaId: string): string
       log(room, 'Instalaciones comprobadas. Empiezan las operaciones de la base.', 'ok')
     }
   }
-  refrescar(room)
-  return null
 }
 
 // ---------- Movimiento entre zonas y actividades ----------
@@ -756,21 +769,8 @@ export function accion(room: RoomState, id: string, tipo: string, d: Record<stri
       log(room, `${j.nombre} limpió los paneles solares (recuperan un ${antes}% de potencia).`, 'ok')
       break
     }
-    case 'huerto': {
-      if (!puedeActuar(room, j, ['cientifico'])) return 'El huerto lo establece el especialista científico.'
-      if (room.cargamento.huerto < 1) return 'No trajeron el kit de huerto.'
-      if (room.huerto.establecido) return 'El huerto ya está establecido.'
-      if (j.zona !== 'nave') return 'El huerto se monta dentro del hábitat.'
-      if (room.rec.agua < 8) return 'Hacen falta 5 kg de agua para avanzar el huerto.'
-      room.rec.agua -= 5
-      room.huerto.progreso = Math.min(100, room.huerto.progreso + 25)
-      j.vit.fatiga = limitar(j.vit.fatiga + 2, 0, 100)
-      if (room.huerto.progreso >= 100) {
-        room.huerto.establecido = true
-        log(room, 'Huerto artificial establecido. Dará oxígeno y la primera cosecha en 28 días.', 'ok')
-      } else log(room, `${j.nombre} avanzó el huerto (${room.huerto.progreso}%).`)
-      break
-    }
+    case 'huerto':
+      return 'El huerto se monta paso a paso en el laboratorio.'
     case 'muestra': {
       if (!puedeActuar(room, j, ['cientifico'])) return 'Las muestras las recoge el especialista científico.'
       if (room.fase !== 'base') return 'Las muestras se recogen cuando la base está operativa.'
@@ -902,6 +902,9 @@ function vencer(room: RoomState, t: number) {
 }
 
 const enMarcha = (room: RoomState) => !['lobby', 'contexto', 'fin'].includes(room.fase) && !room.resultado
+const conBots = (room: RoomState) => room.jugadores.some((j) => j.bot)
+/** En las salas con bots el reloj también corre en la contextualización: ahí ellos avanzan. */
+const corre = (room: RoomState) => enMarcha(room) || (room.fase === 'contexto' && conBots(room))
 
 /**
  * Lleva la sala hasta el instante real `real`, procesando en orden todo lo que debió ocurrir:
@@ -919,7 +922,7 @@ export function avanzar(room: RoomState, real: number, ultimoVisto: number) {
     let esPaso = false
     for (const p of room.propuestas) if (p.estado === 'pendiente' && p.vence < t) t = p.vence
     for (const e of room.emergencias) if (e.estado === 'activa' && e.vence < t) t = e.vence
-    if (enMarcha(room) && room.reloj + PASO_MS < t) {
+    if (corre(room) && room.reloj + PASO_MS < t) {
       t = room.reloj + PASO_MS
       esPaso = true
     }
@@ -927,10 +930,11 @@ export function avanzar(room: RoomState, real: number, ultimoVisto: number) {
     fijarAhora(t)
     if (esPaso) {
       room.reloj = t
-      pasoSimulacion(room)
+      if (enMarcha(room)) pasoSimulacion(room)
+      if (conBots(room)) pasoTripulantes(room)
     } else vencer(room, t)
   }
   // Si quedó muy atrás (no debería), se pone al día sin simular el hueco.
-  if (enMarcha(room) && hasta - room.reloj > 2 * AUSENCIA_MS) room.reloj = hasta
+  if (corre(room) && hasta - room.reloj > 2 * AUSENCIA_MS) room.reloj = hasta
   fijarAhora(hasta)
 }

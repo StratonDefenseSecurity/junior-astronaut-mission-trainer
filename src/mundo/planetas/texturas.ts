@@ -6,9 +6,14 @@
 //   detalle 'alto': Tierra 2048×1024 (+ nubes 1024×512), Marte 2048×1024, Luna 1024×512.
 //   detalle 'bajo': la mitad en cada lado.
 // La Tierra usa las costas de Natural Earth 1:50 millones (world-atlas land-50m).
+//
+// Encima de esto están las imágenes reales de NASA y USGS (public/texturas/, generadas con
+// scripts/texturas-reales.mjs; créditos en public/texturas/CREDITOS.md). Se piden primero; si no
+// llegan en un momento o fallan, se genera el globo procedural, que queda de respaldo.
 import { useEffect, useState } from 'react'
 import * as THREE from 'three'
 import type { Poligono } from './rasterizar'
+import manifiesto from './texturasReales.json'
 
 export type Detalle = 'alto' | 'bajo'
 type Tipo = 'tierra' | 'nubes' | 'marte' | 'luna'
@@ -123,13 +128,21 @@ export interface TexturasRelieve {
 }
 
 const cache = new Map<string, Promise<unknown>>()
+/** Valores ya resueltos, para que un globo nuevo los use desde el primer cuadro. */
+const resueltos = new Map<string, unknown>()
 
 function memo<T>(clave: string, f: () => Promise<T>): Promise<T> {
   let p = cache.get(clave) as Promise<T> | undefined
   if (!p) {
-    p = f()
+    const nueva = f()
+    p = nueva
     // Si falla, se permite reintentar más tarde.
-    p.catch(() => cache.delete(clave))
+    nueva.then(
+      (v) => {
+        if (cache.get(clave) === nueva) resueltos.set(clave, v)
+      },
+      () => cache.delete(clave),
+    )
     cache.set(clave, p)
   }
   return p
@@ -155,12 +168,172 @@ export const texturasMarte = (detalle: Detalle = 'alto') => texturasRelieve('mar
 export const texturasLuna = (detalle: Detalle = 'alto') => texturasRelieve('luna', detalle)
 
 /**
- * Empieza a generar las texturas antes de que hagan falta (por ejemplo, en el lobby), para que
- * los globos aparezcan ya pintados.
+ * Empieza a cargar las texturas antes de que hagan falta (por ejemplo, en el lobby), para que
+ * los globos aparezcan ya pintados: las imágenes reales si las hay y, si no, las procedurales.
  */
 export function precargarTexturas(cuales: ReadonlyArray<'tierra' | 'marte' | 'luna'> = ['tierra', 'marte', 'luna'], detalle: Detalle = 'alto'): Promise<void> {
-  const f = { tierra: texturasTierra, marte: texturasMarte, luna: texturasLuna }
-  return Promise.all(cuales.map((c) => f[c](detalle))).then(() => undefined)
+  const real: Record<string, () => Promise<unknown>> = { tierra: texturasRealesTierra, marte: texturasRealesMarte, luna: texturasRealesLuna }
+  const procedural: Record<string, (d: Detalle) => Promise<unknown>> = { tierra: texturasTierra, marte: texturasMarte, luna: texturasLuna }
+  return Promise.all(cuales.map((c) => real[c]().catch(() => procedural[c](detalle)))).then(() => undefined)
+}
+
+// ------------------------------------------------------------------- imágenes reales
+
+interface ArchivoReal {
+  archivo: string
+  ancho: number
+  alto: number
+  /** Relieve: la textura guarda 128 + pendiente × k. */
+  k?: number
+}
+interface Manifiesto {
+  tierra?: { dia: ArchivoReal; agua: ArchivoReal; noche: ArchivoReal; nubes: ArchivoReal }
+  luna?: { color: ArchivoReal; relieve: ArchivoReal }
+  marte?: { color: ArchivoReal; relieve: ArchivoReal }
+}
+const REALES = manifiesto as Manifiesto
+
+type UsoImagen = 'color' | 'gris' | 'pendientes'
+
+/** Carga una imagen de public/texturas como textura con mipmaps. */
+function cargarImagen(a: ArchivoReal, uso: UsoImagen): Promise<THREE.Texture> {
+  const url = `${import.meta.env.BASE_URL}${a.archivo}`
+  return new Promise((ok, mal) => {
+    new THREE.TextureLoader().load(
+      url,
+      (t) => {
+        t.colorSpace = uso === 'color' ? THREE.SRGBColorSpace : THREE.NoColorSpace
+        // Las de un canal o dos se suben así a la GPU: ocupan la cuarta parte o la mitad.
+        if (uso === 'gris') t.format = THREE.RedFormat
+        if (uso === 'pendientes') t.format = THREE.RGFormat
+        t.wrapS = THREE.RepeatWrapping
+        t.wrapT = THREE.ClampToEdgeWrapping
+        t.magFilter = THREE.LinearFilter
+        t.minFilter = THREE.LinearMipmapLinearFilter
+        t.generateMipmaps = true
+        t.anisotropy = 8
+        const img = t.image as HTMLImageElement
+        // Se decodifica fuera del hilo principal antes de entregarla, si el navegador lo permite.
+        const listo = typeof img.decode === 'function' ? img.decode().catch(() => undefined) : Promise.resolve()
+        void listo.then(() => {
+          t.needsUpdate = true
+          ok(t)
+        })
+      },
+      undefined,
+      () => mal(new Error(`No se pudo cargar ${url}`)),
+    )
+  })
+}
+
+export interface TexturasRealesTierra {
+  dia: THREE.Texture
+  /** Agua abierta en R (1 = mar). */
+  agua: THREE.Texture
+  /** Luces de noche en R. */
+  noche: THREE.Texture
+  /** Nubes en R (opacidad). */
+  nubes: THREE.Texture
+}
+export interface TexturasRealesRelieve {
+  color: THREE.Texture
+  /** Pendientes este y norte en R y G (128 = plano). */
+  relieve: THREE.Texture
+  /** Escala con que se guardaron las pendientes. */
+  k: number
+}
+
+const sinImagenes = (cuerpo: string) => Promise.reject(new Error(`No hay imágenes reales de ${cuerpo}`))
+
+export function texturasRealesTierra(): Promise<TexturasRealesTierra> {
+  const m = REALES.tierra
+  if (!m) return sinImagenes('la Tierra')
+  return memo('real-tierra', async () => {
+    const [dia, agua, noche, nubes] = await Promise.all([cargarImagen(m.dia, 'color'), cargarImagen(m.agua, 'gris'), cargarImagen(m.noche, 'gris'), cargarImagen(m.nubes, 'gris')])
+    liberarProcedural(['tierra-alto', 'tierra-bajo'])
+    return { dia, agua, noche, nubes }
+  })
+}
+
+function texturasRealesRelieve(cuerpo: 'marte' | 'luna'): Promise<TexturasRealesRelieve> {
+  const m = REALES[cuerpo]
+  if (!m) return sinImagenes(cuerpo)
+  return memo(`real-${cuerpo}`, async () => {
+    const [color, relieve] = await Promise.all([cargarImagen(m.color, 'color'), cargarImagen(m.relieve, 'pendientes')])
+    liberarProcedural([`${cuerpo}-alto`, `${cuerpo}-bajo`])
+    return { color, relieve, k: m.relieve.k ?? 300 }
+  })
+}
+export const texturasRealesMarte = () => texturasRealesRelieve('marte')
+export const texturasRealesLuna = () => texturasRealesRelieve('luna')
+
+/** ¿Hay imágenes reales de este cuerpo en el sitio? */
+export const hayImagenesReales = (cuerpo: 'tierra' | 'marte' | 'luna') => Boolean(REALES[cuerpo])
+
+/**
+ * Cuando llegan las imágenes reales, las texturas procedurales ya no hacen falta: se liberan de
+ * la GPU unos segundos después, para que ningún globo las esté usando todavía.
+ */
+function liberarProcedural(claves: string[]) {
+  for (const clave of claves) {
+    const p = cache.get(clave) as Promise<object> | undefined
+    if (!p) continue
+    cache.delete(clave)
+    resueltos.delete(clave)
+    p.then(
+      (tex) => setTimeout(() => Object.values(tex).forEach((t) => (t as THREE.Texture).dispose()), 4000),
+      () => undefined,
+    )
+  }
+}
+
+/**
+ * Hook de los globos: pide las imágenes reales y, si no llegan en `espera` ms o fallan, genera
+ * las procedurales. Devuelve lo que haya; cuando llegan las reales, el globo se cambia a ellas.
+ * `cuerpo` y `clave` identifican el pedido (la clave cambia con el detalle).
+ */
+export function useTexturasGlobo<R, P>(
+  cuerpo: 'tierra' | 'marte' | 'luna',
+  clave: string,
+  real: () => Promise<R>,
+  procedural: () => Promise<P>,
+  espera = 4000,
+): { real: R | null; procedural: P | null } {
+  type Estado = { clave: string; real: R | null; procedural: P | null }
+  const inicial = (): Estado => ({ clave, real: (resueltos.get(`real-${cuerpo}`) as R | undefined) ?? null, procedural: (resueltos.get(clave) as P | undefined) ?? null })
+  const [estado, setEstado] = useState<Estado>(inicial)
+  useEffect(() => {
+    let vivo = true
+    let llegoReal = false
+    const pedirProcedural = () => {
+      if (!vivo || llegoReal) return
+      procedural().then(
+        (p) => {
+          if (vivo && !llegoReal) setEstado((e) => (e.clave === clave ? { ...e, procedural: p } : e))
+        },
+        (e) => console.warn('No se pudieron generar las texturas del planeta', e),
+      )
+    }
+    const reloj = setTimeout(pedirProcedural, espera)
+    real().then(
+      (r) => {
+        llegoReal = true
+        clearTimeout(reloj)
+        if (vivo) setEstado((e) => (e.clave === clave ? { ...e, real: r } : { clave, real: r, procedural: null }))
+      },
+      () => {
+        clearTimeout(reloj)
+        pedirProcedural()
+      },
+    )
+    return () => {
+      vivo = false
+      clearTimeout(reloj)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clave])
+  const e = estado.clave === clave ? estado : inicial()
+  return { real: e.real, procedural: e.procedural }
 }
 
 /** Hook: la promesa resuelta o null mientras se genera. */
@@ -195,4 +368,6 @@ export const PROVISIONAL = {
   luna: plana(150, 149, 146, 255),
   relievePlano: plana(128, 128, 0, 0, THREE.RGFormat, false),
   sinNubes: plana(0, 0, 0, 0, THREE.RedFormat, false),
+  /** Sin luces de ciudades ni máscara de agua. */
+  negro: plana(0, 0, 0, 0, THREE.RedFormat, false),
 }

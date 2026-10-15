@@ -1,4 +1,5 @@
 // Plano del hábitat y de la base: dónde está cada estación y por dónde se puede caminar.
+import { activos } from '@shared/procedimientos'
 import { TAREAS_ENSAMBLAJE, type Player, type Role, type RoomState, type SistemaId, type Zona } from '@shared/types'
 
 export interface Estacion {
@@ -156,7 +157,11 @@ export function estacionesDestacadas(sala: RoomState, yo: Player | null): string
     }
     if (sala.energia.polvo > 0.1) ids.add('campoSolar')
   }
-  if (puede(sala, yo, ['cientifico']) && sala.cargamento.huerto > 0 && !sala.huerto.establecido && ['transito', 'ensamblaje', 'base'].includes(sala.fase)) ids.add('laboratorio')
+  // Pasos de procedimiento que le tocan: el montaje del huerto y su cuidado (regar, ralear, cosechar...).
+  for (const a of activos(sala)) {
+    const paso = a.proc.pasos[a.paso]
+    if (!a.proc.tarea && puede(sala, yo, paso.roles)) ids.add(paso.estacion)
+  }
   if (puede(sala, yo, ['sistemas'])) {
     for (const e of ESTACIONES) {
       if (e.sistemas?.some((id) => sala.sistemas.some((s) => s.id === id && s.instalado && s.integridad < 50))) ids.add(e.id)

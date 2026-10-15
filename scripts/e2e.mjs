@@ -1,7 +1,9 @@
 // Prueba de punta a punta contra un servidor en marcha (local o Cloudflare):
 //   node scripts/e2e.mjs http://localhost:3001            misión completa (unos 6 minutos)
 //   node scripts/e2e.mjs https://mi-sitio.workers.dev --corto   hasta el inicio del viaje (1.5 min)
-// Crea dos cuentas de prueba y juega con ellas por la API, como lo haría el navegador.
+//   node scripts/e2e.mjs http://localhost:3001 --solo     solo el modo de un jugador con bots (unos 4 minutos)
+// Crea cuentas de prueba y juega con ellas por la API, como lo haría el navegador. Al final
+// prueba también el modo de un jugador, con una persona y cinco tripulantes bot.
 const base = (process.argv[2] ?? 'http://localhost:3001').replace(/\/$/, '')
 const corto = process.argv.includes('--corto')
 const sufijo = Math.random().toString(36).slice(2, 7)
@@ -57,6 +59,11 @@ const esperar = (ms) => new Promise((r) => setTimeout(r, ms))
 
 console.log(`Servidor: ${base}${corto ? ' (prueba corta)' : ''}`)
 const clave = `prueba-${sufijo}`
+if (process.argv.includes('--solo')) {
+  await pruebaSolo()
+  console.log(fallos === 0 ? '\nE2E OK' : `\nE2E CON ${fallos} FALLA(S)`)
+  process.exit(fallos === 0 ? 0 : 1)
+}
 const a = await llamar('registro', { usuario: `e2e_cmd_${sufijo}`, clave })
 comprobar(a.status === 200 && a.d.token, `registro A (${a.ms} ms)`, JSON.stringify(a.d))
 const b = await llamar('registro', { usuario: `e2e_sis_${sufijo}`, clave })
@@ -135,7 +142,9 @@ await paso(A, 'trayectoria', { trayectoria: 'rapida' }, 'A elige trayectoria rá
 comprobar(sala.mision.diasTransito === 150 && sala.mision.solesObjetivo === 10, 'el plan cambia viaje y estancia')
 await paso(A, 'paso', { paso: 3 }, 'A pasa a los suministros')
 await paso(A, 'preset', { preset: 'equilibrado' }, 'alternativa de suministros equilibrada')
-if (sala.masa > sala.capacidad) await paso(A, 'cargamento', { cambios: { blindaje: 0, huerto: 0 } }, `recorte de carga (${sala.masa} t)`)
+// Se recorta primero el blindaje, para que el huerto viaje y se pueda montar en el camino.
+if (sala.masa > sala.capacidad) await paso(A, 'cargamento', { cambios: { blindaje: 0 } }, `recorte de carga (${sala.masa} t)`)
+if (sala.masa > sala.capacidad) await paso(A, 'cargamento', { cambios: { huerto: 0 } }, `recorte del huerto (${sala.masa} t)`)
 await paso(A, 'lanzar', {}, 'no se despega sin que todos estén listos', 400)
 await paso(B, 'listo', { listo: true }, 'B marca listo')
 comprobar(sala.jugadores[1].paso === 3, 'al marcar listo, B queda en el último paso')
@@ -190,6 +199,15 @@ if (!corto) {
       }
     }
   }
+  if (sala.cargamento.huerto > 0) {
+    const huerto = (n, valor, msg) => paso(A, 'procedimiento', { proc: 'huerto', paso: n, valor }, msg)
+    await huerto(0, 'rabano', 'A elige cultivar rábanos')
+    await huerto(1, 4, 'A despliega la cámara de cultivo')
+    await huerto(2, 'rgb', 'A enciende las luces roja, azul y verde')
+    await huerto(3, { orden: ['colocar', 'mechas', 'sujetar'], errores: 0 }, 'A coloca las almohadillas')
+    await huerto(4, 140, 'A ceba cada almohadilla con 140 mL')
+    comprobar(sala.huerto.establecido && sala.huerto.almohadillas?.length === 6 && sala.huerto.almohadillas[0].humedad === 70, 'huerto montado: seis almohadillas al 70% de humedad')
+  }
   const emergencias = new Set()
   for (let i = 0; i < 420 && sala.fase === 'transito'; i++) {
     await esperar(1000)
@@ -204,6 +222,10 @@ if (!corto) {
   comprobar(emergencias.size >= 3, `hubo ${emergencias.size} emergencias en el viaje: ${[...new Set([...emergencias].map((e) => e.split(':')[0]))].join(', ')}`)
   const dosis = sala.jugadores[0].vit.dosis
   comprobar(dosis > 200 && dosis < 600, `dosis acumulada en el viaje: ${Math.round(dosis)} mSv`)
+  if (sala.huerto.establecido) {
+    const vivas = sala.huerto.almohadillas.filter((x) => !x.muerta)
+    comprobar(sala.huerto.diasCultivo > 100 && vivas.every((x) => x.crecimiento > 0), `el huerto creció ${Math.round(sala.huerto.diasCultivo)} días: ${vivas.length} plantas vivas`)
+  }
   comprobar(sala.jugadores.every((j) => j.vit.salud > 50), `tripulación viva y con salud ${sala.jugadores.map((j) => Math.round(j.vit.salud)).join('/')}`)
 
   await paso(B, 'zona', { zona: 'exterior' }, 'no se puede salir antes de aterrizar', 400)
@@ -221,16 +243,47 @@ if (!corto) {
   comprobar(amb.sol === 1 && amb.tempExt < 10 && amb.presion > 600 && amb.presion < 900, `clima real: ${amb.tempExt} °C, ${amb.presion} Pa (sol ${amb.solCuriosity} de Curiosity)`)
   comprobar(sala.energia.generacion === 0, 'sin energía de superficie hasta desplegar los paneles')
 
-  await paso(A, 'tarea', { tarea: 'paneles' }, 'la tarea exterior exige salir', 400)
+  // Montaje por procedimientos, paso a paso, con los valores que daría un experto en Gale (4.6° S).
+  const proc = (quien, id, n, valor, msg, esperado = 200) => paso(quien, 'procedimiento', { proc: id, paso: n, valor }, msg, esperado)
+  // Si la esclusa llegó dañada (aterrizaje duro o una avería del viaje), sistemas la repara antes de salir.
+  const esclusa = sala.sistemas.find((x) => x.id === 'esclusa')
+  if (esclusa.integridad <= 15) await paso(B, 'accion', { id: 'reparar', payload: { sistema: 'esclusa' } }, `B repara la esclusa (${Math.round(esclusa.integridad)}%, ${sala.rec.repuestos} kits)`)
+  await proc(A, 'paneles', 0, 'norte', 'el paso exterior exige salir', 400)
   await paso(A, 'zona', { zona: 'exterior' }, 'A sale con el traje')
-  await paso(A, 'tarea', { tarea: 'paneles' }, 'A despliega los campos solares')
-  await paso(A, 'tarea', { tarea: 'carga' }, 'A descarga los equipos')
+  await proc(A, 'paneles', 1, { orden: ['no', 'se', 'ne', 'so'], errores: 0 }, 'no se salta el orden de los pasos', 400)
+  await proc(A, 'paneles', 0, 'norte', 'A orienta los paneles hacia el ecuador, al norte')
+  await proc(A, 'paneles', 1, { orden: ['no', 'ne', 'so', 'se'], errores: 0 }, 'apretar dos esquinas del mismo lado se rechaza', 400)
+  await proc(A, 'paneles', 1, { orden: ['no', 'se', 'ne', 'so'], errores: 1 }, 'A aprieta los anclajes en cruz')
+  await proc(A, 'paneles', 2, 2, 'soltar antes de tiempo no despliega el ala', 400)
+  await proc(A, 'paneles', 2, 6, 'A acompaña el ala mientras se desenrolla')
+  await proc(A, 'paneles', 3, 5, 'A inclina los paneles 5°, como la latitud')
+  comprobar(sala.efectos?.solar === 1 && sala.procedimientos.paneles.calidad[1] < 1, `los paneles rinden al ${sala.efectos?.solar} y el error de orden queda anotado`)
+  await proc(A, 'carga', 0, { orden: ['eslingas', 'guia', 'tensar', 'soltar'], errores: 0 }, 'A prepara el izado con la grúa')
+  await proc(A, 'carga', 1, 8, 'A baja la carga despacio')
+  if (sala.cargamento.reactor > 0) await proc(A, 'carga', 2, 'enterrado', 'A deja el reactor a 1 km, enterrado')
+  comprobar(sala.ensamblaje.hechas.carga && sala.ensamblaje.paso === 2, sala.cargamento.reactor > 0 ? 'carga descargada y reactor enterrado' : 'sin reactor, el paso de dónde dejarlo se salta solo y el montaje avanza')
   await paso(A, 'zona', { zona: 'nave' }, 'A vuelve al hábitat')
-  await paso(B, 'tarea', { tarea: 'energia' }, 'B conecta la energía')
-  await paso(B, 'tarea', { tarea: 'soporte' }, 'B activa el soporte vital')
-  await paso(B, 'tarea', { tarea: 'revisionInt' }, 'B comprueba la esclusa')
+  await proc(B, 'energia', 0, 'caliente', 'conectar en caliente se rechaza y se explica', 400)
+  await proc(B, 'energia', 0, 'bloqueo', 'B bloquea y etiqueta el interruptor')
+  await proc(B, 'energia', 1, { orden: ['fuente', 'primario', 'baterias', 'convertidor', 'cargas'], errores: 0 }, 'B energiza de la fuente hacia las cargas')
+  await proc(B, 'energia', 2, 124.5, 'B ajusta el convertidor a 124.5 V')
+  await proc(B, 'soporte', 0, { orden: ['termico', 'wrs', 'cdra', 'oga'], errores: 0 }, 'B arranca el soporte vital en orden')
+  await proc(B, 'soporte', 1, 1.7, 'B ajusta el generador a 1.7 kg de oxígeno al día para 2 personas')
+  await proc(B, 'soporte', 2, '3', 'B pone la alarma de CO2 en 3 mmHg')
+  comprobar(sala.ensamblaje.paso === 3 && sala.efectos?.ogaKgDia === 1.7, 'energía y soporte vital listos')
+  await proc(B, 'revisionInt', 0, { orden: ['revisar', 'limpiar', 'cerrar', 'trabas'], errores: 0 }, 'B revisa y limpia el sello')
+  await proc(B, 'revisionInt', 1, 5, 'B presuriza la esclusa')
+  if (sala.procedimientos.revisionInt.datos?.fuga) {
+    await proc(B, 'revisionInt', 2, 'falla', 'B ve la caída de presión: hay fuga')
+    comprobar(sala.procedimientos.revisionInt.paso === 0, 'con fuga, la prueba vuelve a empezar')
+    await proc(B, 'revisionInt', 0, { orden: ['revisar', 'limpiar', 'cerrar', 'trabas'], errores: 0 }, 'B vuelve a limpiar el sello')
+    await proc(B, 'revisionInt', 1, 5, 'B presuriza otra vez')
+  } else await proc(B, 'revisionInt', 2, 'falla', 'sin fuga, dar la prueba por mala se rechaza', 400)
+  await proc(B, 'revisionInt', 2, 'pasa', 'B da la esclusa por estanca')
+  comprobar(sala.cabina.fuga === 0, 'la esclusa queda sin fugas')
   await paso(B, 'zona', { zona: 'exterior' }, 'B sale a inspeccionar')
-  await paso(B, 'tarea', { tarea: 'revisionExt' }, 'B inspecciona el casco')
+  await proc(B, 'revisionExt', 0, 6, 'B fotografía el casco')
+  await proc(B, 'revisionExt', 1, sala.procedimientos.revisionExt.datos?.dano ? 'falla' : 'pasa', 'B mide las marcas del casco y decide')
   comprobar(sala.fase === 'base', 'la base entra en operación')
   await esperar(4000)
   await estado(B)
@@ -255,5 +308,105 @@ if (!corto) {
 
 await llamar('salir', { codigo }, A)
 await llamar('salir', { codigo }, B)
+await pruebaSolo()
 console.log(fallos === 0 ? '\nE2E OK' : `\nE2E CON ${fallos} FALLA(S)`)
 process.exit(fallos === 0 ? 0 : 1)
+
+/** Modo de un jugador: una persona elige su rol y cinco bots hacen el resto de la tripulación. */
+async function pruebaSolo() {
+  console.log('\nUn jugador con bots')
+  const r = await llamar('registro', { usuario: `e2e_solo_${sufijo}`, clave })
+  const T = r.d.token
+  const creada = await llamar('crear', { modo: 'comandante', juego: 'solo' }, T)
+  let s = creada.d.sala
+  const cod = s?.codigo
+  comprobar(creada.status === 200 && s?.modoJuego === 'solo', `sala de un jugador ${cod}`, JSON.stringify(creada.d).slice(0, 200))
+  const bots = s.jugadores.filter((j) => j.bot)
+  comprobar(bots.length === 5 && new Set(bots.map((b) => b.nombre)).size === 5 && bots.every((b) => b.hogar && b.conectado), `cinco bots con nombre y ciudad: ${bots.map((b) => b.nombre).join(', ')}`)
+  comprobar(new Set(s.jugadores.map((b) => b.traje.color)).size === 6, 'cada uno con un traje de otro color')
+  const otro = await llamar('registro', { usuario: `e2e_otro_${sufijo}`, clave })
+  comprobar((await llamar('unirse', { codigo: cod }, otro.d.token)).status === 400, 'nadie más puede unirse a una sala de un jugador')
+
+  const op = async (o, datos, msg, esperado = 200) => {
+    const x = await llamar(o, { codigo: cod, v: s.version, ...datos }, T)
+    if (x.d.sala) s = x.d.sala
+    comprobar(x.status === esperado, msg, JSON.stringify(x.d).slice(0, 200))
+    return x
+  }
+  const mirar = async (extra = {}) => {
+    const x = await llamar('estado', { codigo: cod, v: s.version, h: '', ...extra }, T)
+    if (x.d.sala) s = x.d.sala
+    return x
+  }
+  const esBot = (id) => Boolean(s.jugadores.find((j) => j.id === id)?.bot)
+
+  await op('iniciar', {}, 'el anfitrión empieza solo, sin esperar a nadie')
+  comprobar(s.fase === 'contexto', 'contextualización')
+  for (let i = 0; i < 8; i++) {
+    await esperar(1000)
+    await mirar()
+  }
+  comprobar(s.jugadores.filter((j) => j.bot).every((j) => !j.rol), 'los bots esperan a que la persona elija su rol')
+  comprobar(s.jugadores.some((j) => j.bot && j.paso >= 1), 'los bots avanzan por la contextualización a su ritmo')
+  await op('paso', { paso: 1 }, 'la persona pasa a los roles')
+  await op('rol', { rol: 'comandante' }, 'la persona elige comandante')
+  for (let i = 0; i < 45 && s.jugadores.some((j) => !j.rol); i++) {
+    await esperar(1000)
+    await mirar()
+  }
+  comprobar(new Set(s.jugadores.map((j) => j.rol).filter(Boolean)).size === 6, `los bots tomaron los otros roles: ${s.jugadores.filter((j) => j.bot).map((j) => `${j.nombre} ${j.rol}`).join(', ')}`)
+  const piloto = s.jugadores.find((j) => j.rol === 'piloto')
+  await op('rol', { rol: 'piloto' }, 'la persona pide el rol de un bot')
+  comprobar(s.jugadores.find((j) => j.id === piloto?.id)?.rol === 'comandante', 'el bot le cede el rol y toma el que ella deja')
+  await op('rol', { rol: 'comandante' }, 'y vuelve a comandante')
+  await op('paso', { paso: 2 }, 'la persona pasa al objetivo')
+  await op('nombre', { nombre: 'Solo 1' }, 'bautiza la misión')
+  await op('paso', { paso: 3 }, 'pasa a los suministros')
+  await op('preset', { preset: 'equilibrado' }, 'carga equilibrada')
+  for (const cambio of [{ blindaje: 0 }, { huerto: 0 }, { oxigeno: 1 }, { paneles: 3 }]) {
+    if (s.masa > s.capacidad) await op('cargamento', { cambios: cambio }, `recorte de carga (${s.masa} t de ${s.capacidad} t)`)
+  }
+  await op('listo', { listo: true }, 'la persona marca listo')
+  for (let i = 0; i < 45 && s.jugadores.some((j) => !j.listo); i++) {
+    await esperar(1000)
+    await mirar()
+  }
+  comprobar(s.jugadores.every((j) => j.listo), 'los bots confirman que están listos')
+  await op('lanzar', {}, 'el comandante autoriza el lanzamiento')
+  comprobar(s.fase === 'lanzamiento', 'cuenta regresiva')
+  console.log('  ... ascenso (unos 65 s)')
+  for (let i = 0; i < 90 && s.fase === 'lanzamiento'; i++) {
+    await esperar(1000)
+    await mirar({ p: [0, 0, 0, 0] })
+  }
+  comprobar(s.fase === 'transito', 'rumbo a Marte')
+  if (!corto) {
+    await op('escala', { valor: 86400 }, 'el comandante acelera el tiempo')
+    console.log('  ... viaje con los bots (hasta 2 minutos)')
+    const nombres = new Set(s.jugadores.filter((j) => j.bot).map((j) => j.nombre))
+    const t0 = s.t
+    let propuesta = null
+    let posiciones = false
+    for (let i = 0; i < 120 && s.fase === 'transito'; i++) {
+      await esperar(1000)
+      const x = await mirar({ p: [0, 0, 0, 0] })
+      if (s.jugadores.some((j) => j.bot && Array.isArray(x.d.pos?.[j.id]) && x.d.pos[j.id].length === 4)) posiciones = true
+      // La persona es el comandante: aprueba lo que proponen los bots.
+      for (const p of s.propuestas.filter((y) => y.estado === 'pendiente' && esBot(y.proponente))) {
+        if (!propuesta) {
+          propuesta = p
+          await op('votar', { id: p.id, aprueba: true }, `la persona aprueba la propuesta de un bot: ${p.titulo}`)
+        } else await llamar('votar', { codigo: cod, v: s.version, id: p.id, aprueba: true }, T)
+      }
+      const listo = propuesta && posiciones && s.chat.some((m) => nombres.has(m.de)) && s.jugadores.some((j) => j.bot && j.aportes > 0)
+      if (listo && s.t - t0 > 20 * 86400) break
+    }
+    comprobar(propuesta, 'un bot propone algo y espera la aprobación del comandante')
+    const chat = s.chat.filter((m) => nombres.has(m.de))
+    comprobar(chat.length > 0, `los bots escriben en el chat: "${chat[chat.length - 1]?.de}: ${chat[chat.length - 1]?.texto}"`)
+    comprobar(posiciones, 'el servidor envía la posición de los bots para dibujarlos')
+    comprobar(s.jugadores.some((j) => j.bot && j.aportes > 0), `los bots trabajan: ${s.jugadores.filter((j) => j.bot).map((j) => `${j.nombre} ${j.aportes}`).join(', ')}`)
+    comprobar(s.t - t0 > 10 * 86400 && s.jugadores.every((j) => j.vit.salud > 50), `la misión avanza: día ${Math.round(s.t / 86400)}`)
+  }
+  await llamar('salir', { codigo: cod }, T)
+}

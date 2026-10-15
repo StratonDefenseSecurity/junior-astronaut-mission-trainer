@@ -3,6 +3,7 @@
 // la página principal, que reúne las opciones del esquema del equipo.
 import { createContext, useContext, type ReactNode } from 'react'
 import { C } from '@shared/ciencia'
+import { CULTIVO_BY_ID, cultivoDe } from '@shared/procedimientos'
 import {
   GESTION_BASE,
   PASOS_ENSAMBLAJE,
@@ -21,6 +22,7 @@ import { ESTACION_BY_ID, puede } from '../mundo/mapa'
 import { api } from '../red'
 import { useStore } from '../store'
 import { useVoz, voz } from '../voz'
+import { Procedimientos } from './Procedimiento'
 import { Barra, Dato, RolTag, diasRestantes, diasTexto, enMarte, energiaUsada, mmHg, nivel, pctTraje, roles, tiempoEnEspacio, type Nivel } from './comun'
 
 interface P {
@@ -52,27 +54,10 @@ function Seccion({ titulo, children }: { titulo: string; children: ReactNode }) 
   )
 }
 
-/** Tarea del montaje de la base que se hace en esta estación. */
+/** Procedimientos por pasos que tocan en esta estación: el montaje de la base y el huerto. */
 function Tarea({ sala, yo, estacion }: P & { estacion: string }) {
-  if (sala.fase !== 'ensamblaje') return null
-  const tarea = TAREAS_ENSAMBLAJE.find((t) => t.estacion === estacion && t.paso === sala.ensamblaje.paso)
-  if (!tarea) return null
-  const hecha = sala.ensamblaje.hechas[tarea.id]
-  const mia = puede(sala, yo, tarea.roles)
   const remoto = useContext(Remoto)
-  return (
-    <div className={`tarea ${hecha ? 'hecha' : ''}`}>
-      <strong>Montaje de la base · paso {tarea.paso}</strong>
-      <p>{tarea.titulo}</p>
-      {hecha ? (
-        <span className="mini ok">Hecha por {sala.jugadores.find((j) => j.id === hecha)?.nombre ?? 'la tripulación'}</span>
-      ) : mia ? (
-        <button className="primary" disabled={remoto} title={remoto ? IR_HASTA_AQUI : undefined} onClick={() => api.tarea(tarea.id)}>Hacerlo ahora</button>
-      ) : (
-        <Reservado a={tarea.roles} />
-      )}
-    </div>
-  )
+  return <Procedimientos sala={sala} yo={yo} estacion={estacion} remoto={remoto} />
 }
 
 /** Estado de un equipo, con sus botones de reparar y de encender o apagar. */
@@ -404,28 +389,56 @@ function Enfermeria({ sala, yo }: P) {
   )
 }
 
+/** Las almohadillas del huerto: humedad, salud, crecimiento y moho de cada una. */
+function Almohadillas({ sala }: { sala: RoomState }) {
+  const h = sala.huerto
+  const c = cultivoDe(sala)
+  const lista = h.almohadillas ?? []
+  const vivas = lista.filter((a) => !a.muerta)
+  const maximo = vivas.length ? Math.max(...vivas.map((a) => a.crecimiento)) : 0
+  return (
+    <>
+      <p className="mini">
+        {c.nombre}. Día {Math.floor(h.diasCultivo)} de cultivo; {maximo >= 1 ? 'hay plantas listas para cosechar' : `cosecha en unos ${Math.max(1, Math.round((1 - maximo) * c.dias))} días si se cuidan`}. Cosechas: {h.cosechas}, con {(h.comidaFresca ?? 0).toFixed(1)} kg de verdura fresca comida. Ventilador {h.ventilador === 'alto' ? 'alto: el sustrato se seca antes' : 'normal'}.
+      </p>
+      <div className="almohadillas">
+        {lista.map((a, i) => (
+          <div key={i} className={`almohadilla ${a.muerta ? 'muerta' : ''}`}>
+            <b className="mini">Almohadilla {i + 1}</b>
+            {a.muerta ? (
+              <span className="mini bad">Planta muerta</span>
+            ) : (
+              <>
+                <span className="mini muted">Humedad {Math.round(a.humedad)}%</span>
+                <Barra valor={a.humedad} tono={a.humedad < 25 || a.humedad > 88 ? 'bad' : a.humedad < 40 || a.humedad > 80 ? 'warn' : 'azul'} />
+                <span className="mini muted">Salud {Math.round(a.salud)}%</span>
+                <Barra valor={a.salud} tono={a.salud < 40 ? 'bad' : a.salud < 70 ? 'warn' : 'ok'} />
+                <span className="mini muted">Crecimiento {Math.round(a.crecimiento * 100)}%</span>
+                <Barra valor={a.crecimiento * 100} tono="ok" />
+                {a.moho >= 0.1 && <span className="mini warn">Pelusa blanca: moho</span>}
+                {a.plantulas > 1 && <span className="mini muted">{a.plantulas} plántulas</span>}
+              </>
+            )}
+          </div>
+        ))}
+      </div>
+    </>
+  )
+}
+
 function Laboratorio({ sala, yo }: P) {
   const h = sala.huerto
-  const cie = puede(sala, yo, ['cientifico'])
   const remoto = useContext(Remoto)
   return (
     <>
       <Seccion titulo="Huerto artificial">
         {sala.cargamento.huerto < 1 ? (
           <p className="mini muted">No trajeron el kit de huerto.</p>
-        ) : h.establecido ? (
-          <>
-            <p className="mini">Establecido. Da unos 0.7 kg de oxígeno al día y absorbe CO₂. Próxima cosecha en {Math.max(0, Math.round(28 - h.diasCultivo))} días. Cosechas: {h.cosechas}.</p>
-            <Equipo sala={sala} yo={yo} id="huerto" />
-          </>
         ) : (
           <>
-            <div className="row" style={{ gap: 6 }}>
-              <span className="mini muted">Montaje</span>
-              <div className="grow"><Barra valor={h.progreso} tono="azul" /></div>
-              <span className="mono mini">{h.progreso}%</span>
-            </div>
-            {cie ? <button className="small" style={{ marginTop: 6 }} disabled={remoto || sala.rec.agua < 8} title={remoto ? IR_HASTA_AQUI : undefined} onClick={() => api.accion('huerto')}>Trabajar en el huerto (5 kg de agua)</button> : <Reservado a={['cientifico']} />}
+            {h.establecido && <Almohadillas sala={sala} />}
+            <Tarea sala={sala} yo={yo} estacion="laboratorio" />
+            {h.establecido && <Equipo sala={sala} yo={yo} id="huerto" />}
           </>
         )}
       </Seccion>
@@ -549,7 +562,7 @@ function CampoSolar({ sala, yo }: P) {
       <Seccion titulo="Campos solares">
         {desplegado ? (
           <>
-            <p className="mini">{sala.cargamento.paneles} campo(s) de 50 m². Cada uno da hasta {C.PANEL_KW} kW al mediodía con cielo limpio. El polvo acumulado quita un {polvo}%.</p>
+            <p className="mini">{sala.cargamento.paneles} campo(s) de 50 m². Cada uno da hasta {C.PANEL_KW} kW al mediodía con cielo limpio. Por cómo se orientaron aprovechan el {Math.round((sala.efectos?.solar ?? 1) * 100)}% de la luz. El polvo acumulado quita un {polvo}%.</p>
             <button className="small primary" disabled={polvo < 3} onClick={() => api.accion('limpiar')}>Limpiar los paneles</button>
             <p className="mini muted">Cualquiera puede limpiarlos. El polvo vuelve a posarse cada sol, y mucho más rápido en una tormenta.</p>
           </>
@@ -731,7 +744,7 @@ function resumenOpcion(sala: RoomState, id: OpcionBase['id']): { texto: string; 
     case 'huerto': {
       const h = sala.huerto
       return {
-        texto: sala.cargamento.huerto < 1 ? 'No trajeron el kit de huerto.' : h.establecido ? `Establecido. Cosechas: ${h.cosechas}.` : `Montaje al ${h.progreso}%.`,
+        texto: sala.cargamento.huerto < 1 ? 'No trajeron el kit de huerto.' : h.establecido ? `${CULTIVO_BY_ID[h.cultivo ?? 'lechuga'].nombre}: ${(h.almohadillas ?? []).filter((a) => !a.muerta).length} plantas vivas. Cosechas: ${h.cosechas}.` : `Montaje al ${h.progreso}%.`,
         tono: nivel(false, sala.cargamento.huerto > 0 && !h.establecido),
       }
     }

@@ -5,7 +5,7 @@ import { PASOS_ENSAMBLAJE, ROLE_BY_ID, TAREAS_ENSAMBLAJE, type Player, type Room
 import { ESTACION_BY_ID, estacionesDestacadas, puede } from '../mundo/mapa'
 import { api } from '../red'
 import { useStore } from '../store'
-import { diasRestantes, diasTexto, enMarte, roles, useAhora } from './comun'
+import { MarcaIA, diasRestantes, diasTexto, enMarte, roles, useAhora } from './comun'
 
 function consejo(sala: RoomState, yo: Player): string {
   const sup = enMarte(sala)
@@ -113,7 +113,8 @@ export function Propuestas({ sala, yo }: { sala: RoomState; yo: Player }) {
     <div>
       <div className="assistant">{decideCmd ? 'El comandante aprueba o rechaza cada propuesta, velando por el bienestar de la mayoría.' : 'Gana la mayoría de la tripulación conectada.'}</div>
       {sala.propuestas.map((p) => {
-        const quien = sala.jugadores.find((j) => j.id === p.proponente)?.nombre ?? '?'
+        const autor = sala.jugadores.find((j) => j.id === p.proponente)
+        const quien = autor?.nombre ?? '?'
         const si = Object.values(p.votos).filter(Boolean).length
         const no = Object.values(p.votos).filter((v) => !v).length
         const yaVote = typeof p.votos[yo.id] === 'boolean'
@@ -127,7 +128,8 @@ export function Propuestas({ sala, yo }: { sala: RoomState; yo: Player }) {
             </div>
             <p className="mini muted">{p.descripcion}</p>
             <div className="votes">
-              por {quien} · {roles(p.rolesResponsables)} · sí {si} / no {no}
+              por {quien}
+              <MarcaIA bot={autor?.bot} /> · {roles(p.rolesResponsables)} · sí {si} / no {no}
               {p.estado === 'pendiente' && <span className="countdown"> · {restante} s</span>}
             </div>
             {puedoVotar && (
@@ -150,6 +152,7 @@ export function Asistente({ sala }: { sala: RoomState }) {
   const fin = useRef<HTMLDivElement>(null)
   const botMsgs = useStore((s) => s.botMsgs)
   const mensajes = [...sala.chat, ...botMsgs].sort((a, b) => a.t - b.t)
+  const deIA = new Set(sala.jugadores.filter((j) => j.bot).map((j) => j.nombre))
   useEffect(() => {
     fin.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
   }, [mensajes.length])
@@ -174,7 +177,10 @@ export function Asistente({ sala }: { sala: RoomState }) {
         {mensajes.length === 0 && <p className="muted mini">El asistente consulta el estado real de la misión y explica los riesgos. Lo que le preguntes solo lo ves tú; los mensajes al equipo los ven todos.</p>}
         {mensajes.map((m) => (
           <div key={m.id} className={`msg ${m.bot ? 'bot' : ''}`}>
-            <b>{m.de}</b>
+            <b>
+              {m.de}
+              {!m.bot && <MarcaIA bot={deIA.has(m.de)} />}
+            </b>
             {m.texto}
           </div>
         ))}

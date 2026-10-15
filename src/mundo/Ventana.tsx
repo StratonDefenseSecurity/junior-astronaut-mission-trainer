@@ -16,6 +16,7 @@ import { UA_KM } from './cielo/marco'
 import { orientacionHacia } from './cielo/orientacion'
 import { Globo } from './Globo'
 import { SITIOS_MARTE, orientacionCieloMarte } from './cieloMarte'
+import { Destello, type Oclusor } from './Destello'
 
 const SITIOS = SITIOS_MARTE
 /** La ventana mira hacia -X en el módulo; los planetas quedan un poco a un lado para no taparla entera. */
@@ -60,9 +61,11 @@ function CuerpoCercano({ cuerpo, info, orientacion, fecha, marcadores }: { cuerp
 export function Ventana({ sala }: { sala: RoomState }) {
   const { fecha, observador, lugar } = observadorDe(sala)
   const sigue = useRef<THREE.Group>(null)
+  const camaraMundo = useRef(new THREE.Vector3())
   useFrame(({ camera }) => {
     // Los globos están "en el infinito", como el cielo: se mueven con la cámara.
     if (sigue.current) sigue.current.position.copy(camera.position)
+    camera.getWorldPosition(camaraMundo.current)
   })
   const cuerpos = useMemo(() => cuerposVisibles(fecha, observador), [fecha.getTime(), observador.x, observador.y, observador.z]) // eslint-disable-line react-hooks/exhaustive-deps
   const objetivo: Cuerpo = lugar === 'orbita' ? 'Marte' : sala.vuelo.progreso < 0.5 ? 'Tierra' : 'Marte'
@@ -87,11 +90,28 @@ export function Ventana({ sala }: { sala: RoomState }) {
   const destino = useMemo(() => [{ ...sitio, nombre: SITE_BY_ID[sala.sitio ?? escenarioDe(sala.escenario).sitio ?? 'gale'].nombre, color: '#4fc3f7' }], [sitio, sala.sitio, sala.escenario])
   // Cuerpos que se ven como disco y se dibujan como globo detallado.
   const grandes = (['Tierra', 'Luna', 'Marte'] as Cuerpo[]).filter((c) => cuerpos[c].visible && cuerpos[c].tamanoAngularRad > 0.0035)
+  // Destello del Sol por la ventana; lo tapan las paredes y los planetas que se cruzan.
+  const sol = useMemo(() => cuerpos.Sol.direccion.clone().applyQuaternion(orientacion), [cuerpos, orientacion])
+  const oclusores = useMemo(
+    () =>
+      grandes.map((c): Oclusor & { dir: THREE.Vector3 } => ({
+        dir: cuerpos[c].direccion.clone().applyQuaternion(orientacion),
+        centro: new THREE.Vector3(),
+        radio: Math.tan(cuerpos[c].tamanoAngularRad / 2) * DISTANCIA_GLOBOS,
+      })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [cuerpos, orientacion, grandes.join()],
+  )
+  const oclusoresAhora = () => {
+    for (const o of oclusores) o.centro.copy(camaraMundo.current).addScaledVector(o.dir, DISTANCIA_GLOBOS)
+    return oclusores
+  }
 
   if (lugar === 'superficie') return <VistaMarte sala={sala} fecha={fecha} observador={observador} orientacion={orientacion} />
   return (
     <group>
       <Cielo fecha={fecha} observador={observador} orientacion={orientacion} etiquetas constelaciones={false} ocultarCuerpos={grandes} fondoNegro />
+      <Destello direccion={() => sol} oclusores={oclusoresAhora} tamano={0.45} intensidad={0.85} distancia={1600} />
       <group ref={sigue}>
         {grandes.map((c) => (
           <CuerpoCercano key={c} cuerpo={c} info={cuerpos[c]} orientacion={orientacion} fecha={fecha} marcadores={c === 'Tierra' ? hogares : c === 'Marte' ? destino : undefined} />

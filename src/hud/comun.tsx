@@ -37,6 +37,11 @@ export function RolTag({ rol }: { rol: Role | null }) {
   )
 }
 
+/** Marca discreta de los tripulantes que lleva el servidor en el modo de un jugador. */
+export function MarcaIA({ bot }: { bot?: boolean }) {
+  return bot ? <span className="ia" title="Tripulante con IA">IA</span> : null
+}
+
 export const roles = (lista: Role[]) => lista.map((r) => ROLE_BY_ID[r].corto).join(' + ')
 
 /** Segundo a segundo, la hora del servidor (para cuentas regresivas). */

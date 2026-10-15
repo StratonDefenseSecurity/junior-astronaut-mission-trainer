@@ -9,6 +9,7 @@ export function HomeScreen() {
   const setFuentes = useStore((s) => s.setFuentes)
   const [codigo, setCodigo] = useState('')
   const [modo, setModo] = useState<'comandante' | 'votacion'>('comandante')
+  const [juego, setJuego] = useState<'solo' | 'multi'>('multi')
 
   return (
     <div className="center-screen">
@@ -18,9 +19,19 @@ export function HomeScreen() {
           {!conectado && <span className="tag warn">sin conexión</span>}
         </div>
         <h1>Hola, {usuario?.nombre}</h1>
-        <p className="muted">Crea una sala y comparte el código con tu tripulación, o únete a una que ya exista. Se juega de 2 a 6 personas, cada una con su rol.</p>
+        <p className="muted">Juega con tu tripulación de 2 a 6 personas, cada una con su rol, o solo con compañeros que maneja la IA.</p>
 
         <h3>Crear sala</h3>
+        <div className="opciones">
+          <button className={`opcion ${juego === 'solo' ? 'activa' : ''}`} onClick={() => setJuego('solo')}>
+            <strong>Un jugador con bots</strong>
+            <small>Eliges tu rol y cinco tripulantes con IA cubren los demás. Empiezas cuando quieras.</small>
+          </button>
+          <button className={`opcion ${juego === 'multi' ? 'activa' : ''}`} onClick={() => setJuego('multi')}>
+            <strong>Multijugador</strong>
+            <small>Compartes el código con tu tripulación. Hacen falta al menos 2 personas.</small>
+          </button>
+        </div>
         <label className="stack" style={{ gap: 4 }}>
           <span className="muted">¿Cómo se resuelven las decisiones en disputa?</span>
           <select value={modo} onChange={(e) => setModo(e.target.value as 'comandante' | 'votacion')}>
@@ -28,7 +39,7 @@ export function HomeScreen() {
             <option value="votacion">Se vota por mayoría</option>
           </select>
         </label>
-        <button className="primary" onClick={() => api.crearSala(modo)}>Crear sala</button>
+        <button className="primary" onClick={() => api.crearSala(modo, juego)}>{juego === 'solo' ? 'Crear sala con bots' : 'Crear sala'}</button>
 
         <h3 style={{ marginTop: 10 }}>Unirse a una sala</h3>
         <div className="row">

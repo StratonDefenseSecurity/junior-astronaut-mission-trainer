@@ -1,8 +1,9 @@
 # Globos de la Tierra, Marte y la Luna
 
 Componentes de React Three Fiber con la orientación real de cada cuerpo para la fecha de la
-misión. Las texturas se generan en el navegador (sin imágenes ni red) dentro de un Web Worker y
-se guardan en caché toda la sesión.
+misión. Usan imágenes reales de NASA y USGS (`public/texturas/`, ver más abajo). Mientras llegan,
+o si no se pueden cargar, se usan texturas generadas en el navegador dentro de un Web Worker, sin
+imágenes ni red. Todas se guardan en caché toda la sesión.
 
 ```tsx
 import { Tierra, Marte, Luna, LUGARES_TIERRA, precargarTexturas } from './mundo/planetas'
@@ -19,6 +20,25 @@ marco del grupo padre; si falta se calcula para la fecha), `marcadores`, `detall
 `atmosfera`; `<Marte>`, `atmosfera`. `latLonAVector(lat, lon, radio)` da un punto en el marco
 local del globo (el de la textura); `orientacionCuerpo(cuerpo, fecha)` da la rotación de ese
 marco a la escena. `DemoPlanetas` (en `Demo.tsx`) muestra los tres para revisarlos.
+
+## Imágenes reales
+
+`node scripts/texturas-reales.mjs` descarga las imágenes aprobadas a `.cache/texturas-reales/`
+(fuera de git) y escribe versiones para la web en `public/texturas/` (unos 2 MB en total) y la
+lista de lo que hay en `texturasReales.json`. Créditos y cambios: `public/texturas/CREDITOS.md`.
+
+- **Tierra:** Blue Marble: Next Generation con batimetría, diciembre de 2004 (4096×2048), luces de
+  Black Marble 2016 (solo del lado de noche, se encienden pasado el terminador y las tapan las
+  nubes), nubes de Blue Marble en una capa aparte que se corre despacio, y brillo del Sol en el
+  agua con la máscara de las costas de Natural Earth.
+- **Luna:** color de LROC y relieve de LOLA (CGI Moon Kit de la SVS de NASA).
+- **Marte:** el código ya carga el mosaico Viking MDIM2.1 y el relieve de MOLA si existen, pero
+  los archivos de USGS no traen vistas reducidas: generarlos con `--marte` baja unos 330 MB. Hasta
+  que se aprueben, Marte usa el globo procedural.
+
+`useTexturasGlobo` pide las imágenes primero; si no llegan en 4 s o fallan, genera las
+procedurales, y cuando llegan las reales cambia a ellas y libera las otras de la GPU. Las de un
+canal se suben como `RedFormat` y las de relieve como `RGFormat`, con mipmaps.
 
 ## Qué es real
 
@@ -42,21 +62,28 @@ marco a la escena. `DemoPlanetas` (en `Demo.tsx`) muestra los tres para revisarl
 
 ## Qué es estilizado (no son datos)
 
-- El color del suelo terrestre: regla por latitud más regiones aproximadas de desiertos, selvas
-  y montañas, y ruido. **No es una imagen satelital**. La plataforma continental se aproxima con
-  la distancia a la costa; el borde del hielo marino es una extensión típica, no de una fecha.
-- Las nubes: ruido con las franjas típicas de nubosidad (ZCIT, latitudes medias). No son las
-  nubes de ningún día. No hay luces de ciudades (no se usan datos de población).
-- Marte: el color, la forma y el tamaño de los rasgos de albedo (la IAU solo da su centro), el
+- Con las imágenes reales: el mar oscurecido (el mosaico pinta la batimetría), el tono de las
+  luces de las ciudades, la exageración del relieve de la Luna (×3) y de Marte (×5) y la deriva
+  de las nubes, que son de una composición de satélites y no del día de la misión.
+- En el globo procedural de respaldo, el color del suelo terrestre: regla por latitud más
+  regiones aproximadas de desiertos, selvas y montañas, y ruido. **No es una imagen satelital**.
+  La plataforma continental se aproxima con la distancia a la costa; el borde del hielo marino es
+  una extensión típica, no de una fecha. Sus nubes son ruido con las franjas típicas de
+  nubosidad (ZCIT, latitudes medias) y no tiene luces de ciudades.
+- Marte procedural: el color, la forma y el tamaño de los rasgos de albedo (la IAU solo da su centro), el
   relieve fino y los cráteres pequeños. El casquete sur está corrido unos 3° del polo hacia el
   hemisferio occidental (ESA); la longitud exacta de ese corrimiento es una aproximación nuestra.
-- Luna: los bordes de los mares, los cráteres pequeños y los rayos de Tycho.
+- Luna procedural: los bordes de los mares, los cráteres pequeños y los rayos de Tycho.
 - Exageraciones para que se vean en pantalla: el halo azul de la Tierra (escala de altura
   ~22 km en vez de ~8 km) y la altura de las nubes (~25 km); de lejos, el halo nunca es más
   fino que un píxel. La escala de altura de Marte (~11 km) es la real.
 
 ## Fuentes y licencias
 
+- Imágenes de NASA y USGS (dominio público), detalle en `public/texturas/CREDITOS.md`:
+  Blue Marble y Black Marble de NASA Earth Observatory / NASA Goddard; CGI Moon Kit de la SVS de
+  NASA (https://svs.gsfc.nasa.gov/4720) con datos de LROC (NASA/GSFC/Arizona State University) y
+  LOLA; Viking MDIM2.1 y MOLA de NASA/JPL/USGS.
 - Natural Earth (dominio público): https://www.naturalearthdata.com/about/terms-of-use/ ·
   world-atlas (ISC): https://github.com/topojson/world-atlas
 - astronomy-engine (MIT): https://github.com/cosinekitty/astronomy · IAU WGCCRE 2015:
@@ -73,6 +100,7 @@ marco a la escena. `DemoPlanetas` (en `Demo.tsx`) muestra los tres para revisarl
 
 - La Tierra se dibuja como esfera: la latitud del globo es geocéntrica (difiere de la
   geográfica hasta 0.19°). No se modela el achatamiento ni el movimiento del polo.
-- Resolución: 2048×1024 (≈20 km por píxel en el ecuador). Muy cerca del suelo se suma ruido
-  procedural para que no se vea borroso, pero no agrega detalle real.
+- Resolución: la Tierra real 4096×2048 (≈10 km por píxel en el ecuador), la Luna 2048×1024 y
+  su relieve 1440×720; el procedural 2048×1024. Muy cerca del suelo se suma ruido procedural
+  para que no se vea borroso, pero no agrega detalle real.
 - Marte no tiene casquetes estacionales ni tormentas de polvo; solo los casquetes residuales.

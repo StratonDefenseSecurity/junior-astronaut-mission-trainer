@@ -1,7 +1,8 @@
 // Telemetría de vuelo: ascenso, crucero Tierra–Marte y descenso.
 // Son perfiles aproximados con órdenes de magnitud reales, no una integración orbital.
 import { C, distanciaTierraAlLlegar } from '../../shared/ciencia.js'
-import { DESCENSO_S, TRANSITO_INICIO_S, type RoomState } from '../../shared/types.js'
+import { EDL, estadoEDL } from '../../shared/edl.js'
+import { TRANSITO_INICIO_S, type RoomState } from '../../shared/types.js'
 
 const mezcla = (a: number, b: number, x: number) => a + (b - a) * Math.min(1, Math.max(0, x))
 
@@ -57,39 +58,20 @@ export function telemetriaCrucero(room: RoomState) {
   v.retardo = Math.round((v.distTierra * 1e6) / C.VELOCIDAD_LUZ_KM_S)
 }
 
-/** Entrada, descenso y aterrizaje: los "siete minutos de terror". */
+/**
+ * Entrada, descenso y aterrizaje: los "siete minutos de terror", con la trayectoria reconstruida
+ * de Perseverance (shared/edl.ts). El descenso empieza en la entrada atmosférica.
+ */
 export function telemetriaDescenso(room: RoomState) {
   const v = room.vuelo
   const td = Math.max(0, room.t - room.tFase)
-  if (td < 255) {
-    const x = td / 255
-    v.etapa = td > 60 && td < 130 ? 'Escudo térmico al máximo' : 'Entrada atmosférica'
-    v.altitud = mezcla(125, 11, Math.pow(x, 0.8))
-    v.velocidad = mezcla(5.8, 0.45, Math.pow(x, 1.6))
-    // La frenada más fuerte llega hacia el minuto y medio.
-    v.g = 0.4 + 4.3 * Math.exp(-Math.pow((td - 95) / 45, 2))
-  } else if (td < 360) {
-    const x = (td - 255) / 105
-    v.etapa = 'Paracaídas supersónico'
-    v.altitud = mezcla(11, 1.6, x)
-    v.velocidad = mezcla(0.45, 0.08, Math.pow(x, 0.6))
-    v.g = 1.1
-  } else if (td < DESCENSO_S) {
-    const x = (td - 360) / (DESCENSO_S - 360)
-    v.etapa = 'Descenso propulsado'
-    v.altitud = mezcla(1.6, 0, x)
-    v.velocidad = mezcla(0.08, 0, x)
-    v.g = 0.7
-    room.rec.propelente = Math.max(0, Math.round(room.rec.propelente - 0.6))
-  } else {
-    v.etapa = 'Contacto'
-    v.altitud = 0
-    v.velocidad = 0
-    v.g = C.GRAVEDAD_MARTE / C.GRAVEDAD_TIERRA
-  }
-  v.altitud = Math.round(v.altitud * 100) / 100
-  v.velocidad = Math.round(v.velocidad * 100) / 100
-  v.g = Math.round(v.g * 100) / 100
+  const e = estadoEDL(td)
+  v.etapa = e.etapa
+  v.altitud = Math.round(e.altitud * 100) / 100
+  // Con cuatro decimales en km/s se ve la velocidad final de la grúa celeste, menos de 3 km/h.
+  v.velocidad = Math.round(e.velocidad * 10000) / 10000
+  v.g = Math.round(e.g * 100) / 100
+  if (td >= EDL.cubierta && td < EDL.contacto) room.rec.propelente = Math.max(0, Math.round(room.rec.propelente - 0.6))
 }
 
 /** Aceleración que siente la tripulación ahora, en g. */

@@ -3,7 +3,7 @@
 // Sirve para comprobar la lógica y el equilibrio del juego.
 import { C, REMS_RESUMEN } from '../shared/ciencia.js'
 import { CLIMA_MARTE } from '../server/datos/climaMarte.js'
-import { TAREAS_ENSAMBLAJE, formatoMET, masaTotal, type Role, type RoomState } from '../shared/types.js'
+import { formatoMET, masaTotal, type Role, type RoomState } from '../shared/types.js'
 import { tripulacion } from '../server/base.js'
 import {
   accion,
@@ -18,7 +18,6 @@ import {
   elegirTrayectoria,
   fijarEscala,
   fijarPaso,
-  hacerTarea,
   iniciarMision,
   lanzar,
   marcarListo,
@@ -27,6 +26,7 @@ import {
   votar,
 } from '../server/game.js'
 import { responderBot } from '../server/bot.js'
+import { pasoProcedimiento, procedimientosPendientes, valorExperto } from '../server/procedimientos.js'
 import { escenarioDe } from '../shared/escenarios.js'
 
 const N = Math.min(6, Math.max(2, Number(process.argv[2] ?? 6)))
@@ -185,7 +185,6 @@ function base() {
       }
     }
   }
-  if (room.cargamento.huerto && !room.huerto.establecido) accion(room, cie.id, 'huerto', {})
   if (room.energia.polvo > 0.08 && room.ambiente.hora > 9 && room.ambiente.hora < 16) {
     const p = de('piloto')
     if (cambiarZona(room, p.id, 'exterior') === null) {
@@ -195,12 +194,20 @@ function base() {
   }
 }
 
-function ensamblar() {
-  for (const t of TAREAS_ENSAMBLAJE.filter((x) => x.paso === room.ensamblaje.paso && !room.ensamblaje.hechas[x.id])) {
-    const quien = room.jugadores.find((j) => j.rol && t.roles.includes(j.rol)) ?? cmd
-    if (t.zona === 'exterior') sinError(cambiarZona(room, quien.id, 'exterior'), `salir (${t.id})`)
-    sinError(hacerTarea(room, quien.id, t.id), `tarea ${t.id}`)
-    if (t.zona === 'exterior') cambiarZona(room, quien.id, 'nave')
+/** Hace, paso a paso y como un experto, los procedimientos pendientes: el montaje y el huerto. */
+const calidades: number[] = []
+function procedimientos(soloMontaje: boolean) {
+  for (let guarda = 0; guarda < 30; guarda++) {
+    const p = procedimientosPendientes(room).find((x) => !soloMontaje || !['huerto', 'regar', 'ralear', 'moho', 'amarillas', 'cosechar'].includes(x.procId))
+    if (!p) return
+    const quien = room.jugadores.find((j) => j.rol && p.roles.includes(j.rol)) ?? cmd
+    // Quien está fuera de servicio o en el refugio espera a poder hacerlo.
+    if (quien.incapacitado > 0 || quien.enRefugio) return
+    if (p.zona === 'exterior') sinError(cambiarZona(room, quien.id, 'exterior'), `salir (${p.procId})`)
+    sinError(pasoProcedimiento(room, quien.id, p.procId, p.paso, valorExperto(room, p.procId, p.paso)), `procedimiento ${p.procId} paso ${p.paso}`)
+    const e = room.procedimientos?.[p.procId]
+    if (e) calidades.push(e.calidad[p.paso] ?? 1)
+    if (p.zona === 'exterior') cambiarZona(room, quien.id, 'nave')
   }
 }
 
@@ -219,7 +226,8 @@ while (!room.resultado && segundos < 6 * 3600) {
     sinError(proponerUbicacion(room, de('piloto').id, escenarioDe(room.escenario).sitio ?? 'gale'), 'ubicación')
     for (const p of room.propuestas.filter((x) => x.estado === 'pendiente')) votar(room, cmd.id, p.id, true)
   }
-  if (room.fase === 'ensamblaje' && segundos % 5 === 0) ensamblar()
+  if (room.fase === 'ensamblaje' && segundos % 5 === 0) procedimientos(true)
+  if (buena && segundos % 3 === 0) procedimientos(false)
   if (segundos % 3 === 0) {
     mantenimiento()
     base()
@@ -239,7 +247,10 @@ exigir(room.resultado, 'la misión debe terminar')
 console.log(`\n${room.resultado!.titulo}: ${room.resultado!.motivo}`)
 console.log(`Tiempo real de juego a máxima escala: ${Math.round(segundos / 60)} min. Emergencias:`, JSON.stringify(cuenta))
 console.log(`Equipos: ${room.sistemas.filter((s) => s.instalado).map((s) => `${s.id} ${Math.round(s.integridad)}`).join(', ')}`)
-console.log(`Huerto: ${room.huerto.establecido ? `sí, ${room.huerto.cosechas} cosechas` : 'no'} · muestras ${room.mision.muestrasAnalizadas}/${room.mision.muestrasObjetivo} · límite de dosis ${C.LIMITE_CARRERA_MSV} mSv`)
+exigir(calidades.every((q) => q === 1), `los valores de experto dan calidad 1: ${calidades.filter((q) => q !== 1).join(', ')}`)
+const plantas = room.huerto.almohadillas ?? []
+console.log(`Procedimientos: ${calidades.length} pasos hechos como un experto · efectos ${JSON.stringify(room.efectos ?? {})}`)
+console.log(`Huerto: ${room.huerto.establecido ? `sí, ${room.huerto.cultivo}, ${room.huerto.cosechas} cosechas, ${room.huerto.comidaFresca ?? 0} kg frescos, ${plantas.filter((a) => !a.muerta).length}/${plantas.length} plantas vivas` : 'no'} · muestras ${room.mision.muestrasAnalizadas}/${room.mision.muestrasObjetivo} · límite de dosis ${C.LIMITE_CARRERA_MSV} mSv`)
 console.log('Últimos registros:')
 for (const l of room.registro.slice(-12)) console.log(`   ${l.tipo === 'alerta' ? '!' : ' '} ${l.texto}`)
 console.log('\nAsistente:', responderBot(room, cmd, '¿cómo vamos?').slice(0, 200))

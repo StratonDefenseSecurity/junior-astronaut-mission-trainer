@@ -17,8 +17,8 @@ Una tripulación de 2 a 6 estudiantes crea su cuenta y entra a una sala. La misi
 3. **Lanzamiento.** Cuenta regresiva y ascenso con telemetría: altitud, velocidad, aceleración, combustible y energía usada. El pulso de cada tripulante sube con las g.
 4. **Viaje a Marte.** Se camina por el interior de la nave. Dura 150, 210 o 259 días de misión según la trayectoria. En pantalla y en la bitácora quedan registrados los días y horas que llevan en el espacio, el combustible y la energía usada. El comandante controla la escala de tiempo.
 5. **Llegada.** Desde la órbita se elige el sitio de aterrizaje y se vive el descenso.
-6. **Llegar a la base.** Al aterrizar se presenta la página principal, con la misión de ensamblaje: elegir ubicación, desplegar hábitat y equipos, activar soporte vital y energía, comprobar instalaciones. Cada tarea la hace el rol responsable yendo al lugar, dentro o fuera.
-7. **Administrar recursos.** La página principal reúne las opciones del esquema, cada una con su sub-interfaz: controlar agua, oxígeno, alimentos y energía; decidir cómo distribuir recursos limitados; administrar producción y reciclaje; mantener los equipos; proteger a la tripulación de la radiación; y el huerto artificial. El comandante aprueba o rechaza las decisiones de los demás.
+6. **Llegar a la base.** Al aterrizar se presenta la página principal, con la misión de ensamblaje: elegir ubicación, desplegar hábitat y equipos, activar soporte vital y energía, comprobar instalaciones. Cada tarea la hace el rol responsable yendo al lugar, dentro o fuera, y paso a paso como en la vida real: mantener pulsado mientras se desenrolla un panel, apretar los anclajes en cruz, ajustar la inclinación según la latitud, energizar de la fuente hacia las cargas, leer la caída de presión de la esclusa antes de darla por estanca. Cómo se haga tiene consecuencias: un panel mal orientado rinde menos y una fuga que se deja pasar sigue perdiendo aire.
+7. **Administrar recursos.** La página principal reúne las opciones del esquema, cada una con su sub-interfaz: controlar agua, oxígeno, alimentos y energía; decidir cómo distribuir recursos limitados; administrar producción y reciclaje; mantener los equipos; proteger a la tripulación de la radiación; y el huerto artificial, que sigue al Veggie de la ISS: se elige el cultivo, se despliega la cámara, se encienden las luces, se colocan las almohadillas y se riegan con jeringa. Después hay que regar cuando se secan, ralear, revisar las hojas por si hay moho o se caen, y cosechar. El comandante aprueba o rechaza las decisiones de los demás.
 8. **Emergencias.** Alerta, identificación del problema y alternativas con consecuencias distintas. Las de varios roles pasan por el comandante o se votan.
 
 Durante el viaje no hay gravedad: los personajes flotan, se impulsan con inercia y hay objetos sueltos que flotan por el módulo. Cada espacio tiene su animación: correr en la cinta o pedalear en el gimnasio, dormir en el saco sujeto a la pared (en Marte, en la litera), teclear en las consolas y encogerse en el refugio. Por el ventanal se ve el cielo real de la fecha desde la posición real de la nave: la Tierra alejándose con la Luna, Marte creciendo, los planetas y las estrellas. De noche en Marte se ve la Tierra como un lucero.
@@ -71,6 +71,7 @@ Abre `http://localhost:5173`. El cliente (Vite) corre en el 5173 y el servidor e
 | `npm run typecheck` | Revisa tipos del cliente, del servidor y del Worker |
 | `npm run simular` | Juega una misión completa sin navegador. Acepta tripulantes, alternativa, política, trayectoria y perfil: `npx tsx scripts/simular.ts 4 minimo buena rapida corta` |
 | `npm run e2e` | Prueba de punta a punta por la API contra un servidor en marcha. Añade la URL y `--corto` para la versión de 90 segundos |
+| `node scripts/texturas-reales.mjs` | Descarga las imágenes de NASA de la Tierra y la Luna y genera las texturas de `public/texturas/`. Con `--marte` también Marte, que baja unos 330 MB |
 | `npm run cf:dev` | Compila el sitio y lo sirve con el emulador de Cloudflare en `http://127.0.0.1:8787`, con Durable Objects y WebSocket como en producción |
 | `npm run desplegar` | Compila el sitio y lo publica en Cloudflare |
 
@@ -88,6 +89,7 @@ Todo corre en Cloudflare, en el plan gratuito, sin un servidor siempre encendido
 shared/types.ts       tipos, roles, suministros, sitios, tareas, escalas
 shared/ciencia.ts     constantes reales, fuentes y supuestos
 shared/plan.ts        alternativas de suministros y cuentas del asistente sobre la carga
+shared/procedimientos.ts  procedimientos por pasos del montaje y del huerto, con su explicación real
 server/cloudflare.ts  Worker y Durable Objects: reparto de peticiones, WebSocket, almacenamiento
 server/api.ts         operaciones del juego: cuentas, salas, posiciones, guardado
 shared/escenarios.ts  situaciones de misión, fechas reales y ciudades de origen
@@ -95,7 +97,8 @@ shared/astronomia.ts  estación de Marte (Ls) a partir de la fecha
 server/game.ts        reglas: roles, suministros, propuestas, acciones, emergencias
 server/emergencies.ts catálogo de emergencias
 server/bot.ts         asistente por reglas
-server/sim/           simulación: paso, fisiología, ambiente, vuelo
+server/procedimientos.ts  valida cada paso y aplica sus consecuencias
+server/sim/           simulación: paso, fisiología, ambiente, vuelo, huerto
 server/datos/         datos de NASA generados
 server/almacen*.ts    dónde se guardan los documentos: Durable Object, archivos locales o Vercel Blob
 server/index.ts       servidor local de desarrollo (Express)

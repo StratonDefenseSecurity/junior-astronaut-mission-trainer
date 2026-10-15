@@ -33,7 +33,6 @@ import {
   fijarActividad,
   fijarEscala,
   fijarPaso,
-  hacerTarea,
   iniciarMision,
   irAyudar,
   jugador,
@@ -48,7 +47,9 @@ import {
   votar,
 } from './game.js'
 import { log } from './base.js'
+import { pasoProcedimiento } from './procedimientos.js'
 import { fijarAhora, fijarMovidos } from './reloj.js'
+import { agregarBots, posicionesBots, type Andar } from './tripulantes.js'
 
 export interface Respuesta {
   status: number
@@ -156,6 +157,8 @@ interface Presencia {
   /** Posición de cada personaje: [x, z, giro, animación]. */
   pos: Map<string, number[]>
   movido: Map<string, number>
+  /** Dónde se dibuja cada tripulante bot (ver `posicionesBots`). */
+  bots: Map<string, Andar>
 }
 const salas = new Map<string, Entrada>()
 const presencias = new Map<string, Presencia>()
@@ -168,21 +171,21 @@ const SIN_SALA = { sinSala: true }
 
 function presenciaDe(codigo: string): Presencia {
   let p = presencias.get(codigo)
-  if (!p) presencias.set(codigo, (p = { desde: Date.now(), ultimo: new Map(), pos: new Map(), movido: new Map() }))
+  if (!p) presencias.set(codigo, (p = { desde: Date.now(), ultimo: new Map(), pos: new Map(), movido: new Map(), bots: new Map() }))
   return p
 }
 
-/** Posiciones de los demás personajes vistos hace poco. */
-function posiciones(codigo: string, yo: string, t: number): string {
+/** Posiciones de los demás personajes vistos hace poco, y de los bots, que caminan solos. */
+function posiciones(codigo: string, room: RoomState, yo: string, t: number): string {
   const p = presenciaDe(codigo)
-  const salida: Record<string, number[]> = {}
+  const salida: Record<string, number[]> = room.jugadores.some((j) => j.bot) ? posicionesBots(room, p.bots, t) : {}
   for (const [id, pos] of p.pos) if (id !== yo && t - (p.ultimo.get(id) ?? 0) < 6000) salida[id] = pos
   return JSON.stringify(salida)
 }
 
 const respuestaSala = (e: Entrada, texto: string, codigo: string, yo: string, t: number): Respuesta => ({
   status: 200,
-  json: `{"sala":${texto},"h":"${huella(texto)}","ahora":${t - e.room.desfase},"pos":${posiciones(codigo, yo, t)}}`,
+  json: `{"sala":${texto},"h":"${huella(texto)}","ahora":${t - e.room.desfase},"pos":${posiciones(codigo, e.room, yo, t)}}`,
 })
 
 /** Ejecuta las operaciones de una misma sala de una en una dentro de esta instancia. */
@@ -234,7 +237,8 @@ function actualizarPresencia(codigo: string, room: RoomState, usuarioId: string,
     if (!previa || Math.abs(previa[0] - nueva[0]) + Math.abs(previa[1] - nueva[1]) > 0.05) p.movido.set(usuarioId, t)
     p.pos.set(usuarioId, nueva)
   }
-  for (const j of room.jugadores) j.conectado = t - (p.ultimo.get(j.id) ?? p.desde) < DESCONECTADO_MS
+  // Los bots no consultan: siempre están conectados.
+  for (const j of room.jugadores) j.conectado = Boolean(j.bot) || t - (p.ultimo.get(j.id) ?? p.desde) < DESCONECTADO_MS
   const despiertos = new Set<string>()
   for (const [id, cuando] of p.movido) if (t - cuando < MOVIMIENTO_MS) despiertos.add(id)
   fijarMovidos(despiertos)
@@ -244,9 +248,10 @@ function actualizarPresencia(codigo: string, room: RoomState, usuarioId: string,
 function podarLobby(codigo: string, room: RoomState, t: number) {
   const p = presenciaDe(codigo)
   const antes = room.jugadores.length
-  room.jugadores = room.jugadores.filter((j) => t - (p.ultimo.get(j.id) ?? p.desde) < FANTASMA_LOBBY_MS)
-  if (room.jugadores.length !== antes && !room.jugadores.some((j) => j.id === room.hostId) && room.jugadores[0]) {
-    room.hostId = room.jugadores[0].id
+  room.jugadores = room.jugadores.filter((j) => j.bot || t - (p.ultimo.get(j.id) ?? p.desde) < FANTASMA_LOBBY_MS)
+  const persona = room.jugadores.find((j) => !j.bot)
+  if (room.jugadores.length !== antes && !room.jugadores.some((j) => j.id === room.hostId) && persona) {
+    room.hostId = persona.id
   }
 }
 
@@ -317,7 +322,7 @@ function consultar(codigo: string, usuario: Usuario, versionCliente: number, hue
     }
     const texto = JSON.stringify(room)
     if (huella(texto) === huellaCliente) {
-      return { status: 200, json: `{"igual":true,"ahora":${t - room.desfase},"pos":${posiciones(codigo, usuario.id, t)}}` }
+      return { status: 200, json: `{"igual":true,"ahora":${t - room.desfase},"pos":${posiciones(codigo, room, usuario.id, t)}}` }
     }
     return respuestaSala(e, texto, codigo, usuario.id, t)
   })
@@ -331,14 +336,17 @@ export const codigoAleatorio = () => Array.from(crypto.randomBytes(6), (b) => LE
  * Crea una sala. `codigoFijo` lo pasa quien ya eligió el código porque de él depende dónde se
  * guarda la sala (en Cloudflare, en qué Durable Object); si está en uso responde `codigoEnUso`.
  */
-async function crear(usuario: Usuario, modo: DecisionMode, codigoFijo?: string): Promise<Respuesta> {
+async function crear(usuario: Usuario, modo: DecisionMode, juego: 'solo' | 'multi', codigoFijo?: string): Promise<Respuesta> {
   for (let intento = 0; intento < (codigoFijo ? 1 : 6); intento++) {
     const codigo = codigoFijo ?? codigoAleatorio()
     const t = Date.now()
     fijarAhora(t)
     const room = crearSala(codigo, usuario.id, modo)
+    room.modoJuego = juego
     room.jugadores.push(nuevoJugador(usuario.id, usuario.nombre))
-    log(room, `${usuario.nombre} creó la sala.`)
+    // Un jugador: el resto de la tripulación la ponen los bots desde el principio.
+    if (juego === 'solo') agregarBots(room)
+    log(room, juego === 'solo' ? `${usuario.nombre} creó la sala con una tripulación de bots.` : `${usuario.nombre} creó la sala.`)
     room.version = 1
     const texto = JSON.stringify(room)
     const r = await almacen().escribir(rutaSala(codigo), documento(t, texto), null)
@@ -365,6 +373,7 @@ function unirse(codigo: string, usuario: Usuario): Promise<Respuesta> {
         j.nombre = usuario.nombre
         return null
       }
+      if (room.modoJuego === 'solo') return 'Esa sala es de un solo jugador con bots.'
       if (room.fase !== 'lobby' && room.fase !== 'contexto') return 'Esa misión ya despegó y no formas parte de ella.'
       if (room.jugadores.length >= MAX_JUGADORES) return `La sala está llena (${MAX_JUGADORES} tripulantes).`
       room.jugadores.push(nuevoJugador(usuario.id, usuario.nombre))
@@ -387,7 +396,7 @@ function salir(codigo: string, usuario: Usuario): Promise<Respuesta> {
     // Tras el despegue conserva su puesto y puede volver con el código; antes, deja la sala.
     if (room.fase !== 'lobby' && room.fase !== 'contexto') return ok(SIN_SALA)
     room.jugadores = room.jugadores.filter((j) => j.id !== usuario.id)
-    if (room.jugadores.length === 0) {
+    if (!room.jugadores.some((j) => !j.bot)) {
       salas.delete(codigo)
       presencias.delete(codigo)
       await almacen().borrar(rutaSala(codigo))
@@ -433,7 +442,7 @@ async function despachar(c: Record<string, unknown>, autorizacion: string | unde
   const usuario = verificar(autorizacion)
   if (!usuario) return fallo(401, 'Sesión inválida. Vuelve a ingresar.', { sinSesion: true })
   if (op === 'yo') return ok({ usuario })
-  if (op === 'crear') return crear(usuario, c.modo === 'votacion' ? 'votacion' : 'comandante', opciones.codigoNuevo)
+  if (op === 'crear') return crear(usuario, c.modo === 'votacion' ? 'votacion' : 'comandante', c.juego === 'solo' ? 'solo' : 'multi', opciones.codigoNuevo)
 
   const codigo = texto(c.codigo, 10).toUpperCase()
   if (!/^[A-Z0-9]{6}$/.test(codigo)) return fallo(400, 'El código de sala tiene 6 letras o números.')
@@ -487,8 +496,8 @@ async function despachar(c: Record<string, unknown>, autorizacion: string | unde
     // Misión
     case 'ubicacion':
       return m((room) => proponerUbicacion(room, yo, texto(c.sitioId, 20)))
-    case 'tarea':
-      return m((room) => hacerTarea(room, yo, texto(c.tarea, 20)))
+    case 'procedimiento':
+      return m((room) => pasoProcedimiento(room, yo, texto(c.proc, 20), Number(c.paso), c.valor))
     case 'zona':
       return m((room) => cambiarZona(room, yo, texto(c.zona, 10) as Zona))
     case 'actividad':

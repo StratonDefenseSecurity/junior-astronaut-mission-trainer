@@ -20,6 +20,7 @@ import { DOLENCIAS, UMBRAL_AVERIA, despacharCola, lanzarEmergencia } from '../em
 import { azar, movidos } from '../reloj.js'
 import { actualizarAmbiente, enSuperficie, eventosSolaresPendientes, fraccionSolar, registroDelSol, sorteoTormentaPolvo, tasaDeDosis } from './ambiente.js'
 import { pasoTripulante } from './fisiologia.js'
+import { pasoHuerto } from './huerto.js'
 import { gActual, telemetriaAscenso, telemetriaCrucero, telemetriaDescenso } from './vuelo.js'
 
 const FACTOR_RACION = { normal: 1, ahorro: 0.8, estricto: 0.6 } as const
@@ -32,6 +33,8 @@ const ORDEN_CORTE: Record<RoomState['ajustes']['prioridad'], SistemaId[]> = {
   ciencia: ['isru', 'esclusa', 'wrs', 'termico', 'huerto', 'oga', 'cdra'],
 }
 const CARGA_BASE_KW = 1.2
+/** kg de O2 al día a los que se ajustó el generador (al montar la base), sin pasar de su máximo. */
+const ogaMaximo = (room: RoomState) => Math.min(C.OGA_KG_DIA, room.efectos?.ogaKgDia ?? C.OGA_KG_DIA)
 const KG_AIRE_CABINA = 180
 
 const enMicrogravedad = (room: RoomState) => room.fase === 'transito' || (room.fase === 'llegada' && room.subfase !== 'descenso')
@@ -163,7 +166,8 @@ function energiaYCalor(room: RoomState, dt: number, crew: Player[], superficie: 
     generacion = (9 + 5 / (room.vuelo.distSol * room.vuelo.distSol)) * salida
   } else {
     const conectada = Boolean(hechas.energia)
-    const solar = hechas.paneles && conectada ? room.cargamento.paneles * C.PANEL_KW * fraccionSolar(room) * (1 - e.polvo) : 0
+    // La orientación y la inclinación con que se montaron los paneles cuentan toda la misión.
+    const solar = hechas.paneles && conectada ? room.cargamento.paneles * C.PANEL_KW * fraccionSolar(room) * (1 - e.polvo) * (room.efectos?.solar ?? 1) : 0
     const reactor = hechas.carga && conectada ? room.cargamento.reactor * C.REACTOR_KW : 0
     generacion = (solar + reactor) * salida
   }
@@ -173,7 +177,7 @@ function energiaYCalor(room: RoomState, dt: number, crew: Player[], superficie: 
     return s.instalado && s.activo && s.integridad > UMBRAL_AVERIA
   }
   const kw: Partial<Record<SistemaId, number>> = {}
-  if (funcional('oga') && room.rec.agua > 1) kw.oga = Math.min(C.OGA_KG_DIA, dentro * 0.9) * C.OGA_KW_POR_KG_DIA
+  if (funcional('oga') && room.rec.agua > 1) kw.oga = Math.min(ogaMaximo(room), dentro * 0.9) * C.OGA_KW_POR_KG_DIA
   if (funcional('cdra')) kw.cdra = C.CDRA_KW * C.CDRA_UNIDADES * 0.6
   if (funcional('wrs')) kw.wrs = room.rec.aguaResidual > 0.5 ? C.WRS_KW : 0.1
   if (funcional('esclusa')) {
@@ -189,7 +193,8 @@ function energiaYCalor(room: RoomState, dt: number, crew: Player[], superficie: 
     kw.termico = superficie ? Math.max(0, (C.PERDIDA_TERMICA_W_K * (C.TEMP_CABINA_C - a.tempExt)) / 1000 - pasivo) : 0.4
   }
 
-  let consumo = CARGA_BASE_KW + Object.values(kw).reduce((x, y) => x + (y ?? 0), 0)
+  // Con la tensión del bus por debajo de lo debido, los equipos piden más corriente y se pierde más en calor.
+  let consumo = (CARGA_BASE_KW + Object.values(kw).reduce((x, y) => x + (y ?? 0), 0)) * (superficie ? (room.efectos?.perdidaBus ?? 1) : 1)
   const cortes: SistemaId[] = []
   if (e.bateria <= 0.001 && generacion < consumo) {
     for (const id of ORDEN_CORTE[room.ajustes.prioridad]) {
@@ -251,7 +256,8 @@ function soporteVital(room: RoomState, dt: number, crew: Player[], superficie: b
       comidaDisponible: r.comida / quedan,
       racionComida: racion,
       ejercicio: room.ajustes.ejercicio,
-      dosisTasa: tasaDeDosis(room, j.zona, j.enRefugio),
+      // El reactor, si quedó cerca del hábitat, suma su radiación a la del ambiente.
+      dosisTasa: tasaDeDosis(room, j.zona, j.enRefugio) + (superficie ? (room.efectos?.reactorDosis ?? 0) : 0),
       alerta,
     })
     o2 += cons.o2
@@ -294,27 +300,14 @@ function soporteVital(room: RoomState, dt: number, crew: Player[], superficie: b
     c.ppCO2 *= 1 - perdida
   }
 
-  // Huerto: algo de oxígeno, algo menos de CO2 y comida fresca cada 28 días
-  const h = room.huerto
-  if (h.establecido && sis(room, 'huerto').operativo && r.agua > 2) {
-    c.ppO2 += (0.7 * dt) / 86400 / C.KG_O2_POR_KPA
-    c.ppCO2 = Math.max(0.02, c.ppCO2 - (0.96 * dt) / 86400 / C.KG_CO2_POR_KPA)
-    r.agua -= (1 * dt) / 86400
-    h.diasCultivo += dt / 86400
-    if (h.diasCultivo >= 28) {
-      h.diasCultivo = 0
-      h.cosechas += 1
-      r.comida += 6
-      for (const j of crew) j.vit.fatiga = limitar(j.vit.fatiga - 8, 0, 100)
-      log(room, 'Cosecha del huerto: verduras frescas para toda la tripulación.', 'ok')
-    }
-  }
+  // Huerto: cada almohadilla se seca, crece o enferma según cómo se cuide (server/sim/huerto.ts).
+  pasoHuerto(room, dt)
 
   // Reponer oxígeno: primero el generador, luego los tanques
   let falta = (C.PPO2_NOMINAL_KPA - c.ppO2) * C.KG_O2_POR_KPA
   const oga = sis(room, 'oga')
   if (falta > 0 && oga.operativo && r.agua > 1) {
-    const prod = Math.min(falta, (C.OGA_KG_DIA * rendimiento(oga.integridad) * dt) / 86400, (r.agua - 1) / C.OGA_AGUA_POR_O2)
+    const prod = Math.min(falta, (ogaMaximo(room) * rendimiento(oga.integridad) * dt) / 86400, (r.agua - 1) / C.OGA_AGUA_POR_O2)
     c.ppO2 += prod / C.KG_O2_POR_KPA
     r.agua -= prod * C.OGA_AGUA_POR_O2
     falta -= prod
@@ -565,7 +558,7 @@ function calcularAutonomia(room: RoomState, crew: Player[]) {
   const consumoO2 = n * gastoMedio * C.O2_KG_POR_J * 86400
   const usoAgua = n * (C.AGUA_BEBIDA_KG_DIA + C.AGUA_HIGIENE_KG_DIA * (room.ajustes.racionAgua === 'ahorro' ? 0.4 : 1))
   const recupera = wrs.operativo ? 0.95 * (0.9 + (C.WRS_EFICIENCIA - 0.9) * rendimiento(wrs.integridad)) : 0
-  let perdidaAgua = usoAgua * (1 - recupera) + (oga ? consumoO2 * C.OGA_AGUA_POR_O2 : 0) + (room.huerto.establecido ? 1 : 0)
+  let perdidaAgua = usoAgua * (1 - recupera) + (oga ? consumoO2 * C.OGA_AGUA_POR_O2 : 0) + (room.huerto.establecido ? 0.15 : 0)
   if (enSuperficie(room) && isru.operativo) perdidaAgua -= 45 * rendimiento(isru.integridad)
   const aguaUtil = r.agua + (wrs.operativo ? r.aguaResidual * 0.9 : 0)
   const agua = perdidaAgua > 0.05 ? Math.min(999, aguaUtil / perdidaAgua) : 999
@@ -581,7 +574,8 @@ function puntosCriticos(room: RoomState, crew: Player[]): string[] {
   const e = room.energia
   const necesarios = diasRestantes(room)
   if (c.ppO2 < 19.5) p.push(`Oxígeno en cabina bajo: ${c.ppO2.toFixed(1)} kPa`)
-  if (c.ppCO2 > C.PPCO2_LIMITE_KPA) p.push(`CO2 alto: ${(c.ppCO2 * 7.5).toFixed(1)} mmHg (límite 3)`)
+  // La alarma salta donde se ajustó al montar el soporte vital.
+  if (c.ppCO2 > (room.efectos?.alarmaCO2 ?? C.PPCO2_LIMITE_KPA)) p.push(`CO2 alto: ${(c.ppCO2 * 7.5).toFixed(1)} mmHg (límite 3)`)
   if (c.temp < 15 || c.temp > 28) p.push(`Cabina a ${c.temp.toFixed(0)} °C`)
   if (c.fuga > 0) p.push('Fuga de presión')
   if (e.cortes.length) p.push(`Sin energía: ${e.cortes.map((id) => nombreSistema(id)).join(', ')}`)

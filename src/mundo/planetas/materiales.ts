@@ -62,6 +62,11 @@ const FRAG_SUPERFICIE = /* glsl */ `
 uniform sampler2D uMapa;
 uniform sampler2D uRelieve;
 uniform sampler2D uNubes;
+uniform sampler2D uLuces;
+uniform sampler2D uAgua;
+uniform float uConAgua;
+uniform float uBrilloLuces;
+uniform float uDeriva;
 uniform vec3 uSol;
 uniform float uAmbiente;
 uniform float uFuerzaRelieve;
@@ -97,11 +102,16 @@ void main() {
     vec3 Np = Ng;
   #endif
 
+  #ifdef TIERRA
+    // Agua: máscara de Natural Earth con las imágenes reales; alfa del mapa en el procedural.
+    float agua = mix(texel.a, texture2D(uAgua, vUv).r, uConAgua);
+  #endif
+
   // Detalle fino procedural solo de cerca (desaparece al alejarse para no parpadear).
   if (uDetalle > 0.001) {
     float d = detalleFino(n);
     #ifdef TIERRA
-      albedo *= 1.0 + d * 0.22 * uDetalle * (1.0 - texel.a);
+      albedo *= 1.0 + d * 0.22 * uDetalle * (1.0 - agua);
     #else
       albedo *= 1.0 + d * 0.16 * uDetalle;
     #endif
@@ -124,22 +134,27 @@ void main() {
   vec3 color = albedo * (luz + uAmbiente);
 
   #ifdef TIERRA
-    float agua = texel.a;
     // Sombras de las nubes: se busca la nube que está entre el punto y el Sol.
     float cz = max(nlg, 0.08);
     float cosLat = sqrt(max(1.0 - n.y * n.y, 0.0025));
     vec2 desplaza = vec2(dot(L, este) / (6.2831853 * cosLat), dot(L, norte) / 3.1415927) * uAlturaNubes / cz;
-    float sombra = texture2D(uNubes, vUv + desplaza).r;
+    float sombra = texture2D(uNubes, vUv + vec2(uDeriva, 0.0) + desplaza).r;
+    float nubeEncima = texture2D(uNubes, vUv + vec2(uDeriva, 0.0)).r;
     color *= 1.0 - 0.5 * sombra * smoothstep(0.0, 0.15, nlg);
     // Reflejo del Sol en el océano (más intenso cerca del borde, como el agua real).
     vec3 H = normalize(L + V);
     float nh = max(dot(Ng, H), 0.0);
     float fresnel = 0.02 + 0.98 * pow(1.0 - max(dot(H, V), 0.0), 5.0);
-    float brillo = (pow(nh, 160.0) * 2.2 + pow(nh, 18.0) * 0.08) * (0.4 + fresnel);
+    float brillo = (pow(nh, 160.0) * 1.3 + pow(nh, 18.0) * 0.07) * (0.4 + fresnel);
     color += vec3(1.0, 0.94, 0.82) * brillo * agua * smoothstep(0.0, 0.1, nlg) * (1.0 - 0.8 * sombra);
     // Franja anaranjada del crepúsculo junto al terminador.
     float crep = smoothstep(-0.12, 0.0, nlg) * (1.0 - smoothstep(0.0, 0.18, nlg));
     color += albedo * vec3(0.9, 0.45, 0.2) * crep * 0.25;
+    // Luces de las ciudades (Black Marble): solo en el lado de noche, se encienden pasado el
+    // terminador y las tapan las nubes. Tono de lámpara de sodio.
+    float ciudad = texture2D(uLuces, vUv).r;
+    float noche = 1.0 - smoothstep(-0.12, 0.03, nlg);
+    color += vec3(1.0, 0.68, 0.36) * (ciudad * ciudad) * uBrilloLuces * noche * (1.0 - 0.8 * nubeEncima);
   #endif
 
   // Bruma atmosférica: azulada en la Tierra, polvo anaranjado en Marte; más fuerte hacia el borde.
@@ -165,9 +180,17 @@ export interface UniformsSuperficie {
   uAtm: THREE.IUniform<THREE.Color>
   uAtmFuerza: THREE.IUniform<number>
   uAlturaNubes: THREE.IUniform<number>
+  uLuces: THREE.IUniform<THREE.Texture>
+  uAgua: THREE.IUniform<THREE.Texture>
+  uConAgua: THREE.IUniform<number>
+  uBrilloLuces: THREE.IUniform<number>
+  uDeriva: THREE.IUniform<number>
 }
 
-export function materialSuperficie(tipo: TipoSuperficie, inicial: { mapa: THREE.Texture; relieve: THREE.Texture; nubes: THREE.Texture; atm: string; atmFuerza: number }) {
+export function materialSuperficie(
+  tipo: TipoSuperficie,
+  inicial: { mapa: THREE.Texture; relieve: THREE.Texture; nubes: THREE.Texture; luces: THREE.Texture; agua: THREE.Texture; atm: string; atmFuerza: number },
+) {
   const uniforms: UniformsSuperficie = {
     uMapa: { value: inicial.mapa },
     uRelieve: { value: inicial.relieve },
@@ -179,6 +202,11 @@ export function materialSuperficie(tipo: TipoSuperficie, inicial: { mapa: THREE.
     uAtm: { value: new THREE.Color(inicial.atm) },
     uAtmFuerza: { value: inicial.atmFuerza },
     uAlturaNubes: { value: 0.006 },
+    uLuces: { value: inicial.luces },
+    uAgua: { value: inicial.agua },
+    uConAgua: { value: 0 },
+    uBrilloLuces: { value: 2.6 },
+    uDeriva: { value: 0 },
   }
   const defines: Record<string, string> = {}
   if (tipo === 'tierra') defines.TIERRA = ''
@@ -195,6 +223,7 @@ uniform sampler2D uNubes;
 uniform vec3 uSol;
 uniform float uAmbiente;
 uniform float uDetalle;
+uniform float uDeriva;
 varying vec2 vUv;
 varying vec3 vLocal;
 varying vec3 vPosMundo;
@@ -207,7 +236,7 @@ void main() {
   vec3 Ng = normalize(vNormal);
   vec3 L = normalize(uSol);
   vec3 V = normalize(cameraPosition - vPosMundo);
-  float a = texture2D(uNubes, vUv).r;
+  float a = texture2D(uNubes, vUv + vec2(uDeriva, 0.0)).r;
   if (uDetalle > 0.001) {
     // De cerca, los bordes de las nubes se deshilachan en vez de verse borrosos.
     float d = detalleFino(normalize(vLocal) * 0.7);
@@ -233,6 +262,7 @@ export function materialNubes(nubes: THREE.Texture) {
       uSol: { value: new THREE.Vector3(1, 0, 0) },
       uAmbiente: { value: 0.01 },
       uDetalle: { value: 0 },
+      uDeriva: { value: 0 },
     },
     vertexShader: VERT_SUPERFICIE,
     fragmentShader: FRAG_NUBES,

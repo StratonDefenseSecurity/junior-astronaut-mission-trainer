@@ -5,6 +5,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { CIUDAD_BY_ID } from '@shared/escenarios'
 import { ROLE_BY_ID, type Player, type RoomState } from '@shared/types'
+import { MarcaIA } from '../hud/comun'
 import { ajenos, api } from '../red'
 import { useStore } from '../store'
 import { sonido } from '../sonido'
@@ -35,6 +36,7 @@ function Etiqueta({ j, propio }: { j: Player; propio: boolean }) {
       {j.ayuda && <b>! </b>}
       {j.nombre}
       {rol && <span style={{ color: rol.color }}> {rol.corto}</span>}
+      <MarcaIA bot={j.bot} />
       {estado && <i> · {estado}</i>}
       <Habla id={j.id} />
     </div>
@@ -355,7 +357,8 @@ function OidoVoz({ sala, yo }: { sala: RoomState; yo: Player }) {
   useFrame(({ camera }) => {
     otros.clear()
     for (const j of salaRef.current.jugadores) {
-      if (j.id === yo.id) continue
+      // Los bots no hablan por la voz.
+      if (j.id === yo.id || j.bot) continue
       const a = ajenos.get(j.id)
       otros.set(j.id, { x: a?.x ?? 0, z: a?.z ?? 0, fuera: j.zona === 'exterior' || j.zona !== yo.zona })
     }

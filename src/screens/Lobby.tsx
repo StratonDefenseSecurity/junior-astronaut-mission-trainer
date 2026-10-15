@@ -3,8 +3,9 @@
 import { useRef } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import { CIUDADES, ESCENARIOS, ESCENARIO_BY_ID, fechaLarga, type EscenarioId } from '@shared/escenarios'
+import { CIUDADES, CIUDAD_BY_ID, ESCENARIOS, ESCENARIO_BY_ID, fechaLarga, type CiudadId, type EscenarioId } from '@shared/escenarios'
 import { PEINADOS, TRAJE_COLORES, TRAJE_PELOS, TRAJE_PIELES, TRAJE_VISORES, type Traje } from '@shared/types'
+import { MarcaIA } from '../hud/comun'
 import { Astronauta } from '../mundo/Astronauta'
 import { api } from '../red'
 import { useStore, useYo } from '../store'
@@ -65,11 +66,13 @@ export function LobbyScreen() {
   const usuario = useStore((s) => s.usuario)
   const yo = useYo()
   const soyHost = sala.hostId === usuario?.id
+  const solo = sala.modoJuego === 'solo'
   const presentes = sala.jugadores.filter((j) => j.conectado)
-  const puedeIniciar = soyHost && presentes.length >= 2
+  const puedeIniciar = soyHost && (solo || presentes.length >= 2)
   const anfitrion = sala.jugadores.find((j) => j.id === sala.hostId)?.nombre ?? 'Quien creó la sala'
-  const aviso =
-    presentes.length < 2
+  const aviso = solo
+    ? 'Tu tripulación con IA ya está aquí. Tú eliges tu rol primero y ellos cubren los demás.'
+    : presentes.length < 2
       ? 'Se necesitan al menos 2 tripulantes. Comparte el código de la sala.'
       : soyHost
         ? 'Ya pueden empezar. Lo primero que verán es la situación que tienen que afrontar.'
@@ -82,7 +85,9 @@ export function LobbyScreen() {
           <div className="grow">
             <div className="brand">Sala de tripulación</div>
             <h1 className="mono" style={{ letterSpacing: '0.2em' }}>{sala.codigo}</h1>
-            <p className="muted">Comparte este código. Decisiones en disputa: {sala.modoDecision === 'comandante' ? 'las aprueba el comandante' : 'se votan por mayoría'}.</p>
+            <p className="muted">
+              {solo ? 'Un jugador con bots.' : 'Comparte este código.'} Decisiones en disputa: {sala.modoDecision === 'comandante' ? 'las aprueba el comandante' : 'se votan por mayoría'}.
+            </p>
           </div>
           <button onClick={() => api.salir()}>Salir</button>
         </div>
@@ -95,8 +100,14 @@ export function LobbyScreen() {
                 <div key={j.id} className={`crew-card ${j.id === usuario?.id ? 'me' : ''} ${j.conectado ? '' : 'offline'}`}>
                   <div className="row" style={{ gap: 6 }}>
                     <span className="punto" style={{ background: j.traje.color, borderColor: j.traje.acento }} />
-                    <strong className="grow">{j.nombre}{j.id === usuario?.id ? ' (tú)' : ''}</strong>
-                    <span className="mini muted">{j.id === sala.hostId ? 'anfitrión' : j.conectado ? 'en la sala' : 'ausente'}</span>
+                    <strong className="grow">
+                      {j.nombre}
+                      {j.id === usuario?.id ? ' (tú)' : ''}
+                      <MarcaIA bot={j.bot} />
+                    </strong>
+                    <span className="mini muted">
+                      {j.bot ? (j.hogar ? CIUDAD_BY_ID[j.hogar as CiudadId]?.nombre : 'tripulante') : j.id === sala.hostId ? 'anfitrión' : j.conectado ? 'en la sala' : 'ausente'}
+                    </span>
                   </div>
                 </div>
               ))}

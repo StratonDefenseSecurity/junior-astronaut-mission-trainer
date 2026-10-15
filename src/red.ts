@@ -218,7 +218,7 @@ export function iniciarSondeo() {
 }
 
 export const api = {
-  crearSala: (modo: 'comandante' | 'votacion') => llamar('crear', { modo, codigo: undefined }),
+  crearSala: (modo: 'comandante' | 'votacion', juego: 'solo' | 'multi') => llamar('crear', { modo, juego, codigo: undefined }),
   unirse: (codigo: string) => llamar('unirse', { codigo }),
   salir: () => llamar('salir'),
   // Sala y contextualización
@@ -262,7 +262,8 @@ export const api = {
   escala: (valor: number) => llamar('escala', { valor }),
   pausa: (pausa: boolean) => llamar('pausa', { pausa }),
   proponerUbicacion: (sitioId: string) => llamar('ubicacion', { sitioId }),
-  tarea: (tarea: string) => llamar('tarea', { tarea }),
+  /** Un paso de un procedimiento (ver shared/procedimientos.ts). Los errores los muestra quien llama. */
+  procedimiento: (proc: string, paso: number, valor: unknown) => llamar('procedimiento', { proc, paso, valor }, true),
   zona: (zona: 'nave' | 'exterior') => llamar('zona', { zona }),
   actividad: (actividad: 'ejercicio' | 'sueno' | null) => llamar('actividad', { actividad }),
   refugio: (entrar: boolean) => llamar('refugio', { entrar }),

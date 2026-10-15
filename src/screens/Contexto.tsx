@@ -23,7 +23,7 @@ import {
   type RoomState,
   type SupplyId,
 } from '@shared/types'
-import { Barra, RolTag, nivel } from '../hud/comun'
+import { Barra, MarcaIA, RolTag, nivel } from '../hud/comun'
 import { puede } from '../mundo/mapa'
 import { api } from '../red'
 import { useStore } from '../store'
@@ -159,13 +159,19 @@ function Roles({ sala, yo, alSeguir }: P & { alSeguir: () => void }) {
           {ROLES.map((r) => {
             const dueno = sala.jugadores.find((j) => j.rol === r.id)
             const esMio = dueno?.id === yo.id
-            const tomado = Boolean(dueno) && !esMio
+            // En el modo de un jugador, el bot cede su rol si la persona lo pide.
+            const tomado = Boolean(dueno) && !esMio && !dueno?.bot
             return (
               <button key={r.id} className={`role-card ${tomado ? 'taken' : ''} ${esMio ? 'mine' : ''}`} disabled={tomado} onClick={() => api.elegirRol(esMio ? null : r.id)}>
                 <div className="row">
                   <span className="tag" style={{ color: r.color }}>{r.corto}</span>
                   <strong className="grow">{r.nombre}</strong>
-                  {dueno && <span className="muted">{esMio ? 'tú' : dueno.nombre}</span>}
+                  {dueno && (
+                    <span className="muted">
+                      {esMio ? 'tú' : dueno.nombre}
+                      <MarcaIA bot={dueno.bot} />
+                    </span>
+                  )}
                 </div>
                 <span className="muted">{r.descripcion}</span>
                 <span className="mini">Le toca: {tareasDeRol(r.id).map((t) => t.charAt(0).toLowerCase() + t.slice(1)).join('; ')}.</span>
@@ -473,6 +479,7 @@ export function ContextoScreen() {
           {sala.jugadores.map((j) => (
             <span key={j.id} className={`tag ${j.listo ? 'ok' : ''} ${j.conectado ? '' : 'apagado'}`}>
               <RolTag rol={j.rol} /> {j.nombre}
+              <MarcaIA bot={j.bot} />
               {j.id === yo.id ? ' (tú)' : ''} · {j.listo ? 'listo ✓' : j.conectado ? HACIENDO[j.paso ?? 0] : 'ausente'}
             </span>
           ))}

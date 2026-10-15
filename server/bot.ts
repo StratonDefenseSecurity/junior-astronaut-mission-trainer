@@ -1,12 +1,23 @@
 // Asistente de misión por reglas: recibe la consulta, mira el estado real de la sala,
 // evalúa los datos y explica los riesgos. No usa servicios externos.
 import { C } from '../shared/ciencia.js'
+import { cultivoDe } from '../shared/procedimientos.js'
 import { PERFIL_BY_ID, ROLE_BY_ID, SITE_BY_ID, nombreSistema, formatoHora, formatoMET, type Player, type RoomState } from '../shared/types.js'
 import { rendimiento, sis, tripulacion } from './base.js'
 import { UMBRAL_AVERIA } from './emergencies.js'
 import { enSuperficie, tasaDeDosis } from './sim/ambiente.js'
 import { FC_MAXIMA } from './sim/fisiologia.js'
 import { diasRestantes } from './sim/paso.js'
+
+/** Cómo va el huerto, almohadilla por almohadilla, y cuándo se cosecha. */
+function estadoHuerto(room: RoomState): string {
+  const vivas = (room.huerto.almohadillas ?? []).filter((a) => !a.muerta)
+  if (!vivas.length) return 'establecido, pero no queda ninguna planta viva'
+  const c = cultivoDe(room)
+  const falta = Math.max(0, Math.round((1 - Math.max(...vivas.map((a) => a.crecimiento))) * c.dias))
+  const seca = Math.round(Math.min(...vivas.map((a) => a.humedad)))
+  return `${vivas.length} plantas de ${c.nombre.charAt(0).toLowerCase() + c.nombre.slice(1)}, cosecha en unos ${falta} días si se cuidan. La almohadilla más seca está al ${seca}% de humedad. Cosechas: ${room.huerto.cosechas}`
+}
 
 const norm = (s: string) =>
   s
@@ -123,7 +134,7 @@ export function responderBot(room: RoomState, autor: Player, pregunta: string): 
   }
   if (/comida|aliment|racion|hambre|huerto|cosecha/.test(t)) {
     const h = room.huerto
-    return `Alimentos: ${Math.round(r.comida)} kg. Ración ${room.ajustes.racionComida}: ${n1(n * C.COMIDA_KG_DIA * { normal: 1, ahorro: 0.8, estricto: 0.6 }[room.ajustes.racionComida])} kg al día. Alcanza para ${dias(room.autonomia.comida)}; faltan ${Math.round(diasRestantes(room))}. Tus reservas están al ${Math.round(v.reservas)}%. Huerto: ${h.establecido ? `establecido, próxima cosecha en ${Math.round(28 - h.diasCultivo)} días` : room.cargamento.huerto ? `${h.progreso}% montado` : 'no trajeron el kit'}.`
+    return `Alimentos: ${Math.round(r.comida)} kg. Ración ${room.ajustes.racionComida}: ${n1(n * C.COMIDA_KG_DIA * { normal: 1, ahorro: 0.8, estricto: 0.6 }[room.ajustes.racionComida])} kg al día. Alcanza para ${dias(room.autonomia.comida)}; faltan ${Math.round(diasRestantes(room))}. Tus reservas están al ${Math.round(v.reservas)}%. Huerto: ${h.establecido ? estadoHuerto(room) : room.cargamento.huerto ? `${h.progreso}% montado` : 'no trajeron el kit'}.`
   }
   if (/energia|bateria|panel|solar|reactor|electric|luz/.test(t)) {
     const pct = e.capacidad ? Math.round((e.bateria / e.capacidad) * 100) : 0

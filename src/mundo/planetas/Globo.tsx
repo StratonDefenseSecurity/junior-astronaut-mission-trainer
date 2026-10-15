@@ -46,12 +46,21 @@ export interface PropsGlobo {
   brilloNoche?: number
 }
 
+/** Vueltas por segundo (de reloj) que se corren las nubes sobre el suelo: una cada ~3 horas. */
+const DERIVA_NUBES = 1 / 10800
+
 /** Configuración interna de cada cuerpo. */
 export interface ConfigGlobo {
   cuerpo: CuerpoGlobo
   mapa: THREE.Texture
   relieve: THREE.Texture
   nubes: THREE.Texture | null
+  /** Luces de las ciudades en R (solo la Tierra con imágenes reales). */
+  luces?: THREE.Texture
+  /** Agua en R; si falta, el agua es el alfa de `mapa` (globo procedural). */
+  agua?: THREE.Texture
+  /** Inclinación de la normal por unidad de pendiente guardada en `relieve` (por defecto la del procedural). */
+  fuerzaRelieve?: number
   /** Bruma sobre el disco (color y fuerza). */
   bruma: { color: string; fuerza: number }
   /** Halo del limbo; H es la escala de altura como fracción del radio. */
@@ -88,7 +97,16 @@ export function Globo({ config, props, children }: { config: ConfigGlobo; props:
   const reloj = useMemo(() => new RelojCuerpo(config.cuerpo), [config.cuerpo])
 
   const superficie = useMemo(
-    () => materialSuperficie(config.cuerpo, { mapa: config.mapa, relieve: config.relieve, nubes: config.nubes ?? PROVISIONAL.sinNubes, atm: config.bruma.color, atmFuerza: config.bruma.fuerza }),
+    () =>
+      materialSuperficie(config.cuerpo, {
+        mapa: config.mapa,
+        relieve: config.relieve,
+        nubes: config.nubes ?? PROVISIONAL.sinNubes,
+        luces: config.luces ?? PROVISIONAL.negro,
+        agua: config.agua ?? PROVISIONAL.negro,
+        atm: config.bruma.color,
+        atmFuerza: config.bruma.fuerza,
+      }),
     // Las texturas se cambian abajo sin recrear el material.
     [config.cuerpo],
   )
@@ -103,14 +121,19 @@ export function Globo({ config, props, children }: { config: ConfigGlobo; props:
   useEffect(() => () => halo?.dispose(), [halo])
   useEffect(() => () => puntos.dispose(), [puntos])
 
-  // Texturas: llegan cuando el worker termina (antes hay unas provisionales de 1×1).
+  // Texturas: llegan las imágenes reales o, si no, las del worker (antes hay unas de 1×1).
+  const fuerzaInicial = useMemo(() => (superficie.uniforms as UniformsSuperficie).uFuerzaRelieve.value, [superficie])
   useEffect(() => {
     const u = superficie.uniforms as UniformsSuperficie
     u.uMapa.value = config.mapa
     u.uRelieve.value = config.relieve
     u.uNubes.value = config.nubes ?? PROVISIONAL.sinNubes
+    u.uLuces.value = config.luces ?? PROVISIONAL.negro
+    u.uAgua.value = config.agua ?? PROVISIONAL.negro
+    u.uConAgua.value = config.agua ? 1 : 0
+    u.uFuerzaRelieve.value = config.fuerzaRelieve ?? fuerzaInicial
     if (nubes && config.nubes) nubes.uniforms.uNubes.value = config.nubes
-  }, [superficie, nubes, config.mapa, config.relieve, config.nubes])
+  }, [superficie, nubes, fuerzaInicial, config.mapa, config.relieve, config.nubes, config.luces, config.agua, config.fuerzaRelieve])
 
   // Geometría de los marcadores: un solo objeto de puntos para todos.
   const geoPuntos = useMemo(() => {
@@ -131,7 +154,7 @@ export function Globo({ config, props, children }: { config: ConfigGlobo; props:
 
   const segmentos = detalle === 'alto' ? 160 : 64
 
-  useFrame(({ camera, size, gl }) => {
+  useFrame(({ camera, size, gl, clock }) => {
     const r = raiz.current
     const o = orientado.current
     if (!r || !o) return
@@ -149,9 +172,13 @@ export function Globo({ config, props, children }: { config: ConfigGlobo; props:
     const us = superficie.uniforms as UniformsSuperficie
     us.uSol.value.copy(tmpSol)
     us.uAmbiente.value = brilloNoche
+    // Las nubes se corren despacio sobre el suelo (y sus sombras con ellas).
+    const deriva = (clock.elapsedTime * DERIVA_NUBES) % 1
+    us.uDeriva.value = deriva
     if (nubes) {
       nubes.uniforms.uSol.value.copy(tmpSol)
       nubes.uniforms.uAmbiente.value = brilloNoche
+      nubes.uniforms.uDeriva.value = deriva
     }
 
     // 3) Tamaño en pantalla: detalle fino de cerca y grosor mínimo del halo de lejos.

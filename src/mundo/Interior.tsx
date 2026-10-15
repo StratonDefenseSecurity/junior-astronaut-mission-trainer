@@ -10,7 +10,7 @@ import { useMemo, useRef, type ReactNode } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Html, RoundedBox } from '@react-three/drei'
 import * as THREE from 'three'
-import type { RoomState } from '@shared/types'
+import type { Almohadilla, CultivoId, RoomState } from '@shared/types'
 import { ESTACION_BY_ID, INTERIOR, PUNTOS } from './mapa'
 import { Ventana } from './Ventana'
 
@@ -167,13 +167,95 @@ function Puesto({ id, cerca, destacadas, color, children }: PuestoProps) {
 
 const tono = (malo: boolean, regular: boolean) => (malo ? '#ef5350' : regular ? '#f5b942' : '#3ddc97')
 
+/** Color de las hojas de cada cultivo. */
+const HOJA: Record<CultivoId, string> = { lechuga: '#9b2d4a', mizuna: '#4f9a3a', rabano: '#4f9a3a', chile: '#3e7f34' }
+const SANA = new THREE.Color()
+const AMARILLA = new THREE.Color('#c9b24a')
+const SECA = new THREE.Color('#6b4a2a')
+
+/** Una planta en su almohadilla: crece, amarillea si le falta agua y se cubre de moho si le sobra. */
+function Planta({ a, cultivo, x, y }: { a: Almohadilla | null; cultivo: CultivoId; x: number; y: number }) {
+  const color = useMemo(() => {
+    if (!a) return SECA
+    if (a.muerta) return SECA
+    const c = SANA.clone().set(HOJA[cultivo]).lerp(AMARILLA, Math.min(1, Math.max(0, (75 - a.salud) / 50)))
+    return a.moho > 0.1 ? c.lerp(new THREE.Color('#e5e7eb'), Math.min(0.7, a.moho)) : c
+  }, [a, cultivo])
+  const g = a ? (a.muerta ? 0.15 : 0.12 + 0.88 * a.crecimiento) : 0
+  const brotes = a && !a.muerta ? Math.min(3, a.plantulas) : 1
+  return (
+    <group position={[x, y, 0.27]}>
+      {/* almohadilla de tela con arcilla */}
+      <mesh position={[0, 0.03, 0]}>
+        <boxGeometry args={[0.24, 0.06, 0.2]} />
+        <meshStandardMaterial color={a && a.humedad > 60 ? '#b89a76' : '#d9c3a0'} roughness={1} />
+      </mesh>
+      {a &&
+        Array.from({ length: brotes }, (_, k) => {
+          const dx = brotes > 1 ? (k - (brotes - 1) / 2) * 0.06 : 0
+          const escala = brotes > 1 ? 0.6 : 1
+          return (
+            <group key={k} position={[dx, 0.06, 0]} scale={escala}>
+              <mesh position={[0, 0.12 * g, 0]} rotation={[0, 0, a.salud < 50 ? 0.5 : 0]}>
+                <coneGeometry args={[0.03 + 0.07 * g, 0.24 * g + 0.02, 6]} />
+                <meshStandardMaterial color={color} roughness={0.8} />
+              </mesh>
+              <mesh position={[0, 0.24 * g + 0.02, 0]} scale={[1, 0.6, 1]}>
+                <sphereGeometry args={[0.025 + 0.06 * g, 8, 6]} />
+                <meshStandardMaterial color={color} roughness={0.8} />
+              </mesh>
+              {/* el rábano engorda en la raíz; el chile da frutos al final */}
+              {cultivo === 'rabano' && !a.muerta && a.crecimiento > 0.4 && (
+                <mesh position={[0, 0.01, 0]}>
+                  <sphereGeometry args={[0.02 + 0.04 * a.crecimiento, 8, 6]} />
+                  <meshStandardMaterial color="#d6336c" roughness={0.6} />
+                </mesh>
+              )}
+              {cultivo === 'chile' && !a.muerta && a.crecimiento > 0.75 &&
+                [-1, 1].map((l) => (
+                  <mesh key={l} position={[l * 0.06 * g, 0.16 * g, 0.04]} rotation={[0, 0, l * 0.4]}>
+                    <coneGeometry args={[0.014, 0.07, 6]} />
+                    <meshStandardMaterial color={a.crecimiento >= 1 ? '#d62828' : '#5a9e2f'} roughness={0.5} />
+                  </mesh>
+                ))}
+            </group>
+          )
+        })}
+    </group>
+  )
+}
+
+/** La cámara de cultivo por dentro: las seis almohadillas y la luz de los LED. */
+function Cultivo({ sala }: { sala: RoomState }) {
+  const h = sala.huerto
+  const encendida = sala.sistemas.some((s) => s.id === 'huerto' && s.operativo) && h.progreso >= 60
+  // Rojo, azul y verde dan rosa; solo rojo y azul, violeta; las de cabina, blanco tenue.
+  const luz = h.luz === undefined || h.luz >= 1 ? '#ff6ad5' : h.luz >= 0.9 ? '#b43cff' : '#fff4e2'
+  const colocadas = h.establecido || h.progreso >= 80
+  const posiciones = [-0.36, 0, 0.36].flatMap((x) => [0.6, 1.2].map((y) => [x, y] as const))
+  return (
+    <>
+      <pointLight position={[0, 1.6, 0.4]} color={luz} intensity={encendida ? (h.luz !== undefined && h.luz < 0.9 ? 1.2 : 2.5) : 0} distance={2.5} decay={2} />
+      {/* fuelle transparente: aparece al desplegar la cámara */}
+      {h.progreso >= 40 && (
+        <mesh position={[0, 1.15, 0.3]} material={MAT.cristal}>
+          <boxGeometry args={[1.1, 1.35, 0.24]} />
+        </mesh>
+      )}
+      {colocadas &&
+        posiciones.map(([x, y], i) => (
+          <Planta key={i} a={h.establecido ? (h.almohadillas?.[i] ?? null) : null} cultivo={h.cultivo ?? 'lechuga'} x={x} y={y} />
+        ))}
+    </>
+  )
+}
+
 function Estaciones({ sala, cerca, destacadas, micro }: { sala: RoomState; cerca: string | null; destacadas: string[]; micro: boolean }) {
   const c = sala.cabina
   const e = sala.energia
   const bateria = e.capacidad ? e.bateria / e.capacidad : 0
   const sis = (id: string) => sala.sistemas.find((s) => s.id === id)!
   const comun = { cerca, destacadas }
-  const plantas = Math.round((sala.huerto.progreso / 100) * 12)
   return (
     <>
       <Puesto id="soporte" color="#4fc3f7" {...comun}>
@@ -244,17 +326,7 @@ function Estaciones({ sala, cerca, destacadas, micro }: { sala: RoomState; cerca
             <boxGeometry args={[1.05, 0.04, 0.3]} />
             <meshBasicMaterial color="#ff7ad9" />
           </mesh>
-          <pointLight position={[0, 1.6, 0.4]} color="#ff6ad5" intensity={sala.huerto.progreso > 0 ? 2.5 : 0} distance={2.5} decay={2} />
-          {Array.from({ length: plantas }, (_, i) => (
-            <group key={i} position={[-0.42 + (i % 6) * 0.17, 0.62 + Math.floor(i / 6) * 0.62, 0.05]}>
-              <mesh material={i % 2 ? MAT.planta : MAT.plantaClara} position={[0, 0.1, 0]}>
-                <coneGeometry args={[0.07, sala.huerto.establecido ? 0.26 : 0.16, 6]} />
-              </mesh>
-              <mesh material={MAT.plantaClara} position={[0, 0.17, 0]} scale={[1, 0.6, 1]}>
-                <sphereGeometry args={[0.06, 8, 6]} />
-              </mesh>
-            </group>
-          ))}
+          <Cultivo sala={sala} />
         </group>
       </Puesto>
 

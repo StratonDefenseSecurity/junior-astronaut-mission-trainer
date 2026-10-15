@@ -390,6 +390,10 @@ export interface Player {
   hogar: string | null
   /** Muestras que carga sin analizar. */
   muestras: number
+  /** Tripulante controlado por el servidor (modo de un jugador). */
+  bot?: boolean
+  /** Estación donde está trabajando ahora (los bots caminan hasta ella). */
+  estacion?: string | null
 }
 
 export interface Recursos {
@@ -564,6 +568,12 @@ export interface RoomState {
   escenarioElegido: string
   /** Nombre que la tripulación le pone a su misión. */
   nombreMision: string
+  /** 'solo': un jugador con tripulantes bot; 'multi': todos son personas. */
+  modoJuego?: 'solo' | 'multi'
+  /** Memoria de los tripulantes bot, por id (ver server/tripulantes.ts). */
+  bots?: Record<string, MemoriaBot>
+  /** Avance de cada procedimiento por pasos (ver shared/procedimientos.ts), por id. */
+  procedimientos?: Record<string, EstadoProcedimiento>
   /** Sucesos preparados para esta misión: los de la situación más alguno al azar. */
   guion: { viaje?: number; sol?: number; tipo: string; datos?: Record<string, unknown>; hecho: boolean }[]
 
@@ -595,8 +605,10 @@ export interface RoomState {
   blindaje: number
   /** Segundo de misión hasta el que la tripulación debe quedarse en el refugio. */
   refugioHasta: number
-  huerto: { progreso: number; establecido: boolean; diasCultivo: number; cosechas: number }
+  huerto: Huerto
   ensamblaje: { paso: number; hechas: Record<string, string> }
+  /** Consecuencias de cómo se montó la base (ver server/procedimientos.ts). Vacío = como un experto. */
+  efectos?: EfectosMontaje
   /** Sitios de muestreo ya visitados. */
   muestreos: string[]
   /** Días que alcanzan las reservas al ritmo actual (999 = de sobra). */
@@ -615,6 +627,97 @@ export interface RoomState {
   chat: ChatMsg[]
   puntosCriticos: string[]
   resultado: { victoria: boolean; titulo: string; motivo: string } | null
+}
+
+/** Avance de un procedimiento: en qué paso va, qué tan bien se hizo cada paso y quién lo hizo. */
+export interface EstadoProcedimiento {
+  /** Índice del siguiente paso por hacer. */
+  paso: number
+  /** 0 a 1 por paso hecho: 1 = como lo haría un experto. */
+  calidad: number[]
+  /** Id de quien hizo cada paso. */
+  por: string[]
+  /** Segundo de misión en que empezó. */
+  inicio: number
+  terminado: boolean
+  /** Valor que se dio en cada paso (ángulo, opción elegida, mL de agua...). */
+  valores?: (number | string | null)[]
+  /** Datos que prepara el servidor para un paso, como la lectura de un instrumento. */
+  datos?: Record<string, number>
+}
+
+/** Lo que dejó el montaje de la base y que la simulación aplica cada paso. */
+export interface EfectosMontaje {
+  /** Fracción de la luz que aprovechan los paneles según su orientación e inclinación. */
+  solar?: number
+  /** mSv por día de más que recibe la tripulación por dónde quedó el reactor. */
+  reactorDosis?: number
+  /** Multiplica el consumo eléctrico: una tensión baja obliga a más corriente y más pérdidas. */
+  perdidaBus?: number
+  /** kg de oxígeno por día a los que se ajustó el generador. */
+  ogaKgDia?: number
+  /** kPa de CO2 a los que salta la alarma. */
+  alarmaCO2?: number
+}
+
+export type CultivoId = 'lechuga' | 'mizuna' | 'rabano' | 'chile'
+
+/** Una almohadilla de cultivo, como las del Veggie de la ISS. */
+export interface Almohadilla {
+  /** 0 a 100: agua en el sustrato de arcilla. */
+  humedad: number
+  /** 0 a 100. */
+  salud: number
+  /** 0 a 1 hasta la cosecha. */
+  crecimiento: number
+  /** 0 a 1: hongos en hojas y sustrato. */
+  moho: number
+  /** Plántulas que brotaron; se ralea a una. */
+  plantulas: number
+  raleada: boolean
+  muerta: boolean
+}
+
+export interface Huerto {
+  progreso: number
+  establecido: boolean
+  diasCultivo: number
+  cosechas: number
+  cultivo?: CultivoId
+  /** 0 a 1: qué tan buena es la luz elegida para el cultivo. */
+  luz?: number
+  /** Ventilador alto: seca hojas y sustrato más rápido. */
+  ventilador?: 'normal' | 'alto'
+  almohadillas?: Almohadilla[]
+  /** Segundo de misión de la última revisión de hojas, para no repetirla enseguida. */
+  revisado?: number
+  /** kg de verdura fresca comida en la misión. */
+  comidaFresca?: number
+}
+
+/** Un tramo del trabajo de un bot: ir a una estación, quedarse unos segundos y hacer algo allí. */
+export interface EtapaBot {
+  estacion: string
+  zona: Zona
+  /** Segundos reales de trabajo en la estación, sin contar el camino. */
+  segundos: number
+  /** Lo que hace al terminar (ver `ejecutar` en server/tripulantes.ts). */
+  hacer: Record<string, unknown> | null
+}
+
+/** Lo que recuerda cada tripulante bot entre un segundo y el siguiente. */
+export interface MemoriaBot {
+  /** Reloj (ms) hasta el que se lo piensa antes de volver a actuar. */
+  libre: number
+  /** Reloj (ms) de su último mensaje en el chat. */
+  habla: number
+  /** Dónde terminó su último trabajo, para calcular lo que tarda en llegar al siguiente. */
+  x: number
+  z: number
+  /** Trabajo en curso: sus etapas y cuándo termina la actual. */
+  trabajo: { que: string; etapas: EtapaBot[]; hasta: number } | null
+  /** Cosas ya dichas o hechas y cuándo, para no repetirlas. */
+  marcas: Record<string, number>
 }
 
 // ---------- Escalas de tiempo ----------

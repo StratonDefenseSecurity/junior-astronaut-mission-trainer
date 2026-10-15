@@ -1,7 +1,8 @@
 // Une el estado de la misión con el motor de sonido: el ambiente de cada escena, la alarma de
 // las emergencias, los tonos de radio de las transmisiones, la esclusa y el ejercicio.
 import { useEffect, useRef } from 'react'
-import { DESCENSO_S, type Player, type RoomState } from '@shared/types'
+import { calorEDL, EDL } from '@shared/edl'
+import type { Player, RoomState } from '@shared/types'
 import { sonido } from '../sonido'
 import { enMicrogravedad } from './Interior'
 
@@ -31,9 +32,10 @@ export function useSonidoJuego(sala: RoomState, yo: Player) {
         }
       : tipo === 'descenso'
         ? {
-            calor: Math.exp(-Math.pow((td - 95) / 55, 2)),
-            paracaidas: td >= 255 && td < 360 ? 1 : 0,
-            retro: td >= 360 && td < DESCENSO_S ? 0.9 : 0,
+            // Momentos reales del descenso de Perseverance (shared/edl.ts).
+            calor: calorEDL(td),
+            paracaidas: td >= EDL.paracaidas && td < EDL.cubierta ? 1 : 0,
+            retro: td >= EDL.cubierta && td < EDL.contacto ? 0.9 : 0,
             marte: 1,
           }
         : tipo === 'eva'

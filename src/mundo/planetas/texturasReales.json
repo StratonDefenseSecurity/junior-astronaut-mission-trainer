@@ -1,0 +1,50 @@
+{
+  "tierra": {
+    "dia": {
+      "archivo": "texturas/tierra-dia.jpg",
+      "ancho": 4096,
+      "alto": 2048
+    },
+    "agua": {
+      "archivo": "texturas/tierra-agua.png",
+      "ancho": 2048,
+      "alto": 1024
+    },
+    "noche": {
+      "archivo": "texturas/tierra-noche.jpg",
+      "ancho": 3600,
+      "alto": 1800
+    },
+    "nubes": {
+      "archivo": "texturas/tierra-nubes.jpg",
+      "ancho": 2048,
+      "alto": 1024
+    }
+  },
+  "luna": {
+    "color": {
+      "archivo": "texturas/luna-color.jpg",
+      "ancho": 2048,
+      "alto": 1024
+    },
+    "relieve": {
+      "archivo": "texturas/luna-relieve.jpg",
+      "ancho": 1440,
+      "alto": 720,
+      "k": 300
+    }
+  },
+  "marte": {
+    "color": {
+      "archivo": "texturas/marte-color.jpg",
+      "ancho": 2048,
+      "alto": 1024
+    },
+    "relieve": {
+      "archivo": "texturas/marte-relieve.jpg",
+      "ancho": 1440,
+      "alto": 720,
+      "k": 300
+    }
+  }
+}

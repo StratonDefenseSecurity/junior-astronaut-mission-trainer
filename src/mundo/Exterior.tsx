@@ -130,35 +130,51 @@ function Habitat({ sala }: { sala: RoomState }) {
   )
 }
 
+/** Hacia dónde gira cada fila de paneles según la orientación elegida (el norte es −z). */
+const GIRO_AZIMUT: Record<string, number> = { norte: 0, sur: Math.PI, este: -Math.PI / 2, oeste: Math.PI / 2 }
+
 function CampoSolar({ sala }: { sala: RoomState }) {
   const e = ESTACION_BY_ID.campoSolar
   const desplegado = Boolean(sala.ensamblaje.hechas.paneles)
   const n = sala.cargamento.paneles
   const celda = mezclar('#1c3b6e', '#a0623f', sala.energia.polvo * 2.2)
-  if (!desplegado) {
-    // Paquetes plegados esperando a que alguien los despliegue.
+  // Mientras se monta se ven los pasos: marcos anclados, alas desenrolladas y por fin inclinadas.
+  const proc = sala.procedimientos?.paneles
+  const hechos = desplegado ? 4 : (proc?.paso ?? 0)
+  if (hechos < 2) {
+    // Paquetes enrollados esperando a que alguien los despliegue.
     return (
       <group position={[e.x, 0, e.z]}>
         {Array.from({ length: Math.min(n, 4) }, (_, i) => (
-          <mesh key={i} position={[(i % 2) * 1.5 - 0.75, 0.4 + Math.floor(i / 2) * 0.75, -2.2]} castShadow>
-            <boxGeometry args={[1.3, 0.7, 2]} />
+          <mesh key={i} position={[(i % 2) * 1.5 - 0.75, 0.4 + Math.floor(i / 2) * 0.75, -2.2]} rotation={[0, 0, Math.PI / 2]} castShadow>
+            <cylinderGeometry args={[0.35, 0.35, 2, 16]} />
             <meshStandardMaterial color="#334155" roughness={0.6} />
           </mesh>
         ))}
       </group>
     )
   }
+  const giro = GIRO_AZIMUT[String(proc?.valores?.[0] ?? 'norte')] ?? 0
+  const inclinacion = hechos >= 4 ? ((Number(proc?.valores?.[3] ?? 24) || 0) * Math.PI) / 180 : 0
+  const desenrollado = hechos >= 3
   return (
     <group position={[e.x, 0, e.z]}>
       {Array.from({ length: n * 2 }, (_, i) => {
         const fila = Math.floor(i / 4)
         const col = i % 4
         return (
-          <group key={i} position={[col * 4.4 - 6.6, 0, -3 - fila * 4.2]}>
-            <mesh position={[0, 1.3, 0]} rotation={[-0.42, 0, 0]} castShadow>
-              <boxGeometry args={[4, 0.08, 2.3]} />
-              <meshStandardMaterial color={celda} metalness={0.7} roughness={0.25} emissive="#0a1f3d" emissiveIntensity={0.3} />
-            </mesh>
+          <group key={i} position={[col * 4.4 - 6.6, 0, -3 - fila * 4.2]} rotation={[0, giro, 0]}>
+            {desenrollado ? (
+              <mesh position={[0, 1.3, 0]} rotation={[-inclinacion, 0, 0]} castShadow>
+                <boxGeometry args={[4, 0.08, 2.3]} />
+                <meshStandardMaterial color={celda} metalness={0.7} roughness={0.25} emissive="#0a1f3d" emissiveIntensity={0.3} />
+              </mesh>
+            ) : (
+              <mesh position={[-1.8, 1.3, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+                <cylinderGeometry args={[0.18, 0.18, 2.3, 12]} />
+                <meshStandardMaterial color="#334155" roughness={0.6} />
+              </mesh>
+            )}
             <mesh position={[0, 0.6, 0.2]}>
               <cylinderGeometry args={[0.07, 0.07, 1.2, 8]} />
               <meshStandardMaterial color="#64748b" metalness={0.6} />
@@ -193,7 +209,8 @@ function PlantaEnergia({ sala }: { sala: RoomState }) {
       </mesh>
       {/* reactor, lejos de la base */}
       {sala.cargamento.reactor > 0 && sala.ensamblaje.hechas.carga && (
-        <group position={[22, 0, 30]}>
+        // Junto al hábitat, a lo lejos sobre el suelo, o hundido en su hoyo con regolito.
+        <group position={sala.procedimientos?.carga?.valores?.[2] === 'cerca' ? [-6, 0, 14] : [22, sala.procedimientos?.carga?.valores?.[2] === 'lejos' ? 0 : -1.6, 30]}>
           <mesh position={[0, 1.2, 0]} castShadow>
             <cylinderGeometry args={[0.5, 0.7, 2.4, 14]} />
             <meshStandardMaterial color="#9aa5b5" metalness={0.6} roughness={0.35} />

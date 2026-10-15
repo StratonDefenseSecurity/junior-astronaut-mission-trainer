@@ -9,7 +9,7 @@ import { api } from '../red'
 import { useStore, useYo } from '../store'
 import { sonido, useSonido } from '../sonido'
 import { useVoz, voz } from '../voz'
-import { Barra, Dato, RolTag, enMarte, energiaUsada, escalaTexto, mmHg, nivel, pctTraje, relojMision, tiempoEnEspacio } from './comun'
+import { Barra, Dato, MarcaIA, RolTag, enMarte, energiaUsada, escalaTexto, mmHg, nivel, pctTraje, relojMision, tiempoEnEspacio } from './comun'
 
 const FASES: Record<RoomState['fase'], string> = {
   lobby: 'Sala',
@@ -213,7 +213,10 @@ export function Tripulacion({ sala }: { sala: RoomState }) {
           <div key={j.id} className={`crew-card ${j.id === yo?.id ? 'me' : ''} ${j.conectado ? '' : 'offline'}`}>
             <div className="row" style={{ gap: 6 }}>
               <RolTag rol={j.rol} />
-              <strong className="grow">{j.nombre}</strong>
+              <strong className="grow">
+                {j.nombre}
+                <MarcaIA bot={j.bot} />
+              </strong>
               <span className="mini muted">{j.incapacitado > 0 ? 'fuera de servicio' : j.enRefugio ? 'refugio' : j.zona === 'exterior' ? 'fuera' : !j.conectado ? 'ausente' : j.manual === 'sueno' ? 'duerme' : ''}</span>
             </div>
             <div className="tres">
@@ -316,7 +319,7 @@ export function Telemetria({ sala, yo }: { sala: RoomState; yo: Player }) {
       <div className="etapa">{cuenta ? `Despegue en ${Math.ceil(-sala.t)}` : v.etapa}</div>
       <div className="fila">
         <div><span>Altitud</span><b>{v.altitud} km</b></div>
-        <div><span>Velocidad</span><b>{v.velocidad} km/s</b></div>
+        <div><span>Velocidad</span><b>{sala.fase === 'lanzamiento' ? `${v.velocidad} km/s` : `${Math.round(v.velocidad * 3600).toLocaleString('es')} km/h`}</b></div>
         <div><span>Aceleración</span><b className={nivel(v.g > 4, v.g > 2.5)}>{v.g} g</b></div>
         <div><span>Tu pulso</span><b className={nivel(yo.vit.fc > 150, yo.vit.fc > 110)}>{Math.round(yo.vit.fc)} lpm</b></div>
       </div>
@@ -328,7 +331,7 @@ export function Telemetria({ sala, yo }: { sala: RoomState; yo: Player }) {
       <div className="muted mini">
         {sala.fase === 'lanzamiento'
           ? 'La aceleración te aplasta contra el asiento y el corazón late más rápido para seguir llevando sangre a la cabeza.'
-          : 'El escudo térmico frena la nave de 5.8 km/s a casi cero en siete minutos. La Tierra no puede ayudar: la señal tarda demasiado.'}
+          : 'Es el descenso real de Perseverance. La cápsula entra a 19 200 km/h y en siete minutos se posa a menos de 3 km/h. La Tierra no puede ayudar: la señal tarda demasiado.'}
       </div>
     </div>
   )
