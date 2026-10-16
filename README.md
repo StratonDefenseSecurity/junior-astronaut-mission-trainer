@@ -17,7 +17,7 @@ Se juega solo, con cinco tripulantes bot que ocupan los otros roles, o en grupo,
 7. En la base, abrir la página principal con `M` y ver el montaje paso a paso: paneles orientados según la latitud, interruptores en orden, prueba de fugas de la esclusa. En el laboratorio, el huerto como el Veggie de la ISS.
 8. El botón **Fuentes** muestra de dónde sale cada dato real y qué es simplificación del juego.
 
-Para mostrarlo en una computadora sencilla, el botón **Gráficos** de la barra superior pasa a la calidad ligera.
+Para mostrarlo en una computadora sencilla, el botón **HD** de la barra superior pasa a los gráficos ligeros.
 
 ## Cómo se juega
 
@@ -89,6 +89,7 @@ Abre `http://localhost:5173`. El cliente (Vite) corre en el 5173 y el servidor e
 | `npm run typecheck` | Revisa tipos del cliente, del servidor y del Worker |
 | `npm run simular` | Juega una misión completa sin navegador. Acepta tripulantes, alternativa, política, trayectoria y perfil: `npx tsx scripts/simular.ts 4 minimo buena rapida corta` |
 | `npm run e2e` | Prueba de punta a punta por la API contra un servidor en marcha. Añade la URL y `--corto` para la versión de 90 segundos |
+| `npm run ui -- <url> <carpeta>` | Prueba de la interfaz con Chrome o Edge sin ventana: juega como una persona, pulsa los botones, camina con el teclado y guarda capturas. `UI_PASOS=ui-multi` prueba dos jugadores; `UI_PASOS=ui-base` los procedimientos de la base (necesita una sala de `scripts/sala-demo.mjs`) |
 | `node scripts/texturas-reales.mjs` | Descarga las imágenes de NASA de la Tierra y la Luna y genera las texturas de `public/texturas/`. Con `--marte` también Marte, que baja unos 330 MB |
 | `npm run cf:dev` | Compila el sitio y lo sirve con el emulador de Cloudflare en `http://127.0.0.1:8787`, con Durable Objects y WebSocket como en producción |
 | `npm run desplegar` | Compila el sitio y lo publica en Cloudflare |

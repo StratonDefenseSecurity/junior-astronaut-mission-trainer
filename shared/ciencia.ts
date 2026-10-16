@@ -460,6 +460,7 @@ export const SUPUESTOS: string[] = [
   'La opacidad del polvo y las tormentas de polvo se generan con un modelo propio; los datos públicos de Curiosity no las incluyen.',
   'El tamaño del hábitat, de los paneles, de las baterías y del reciclador, y las masas de los suministros, son valores de diseño del juego inspirados en la ISS y en estudios de NASA.',
   'Cada cartucho de hidróxido de litio lleva 3 kg de reactivo. Lo que absorbe sale de la química de la reacción, no de un cartucho real.',
+  'El desgaste de cada equipo, la probabilidad de una avería al azar y lo que repara cada kit son valores del juego.',
   'Los umbrales a partir de los cuales el cuerpo sufre daño (oxígeno, CO2, frío, deshidratación) son aproximaciones para el juego.',
   'El cuerpo humano se modela con ecuaciones sencillas. Sirve para aprender relaciones de causa y efecto, no para uso médico.',
   'Los trayectos de 150, 210 y 259 días y las distancias en pantalla son aproximados; 259 días es la duración real de una transferencia de Hohmann.',

@@ -51,7 +51,11 @@ for (let i = 0; i < 900; i++) {
   await op(i % 2 ? A : B, 'estado', { h: '' })
   if (sala.resultado || orden.indexOf(sala.fase) >= orden.indexOf(meta)) break
   const em = sala.emergencias.find((e) => e.estado === 'activa')
-  if (em) await op(A, 'emergencia', { id: em.id, altId: em.alternativas[0].id })
+  // Como una tripulación prudente: guarda repuestos para el soporte vital.
+  if (em) await op(A, 'emergencia', { id: em.id, altId: em.tipo === 'fallo' && sala.rec.repuestos < 2 ? em.alternativas[1].id : em.alternativas[0].id })
+  for (const s of sala.sistemas) {
+    if (s.instalado && s.integridad < 45 && sala.rec.repuestos >= 3 && ['oga', 'cdra', 'wrs', 'termico', 'energia'].includes(s.id)) await op(A, 'accion', { id: 'reparar', payload: { sistema: s.id } })
+  }
   for (const p of sala.propuestas.filter((x) => x.estado === 'pendiente')) await op(A, 'votar', { id: p.id, aprueba: true })
   if (sala.fase === 'transito' && sala.escalaDeseada !== 86400) await op(A, 'escala', { valor: 86400 })
   if (sala.fase === 'llegada' && sala.subfase === 'orbita' && !sala.propuestas.some((p) => p.estado === 'pendiente'))

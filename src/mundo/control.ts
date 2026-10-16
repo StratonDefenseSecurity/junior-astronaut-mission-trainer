@@ -39,7 +39,9 @@ export function entrarEnZona(zona: Zona) {
   local.z = e.z
   local.giro = e.giro
   local.vel = 0
-  local.camGiro = e.giro + Math.PI
+  // Dentro, la cámara va detrás. Fuera, detrás quedaría metida en la esclusa: se coloca en
+  // diagonal, de modo que se vean el astronauta, el hábitat y el terreno.
+  local.camGiro = zona === 'nave' ? e.giro + Math.PI : e.giro - Math.PI / 4
   local.camDistancia = zona === 'nave' ? 4.4 : 7
 }
 

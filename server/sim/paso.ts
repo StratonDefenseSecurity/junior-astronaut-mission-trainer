@@ -361,7 +361,8 @@ function desgaste(room: RoomState, dt: number, superficie: boolean) {
     let tasa = DESGASTE[s.id] * escenarioDe(room.escenario).mod.desgaste
     if (superficie && room.ambiente.tormentaPolvo && (s.id === 'energia' || s.id === 'isru')) tasa *= 3
     s.integridad = Math.max(0, s.integridad - tasa * dias)
-    const riesgo = (0.0025 + (s.integridad < 50 ? (50 - s.integridad) * 0.002 : 0)) * dias
+    // Además del desgaste, una avería al azar cada unos 670 días por equipo (valor del juego).
+    const riesgo = (0.0015 + (s.integridad < 50 ? (50 - s.integridad) * 0.002 : 0)) * dias
     if (s.integridad <= UMBRAL_AVERIA || azar(room) < riesgo) lanzarEmergencia(room, 'fallo', { sistema: s.id })
   }
 }

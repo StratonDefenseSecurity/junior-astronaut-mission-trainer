@@ -1146,7 +1146,8 @@ function vida(room: RoomState, j: Player, m: MemoriaBot) {
     fijarActividad(room, j.id, 'sueno')
     return
   }
-  if (room.ajustes.ejercicio <= 0 || h < 9 || h >= 19 || j.vit.fatiga > 70) return
+  // Mientras se monta la base no hay rato para el gimnasio.
+  if (room.fase === 'ensamblaje' || room.ajustes.ejercicio <= 0 || h < 9 || h >= 19 || j.vit.fatiga > 70) return
   const dia = enSuperficie(room) ? room.ambiente.sol : Math.floor(room.t / 86400)
   const turno = room.jugadores.filter((o) => o.bot).findIndex((o) => o.id === j.id)
   if (m.marcas.ejercicio === dia || h < 9 + turno * 1.6) return

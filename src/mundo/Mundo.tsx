@@ -17,7 +17,7 @@ import { Descenso, Lanzamiento } from './Cinematicas'
 import { controlesDeCamara, entrarEnZona, local, palanca, tecla, useTeclado } from './control'
 import { Exterior } from './Exterior'
 import { Interior, enMicrogravedad } from './Interior'
-import { ALCANCE, ENTRADA, ESTACIONES, ESTACION_BY_ID, INTERIOR, PUESTO, PUESTO_REFUGIO, PUNTOS, estacionVisible, estacionesDestacadas, limitarPosicion } from './mapa'
+import { ALCANCE, ENTRADA, ESTACIONES, ESTACION_BY_ID, EXTERIOR, INTERIOR, PUESTO, PUESTO_REFUGIO, PUNTOS, estacionVisible, estacionesDestacadas, limitarPosicion } from './mapa'
 
 /** Ondas junto al nombre mientras esa persona habla por el chat de voz. */
 function Habla({ id }: { id: string }) {
@@ -226,7 +226,16 @@ function Jugador({ sala, yo }: { sala: RoomState; yo: Player }) {
       destino.x = Math.min(INTERIOR.x1 - 0.3, Math.max(INTERIOR.x0 + 0.3, destino.x))
       destino.z = Math.min(INTERIOR.z1 - 0.3, Math.max(INTERIOR.z0 + 0.3, destino.z))
       destino.y = Math.min(INTERIOR.alto - 0.2, Math.max(0.5, destino.y))
-    } else destino.y = Math.max(0.6, destino.y)
+    } else {
+      destino.y = Math.max(0.6, destino.y)
+      // Fuera, la cámara no puede quedar dentro del hábitat: se la saca por el lado más cercano.
+      const hx = EXTERIOR.habX + 0.4
+      const hz = EXTERIOR.habZ + 0.4
+      if (Math.abs(destino.x) < hx && Math.abs(destino.z) < hz && destino.y < 5.4) {
+        if (hx - Math.abs(destino.x) < hz - Math.abs(destino.z)) destino.x = Math.sign(destino.x || 1) * hx
+        else destino.z = Math.sign(destino.z || 1) * hz
+      }
+    }
     camera.position.lerp(destino, 1 - Math.exp(-dt * 12))
     camera.lookAt(mira)
 
@@ -409,7 +418,7 @@ export function Mundo({ sala, yo }: { sala: RoomState; yo: Player }) {
 
   return (
     <div className="mundo" {...(cinematica ? {} : camara)}>
-      <Canvas key={calidad} shadows={calidad === 'alta'} dpr={calidad === 'alta' ? [1, 1.5] : [0.75, 1]} camera={{ position: [10, 3, 0], fov: 58, near: 0.1, far: 3200 }}>
+      <Canvas shadows={calidad === 'alta'} dpr={calidad === 'alta' ? [1, 1.5] : [0.75, 1]} camera={{ position: [10, 3, 0], fov: 58, near: 0.1, far: 3200 }}>
         <Suspense fallback={null}>
           <Depuracion />
           {sala.fase === 'lanzamiento' && <Lanzamiento sala={sala} />}

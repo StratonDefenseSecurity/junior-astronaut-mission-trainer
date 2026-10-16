@@ -15,3 +15,4 @@ scripts/.sala-demo.json
 
 # texturas reales: descargas de NASA y USGS (ver scripts/texturas-reales.mjs)
 .cache
+ui-capturas/

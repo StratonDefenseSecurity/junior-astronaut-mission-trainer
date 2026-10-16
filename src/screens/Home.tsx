@@ -9,7 +9,7 @@ export function HomeScreen() {
   const setFuentes = useStore((s) => s.setFuentes)
   const [codigo, setCodigo] = useState('')
   const [modo, setModo] = useState<'comandante' | 'votacion'>('comandante')
-  const [juego, setJuego] = useState<'solo' | 'multi'>('multi')
+  const [juego, setJuego] = useState<'solo' | 'multi'>('solo')
 
   return (
     <div className="center-screen">

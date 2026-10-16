@@ -268,7 +268,12 @@ export const api = {
   actividad: (actividad: 'ejercicio' | 'sueno' | null) => llamar('actividad', { actividad }),
   refugio: (entrar: boolean) => llamar('refugio', { entrar }),
   accion: (id: string, payload?: Record<string, unknown>) => llamar('accion', { id, payload }),
-  votar: (id: string, aprueba: boolean) => llamar('votar', { id, aprueba }),
+  // Si otro ya la decidió o venció justo antes del clic, no hace falta avisar con un error.
+  votar: async (id: string, aprueba: boolean) => {
+    const d = await llamar('votar', { id, aprueba }, true)
+    if (d?.error && d.error !== 'Propuesta no disponible.') useStore.getState().toast(d.error)
+    return d
+  },
   elegirAlternativa: (id: string, altId: string) => llamar('emergencia', { id, altId }),
   pedirAyuda: (paraRol: string, motivo: string) => llamar('ayudaPedir', { paraRol, motivo }),
   irAyudar: (jugadorId: string) => llamar('ayudaIr', { jugadorId }),

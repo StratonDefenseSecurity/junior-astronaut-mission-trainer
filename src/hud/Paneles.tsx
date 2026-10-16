@@ -104,7 +104,7 @@ export function BarraSuperior({ sala }: { sala: RoomState }) {
       </div>
 
       <div className="grow" />
-      <div className="bloque" style={{ textAlign: 'right' }}>
+      <div className="bloque" style={{ textAlign: 'right', marginLeft: 'auto' }}>
         <div className="mono mini">Sala {sala.codigo}</div>
         <div className="row" style={{ gap: 4, justifyContent: 'flex-end' }}>
           <BotonesAudio />
@@ -124,8 +124,8 @@ export function BotonesAudio() {
   const g = useGraficos()
   return (
     <>
-      <button className="chip" title="Calidad de los gráficos. Ligera va mejor en computadoras sencillas." onClick={g.alternar}>
-        {g.calidad === 'alta' ? 'Gráficos: alta' : 'Gráficos: ligera'}
+      <button className="chip" title={g.calidad === 'alta' ? 'Gráficos en alta calidad. Pulsa para la versión ligera, mejor en computadoras sencillas.' : 'Gráficos ligeros. Pulsa para la alta calidad.'} onClick={g.alternar}>
+        {g.calidad === 'alta' ? 'HD' : 'Ligero'}
       </button>
       <button className="chip" title={s.silenciado ? 'Activar el sonido' : 'Silenciar'} onClick={() => (void sonido.activar(), sonido.silenciar(!s.silenciado))}>
         {s.silenciado ? 'Sonido: no' : 'Sonido'}
