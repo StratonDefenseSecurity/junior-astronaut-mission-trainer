@@ -94,7 +94,17 @@ export default async function ({ pagina, pulsar, botones, captura, ok, esperar, 
   ok(await pulsar('Sonido', { exacto: true }), 'botón de sonido')
   ok(await pulsar('Fuentes', { exacto: true }), 'abre las fuentes en el juego')
   await captura('fuentes-juego')
-  await pulsar('Cerrar', { exacto: true })
+  // Hay varios "Cerrar" (mensajes de radio, paneles): se pulsa el de la ventana de fuentes.
+  ok(
+    await pagina.$$eval('button', (els) => {
+      const b = els.find((e) => e.textContent.trim() === 'Cerrar' && e.closest('div')?.parentElement?.textContent.includes('De dónde salen los datos'))
+      b?.click()
+      return Boolean(b)
+    }),
+    'cierra las fuentes',
+  )
+  await esperar(500)
+  ok(!/De dónde salen los datos/.test(await textoPagina()), 'la ventana de fuentes queda cerrada')
   await pagina.keyboard.press('KeyM')
   ok(await esperarTexto(/Página principal/, 4000), 'la tecla M abre la página principal')
   await captura('pagina-principal')
