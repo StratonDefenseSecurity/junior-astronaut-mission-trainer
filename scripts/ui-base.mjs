@@ -89,9 +89,16 @@ export default async function ({ pagina, pulsar, botones, captura, ok, esperar, 
         const quedan = await pagina.$$('.proc-actual .proc-secuencia button.opcion:not([disabled])')
         if (!quedan.length) break
         let avanzo = false
-        for (const b of quedan) {
-          const antes = await pagina.$$eval('.proc-actual .proc-secuencia button.activa', (x) => x.length)
-          await b.click()
+        for (let k = 0; k < quedan.length; k++) {
+          const antes = await pagina.$$eval('.proc-actual .proc-secuencia button.activa', (x) => x.length).catch(() => -1)
+          if (antes < 0) break
+          // Se vuelve a buscar el botón en cada intento: la pantalla se redibuja tras cada clic.
+          const pulsado = await pagina.$$eval('.proc-actual .proc-secuencia button.opcion:not([disabled])', (els, k) => {
+            const b = els[k]
+            b?.click()
+            return Boolean(b)
+          }, k).catch(() => false)
+          if (!pulsado) break
           await esperar(350)
           const despues = await pagina.$$eval('.proc-actual .proc-secuencia button.activa', (x) => x.length).catch(() => -1)
           if (despues < 0 || despues > antes) {
@@ -109,9 +116,9 @@ export default async function ({ pagina, pulsar, botones, captura, ok, esperar, 
       await esperar(800)
       if ((await pagina.$eval('.proc-actual', (e) => e.innerText.split('\n')[0]).catch(() => '')) === titulo) await pulsar('Fail', { exacto: true })
     } else {
-      const opciones = await pagina.$$('.proc-actual button.opcion:not([disabled])')
-      for (const b of opciones) {
-        await b.click()
+      const total = await pagina.$$eval('.proc-actual button.opcion:not([disabled])', (els) => els.length)
+      for (let k = 0; k < total; k++) {
+        await pagina.$$eval('.proc-actual button.opcion:not([disabled])', (els, k) => els[k]?.click(), k).catch(() => {})
         await esperar(700)
         if ((await pagina.$eval('.proc-actual', (e) => e.innerText.split('\n')[0]).catch(() => '')) !== titulo) break
       }
@@ -123,8 +130,19 @@ export default async function ({ pagina, pulsar, botones, captura, ok, esperar, 
   }
   async function procedimiento(nombre) {
     let pasos = 0
-    for (let i = 0; i < 12; i++) {
-      if (!(await hacerPaso())) break
+    let tropiezos = 0
+    for (let i = 0; i < 14; i++) {
+      // Si la pantalla se redibuja justo mientras se lee, se espera un momento y se reintenta.
+      let hecho
+      try {
+        hecho = await hacerPaso()
+      } catch (e) {
+        console.log(`    (reintento: ${String(e?.message ?? e).slice(0, 80)})`)
+        if (++tropiezos > 4) break
+        await esperar(1200)
+        continue
+      }
+      if (!hecho) break
       pasos += 1
     }
     await captura(`proc-${nombre}`)
@@ -135,6 +153,7 @@ export default async function ({ pagina, pulsar, botones, captura, ok, esperar, 
   if (await irA('Power')) {
     await captura('estacion-energia')
     console.log('  botones:', (await botones()).join(' | '))
+    console.log('    empieza el procedimiento de energía')
     await procedimiento('energia')
     await pulsar('Close', { exacto: true })
   }

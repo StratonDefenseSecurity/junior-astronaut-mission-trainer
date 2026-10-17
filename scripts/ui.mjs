@@ -106,7 +106,7 @@ try {
   await pasos(herramientas)
 } catch (e) {
   fallos += 1
-  console.log(`  FALLA el recorrido se detuvo: ${e.message}`)
+  console.log(`  FALLA el recorrido se detuvo: ${e.stack?.split('\n').slice(0, 4).join(' | ') ?? e.message}`)
   await captura('detenido').catch(() => {})
 }
 console.log(`\nErrores de la página: ${errores.length}`)
