@@ -27,14 +27,14 @@ export const CUERPOS: readonly Cuerpo[] = ['Sol', 'Mercurio', 'Venus', 'Tierra',
 
 /** Nombre para mostrar en pantalla. */
 export const NOMBRE_CUERPO: Record<Cuerpo, string> = {
-  Sol: 'Sol',
-  Mercurio: 'Mercurio',
+  Sol: 'Sun',
+  Mercurio: 'Mercury',
   Venus: 'Venus',
-  Tierra: 'Tierra',
-  Luna: 'Luna',
-  Marte: 'Marte',
-  Jupiter: 'Júpiter',
-  Saturno: 'Saturno',
+  Tierra: 'Earth',
+  Luna: 'Moon',
+  Marte: 'Mars',
+  Jupiter: 'Jupiter',
+  Saturno: 'Saturn',
 }
 
 const CUERPO_AE: Record<Cuerpo, Body> = {
@@ -250,7 +250,7 @@ export function resolverLambert(r1: Vec3, r2: Vec3, dias: number, mu = MU_SOL): 
   let th = angulo(r1, r2)
   if (punto(cruz(r1, r2), POLO_ECLIPTICA) < 0) th = 2 * Math.PI - th
   const A = Math.sin(th) * Math.sqrt((R1 * R2) / (1 - Math.cos(th)))
-  if (!Number.isFinite(A) || Math.abs(A) < 1e-12) throw new Error('Lambert: los puntos están alineados con el Sol (plano indefinido)')
+  if (!Number.isFinite(A) || Math.abs(A) < 1e-12) throw new Error('Lambert: the points are aligned with the Sun (undefined plane)')
   const y = (z: number) => R1 + R2 + (A * (z * stumpffS(z) - 1)) / Math.sqrt(stumpffC(z))
   const tiempo = (z: number) => {
     const yz = y(z)
@@ -322,7 +322,7 @@ let cache: Trayectoria | null = null
 export function trayectoria(salida: Date, llegada: Date): Trayectoria {
   if (cache && cache.salida.getTime() === salida.getTime() && cache.llegada.getTime() === llegada.getTime()) return cache
   const dias = (llegada.getTime() - salida.getTime()) / DIA_MS
-  if (!(dias > 0)) throw new Error('trayectoria: la llegada debe ser posterior a la salida')
+  if (!(dias > 0)) throw new Error('trajectory: arrival must be after departure')
   const r1 = vectorHelio('Tierra', salida)
   const r2 = vectorHelio('Marte', llegada)
   const { v1, v2, anguloBarridoGrados } = resolverLambert(r1, r2, dias)

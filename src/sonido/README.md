@@ -1,57 +1,57 @@
-# Sonido del juego
+# Game sound
 
-Motor de sonido procedural: todo se sintetiza con la Web Audio API. No hay archivos de audio, no se usa la red y no se agregaron paquetes.
+Procedural sound engine: everything is synthesized with the Web Audio API. There are no audio files, no network use and no added packages.
 
-- `motor.ts`: el motor (síntesis, mezcla, compresor y limitador).
-- `index.ts`: la API pública (`sonido`) y el gancho `useSonido()`.
-- `Demo.tsx`: `DemoSonido`, un banco de pruebas con botones para cada ambiente y evento. No está conectado al juego.
+- `motor.ts`: the engine (synthesis, mixing, compressor and limiter).
+- `index.ts`: the public API (`sonido`) and the `useSonido()` hook.
+- `Demo.tsx`: `DemoSonido`, a test bench with buttons for each ambience and event. It is not connected to the game.
 
-## Uso
+## Usage
 
 ```ts
 import { sonido, useSonido } from './sonido'
 
-sonido.activarAlInteractuar()                  // al arrancar: el primer clic o tecla enciende el audio
-sonido.ambiente('lanzamiento', { empuje: 0 })  // fundido de 1.5 s con el ambiente anterior
-sonido.parametros({ empuje: 1, altitudKm: 12 }) // cada cuadro: barato, no crea nodos
+sonido.activarAlInteractuar()                  // at startup: the first click or key press turns on audio
+sonido.ambiente('lanzamiento', { empuje: 0 })  // 1.5 s crossfade with the previous ambience
+sonido.parametros({ empuje: 1, altitudKm: 12 }) // every frame: cheap, creates no nodes
 sonido.evento('quindarInicio')
 sonido.evento('alarma'); sonido.detener('alarma')
 const { activo, silenciado, volumen } = useSonido()
 ```
 
-| Función | Qué hace |
+| Function | What it does |
 |---|---|
-| `activar(): Promise<void>` | Crea o reanuda el AudioContext. Llamar desde un gesto del usuario (política de reproducción automática). Se puede llamar muchas veces. Lo pedido antes (ambiente, alarma, ejercicio) empieza al activar. |
-| `activarAlInteractuar(): () => void` | Activa con el primer `pointerdown`, `keydown`, `touchend` o `click`. Devuelve la función para cancelar. |
-| `silenciar(b)`, `volumen(v)` | Silencio y volumen maestro 0..1 (por defecto 0.6). Se guardan en localStorage (`mt_sonido_silencio`, `mt_sonido_volumen`). |
-| `estado()` | `{ activo, silenciado, volumen }`, con referencia estable. `suscribir(fn)` avisa cuando cambia. |
-| `ambiente(tipo, parametros?)` | `'ninguno' \| 'nave' \| 'base' \| 'eva' \| 'lanzamiento' \| 'descenso' \| 'orbita'`. Con el mismo tipo solo actualiza parámetros. |
-| `parametros(p)` | Actualiza los parámetros vivos. Aplica como mucho 20 veces por segundo y solo si algo cambió. |
-| `evento(nombre, opciones?)` | Sonidos cortos (tabla abajo). Si el audio no está activado no suena, salvo `alarma` y `ejercicio`, que esperan a la activación. |
-| `detener(nombre?)` | Detiene `'alarma'` o `'ejercicio'`; sin nombre, los dos. |
-| `contexto()` | El AudioContext, o `null` antes de activar. |
-| `destinoVoces()` | GainNode para el chat de voz. Respeta silencio y volumen y pasa por el limitador, pero no por el compresor (el retumbo no baja las voces). `null` antes de activar. |
+| `activar(): Promise<void>` | Creates or resumes the AudioContext. Call it from a user gesture (autoplay policy). It can be called many times. Anything requested earlier (ambience, alarm, exercise) starts on activation. |
+| `activarAlInteractuar(): () => void` | Activates on the first `pointerdown`, `keydown`, `touchend` or `click`. Returns a function to cancel. |
+| `silenciar(b)`, `volumen(v)` | Mute and master volume 0..1 (default 0.6). Saved in localStorage (`mt_sonido_silencio`, `mt_sonido_volumen`). |
+| `estado()` | `{ activo, silenciado, volumen }`, with a stable reference. `suscribir(fn)` notifies when it changes. |
+| `ambiente(tipo, parametros?)` | `'ninguno' \| 'nave' \| 'base' \| 'eva' \| 'lanzamiento' \| 'descenso' \| 'orbita'`. With the same type it only updates parameters. |
+| `parametros(p)` | Updates the live parameters. Applies at most 20 times per second and only if something changed. |
+| `evento(nombre, opciones?)` | Short sounds (table below). If audio is not activated it does not play, except `alarma` and `ejercicio`, which wait for activation. |
+| `detener(nombre?)` | Stops `'alarma'` or `'ejercicio'`; with no name, both. |
+| `contexto()` | The AudioContext, or `null` before activation. |
+| `destinoVoces()` | GainNode for voice chat. It respects mute and volume and goes through the limiter, but not the compressor (the rumble does not lower the voices). `null` before activation. |
 
-### Ambientes y parámetros
+### Ambiences and parameters
 
-| Ambiente | Qué suena | Parámetros |
+| Ambience | What you hear | Parameters |
 |---|---|---|
-| `nave` | Ventiladores y bombas del soporte vital (aire filtrado y un zumbido grave con un batido lento), relés y gorgoteo de agua de vez en cuando. | — |
-| `orbita` | Solo los ventiladores de la cabina, más bajos. | — |
-| `base` | Como la nave pero más tranquila, con el viento de Marte apenas audible, grave y apagado por el casco. | `viento` 0..1 |
-| `eva` | Dentro del traje en Marte: ventilador y bomba del traje, tu respiración y un viento exterior muy débil. | `respiracion` (por minuto; < 3 no se oye), `viento` 0..1 |
-| `lanzamiento` | Vibración de los motores por la estructura (dura mientras haya empuje), ruido que llega por el aire (se apaga al subir), crepitar y ráfagas. Con empuje 0 solo quedan los ventiladores. | `empuje` 0..1, `altitudKm`, `presionDinamica` 0..1 opcional (golpeteo en máx. Q) |
-| `descenso` | Rugido de la entrada, aleteo del paracaídas, retrocohetes. | `calor`, `paracaidas`, `retro` 0..1; `marte` 1 para Marte |
+| `nave` | Life support fans and pumps (filtered air and a low hum with a slow beat), relays and water gurgling now and then. | None |
+| `orbita` | Only the cabin fans, quieter. | None |
+| `base` | Like the ship but calmer, with the Martian wind barely audible, low and muffled by the hull. | `viento` 0..1 |
+| `eva` | Inside the suit on Mars: the suit fan and pump, your breathing and a very faint outside wind. | `respiracion` (per minute; < 3 is silent), `viento` 0..1 |
+| `lanzamiento` | Engine vibration through the structure (lasts while there is thrust), noise arriving through the air (fades as you climb), crackle and gusts. With thrust 0 only the fans remain. | `empuje` 0..1, `altitudKm`, optional `presionDinamica` 0..1 (buffeting at max Q) |
+| `descenso` | Roar of entry, parachute flutter, retrorockets. | `calor`, `paracaidas`, `retro` 0..1; `marte` 1 for Mars |
 
-Para una caminata en el vacío, `eva` con `viento: 0`. Para una toma exterior en el espacio, `'ninguno'` (silencio total) u `'orbita'` si la cámara representa a alguien dentro de la nave.
+For a spacewalk in vacuum, use `eva` with `viento: 0`. For an outside shot in space, use `'ninguno'` (total silence) or `'orbita'` if the camera stands for someone inside the ship.
 
-### Eventos
+### Events
 
-`alarma` (bucle), `aviso`, `clic`, `quindarInicio`, `quindarFin`, `radio`, `esclusa`, `paso`, `separacion`, `teclado`, `exito`, `latido`, `ejercicio` (bucle).
+`alarma` (loop), `aviso`, `clic`, `quindarInicio`, `quindarFin`, `radio`, `esclusa`, `paso`, `separacion`, `teclado`, `exito`, `latido`, `ejercicio` (loop).
 
-Opciones: `volumen` (multiplica, máx. 2) en todos; `direccion: 'despresurizar' | 'presurizar'` y `duracion` (s, tiempo comprimido del juego) en `esclusa`; `duracion` en `radio`; `superficie: 'interior' | 'marte'` en `paso`; `cantidad` en `teclado`; `ritmo` (pasos por minuto) en `ejercicio`, que se puede volver a llamar para cambiarlo sin cortar. Mientras suena la alarma, el ambiente baja a la mitad.
+Options: `volumen` (multiplier, max 2) on all of them; `direccion: 'despresurizar' | 'presurizar'` and `duracion` (s, compressed game time) on `esclusa`; `duracion` on `radio`; `superficie: 'interior' | 'marte'` on `paso`; `cantidad` on `teclado`; `ritmo` (steps per minute) on `ejercicio`, which can be called again to change it without cutting out. While the alarm sounds, the ambience drops to half.
 
-### Chat de voz
+### Voice chat
 
 ```ts
 const ctx = sonido.contexto()!
@@ -59,36 +59,36 @@ const panner = new PannerNode(ctx, { panningModel: 'HRTF', distanceModel: 'inver
 ctx.createMediaStreamSource(streamRemoto).connect(panner).connect(sonido.destinoVoces()!)
 ```
 
-En Chrome, un stream remoto de WebRTC suele necesitar también estar asignado a un `<audio muted>` para que suene por Web Audio. Es un error conocido del navegador, no del motor.
+In Chrome, a remote WebRTC stream usually also has to be attached to an `<audio muted>` element to play through Web Audio. This is a known browser bug, not an engine bug.
 
-## Física (verificada) y fuentes
+## Physics (verified) and sources
 
-1. **En el vacío no hay sonido.** En órbita o en una toma exterior solo suena lo que se oye dentro de la nave o del traje.
-2. **Marte tiene menos del 1 % de la presión de la Tierra:** 6.36 mb en superficie contra 1014 mb. Fuentes: NASA, [Mars Fact Sheet](https://nssdc.gsfc.nasa.gov/planetary/factsheet/marsfact.html) y [Earth Fact Sheet](https://nssdc.gsfc.nasa.gov/planetary/factsheet/earthfact.html).
-3. **El sonido en Marte (micrófonos de Perseverance).** Fuente: S. Maurice et al., "In situ recording of Mars soundscape", *Nature* 605, 653-658 (2022), [doi:10.1038/s41586-022-04679-0](https://doi.org/10.1038/s41586-022-04679-0).
-   - Por la baja impedancia acústica del aire, una misma fuente suena unos 20 dB más débil que en la Tierra. El motor usa ese factor (0.1 en amplitud) para lo que viaja por el aire exterior en `descenso` con `marte: 1`. Aplicarlo a todo el ruido exterior es una aproximación del juego.
-   - La atenuación es muy grande, sobre todo por encima de 1 kHz. Respecto a 1 m, una onda de 8 kHz pierde 40 dB a 8 m; en la Tierra haría falta estar a 65 m. Por eso el viento y los pasos en Marte se oyen graves y apagados.
-   - **Dos velocidades del sonido.** Hay dos valores separados por unos 10 m/s, por debajo y por encima de 240 Hz: unos 240 m/s para los graves y unos 250 m/s para los agudos (en la Tierra, unos 340 m/s). El motor no lo simula, porque no hay fuentes lejanas, pero es un dato para mostrar al jugador. Resumen del CNRS: [Perseverance records the first ever sounds from Mars](https://www.cnrs.fr/en/perseverance-records-first-ever-sounds-mars) (1 de abril de 2022), que también da la presión 170 veces menor y la dificultad para conversar a 5 m. NASA: [Sounds of Mars](https://science.nasa.gov/mission/mars-2020-perseverance/sounds-of-mars/), sobre una atmósfera unas 100 veces menos densa y la pérdida de los sonidos agudos.
-4. **Las naves son ruidosas.** En la ISS se midieron 56-60 dBA en el Nodo 1 y el FGB, 69 dBA en el Módulo de Servicio y 77 dBA durante el ejercicio en la cinta. Las alarmas de precaución y advertencia suenan entre 0.5 y 2 kHz y deben estar 20 dBA por encima del ruido ambiente. La especificación de EE. UU. es NC-50 despierto y NC-40 dormido. Fuente: J. B. Clark, "Acoustic Issues in Human Spaceflight", NASA Johnson Space Center, [NTRS 20100031889](https://ntrs.nasa.gov/citations/20100031889). Son mediciones antiguas: hoy hay ventiladores más silenciosos.
-5. **Origen del ruido del lanzamiento y la entrada:** combustión, mezcla del chorro con el aire, presiones de la capa límite y ondas de choque. Fuente: NASA, [NASA-STD-3001 Technical Brief: Acoustics (OCHMO-TB-035 Rev C, 2023)](https://www.nasa.gov/sites/default/files/atoms/files/acoustics_technical_brief_ochmo_0.pdf). El motor separa lo que llega por la estructura (dura mientras hay empuje) de lo que llega por el aire. Esto último se escala con la densidad relativa exp(−h / 8.5 km), donde 8.5 km es la altura de escala de la Earth Fact Sheet. Es una aproximación isotérmica del juego.
-6. **Dentro del traje** lo que más se oye son las bombas y ventiladores que mueven aire y agua; no es "solo tu respiración", y los golpes de herramientas en el vacío no se oyen. Fuente: el astronauta Garrett Reisman en [What Sounds Do Astronauts Hear During a Spacewalk?](https://www.slate.com/blogs/quora/2013/10/14/what_sounds_do_astronauts_hear_during_a_spacewalk.html) (Slate/Quora, 14 de octubre de 2013).
-7. **Tonos Quindar (Apolo):** seno puro de 250 ms, 2525 Hz al pulsar el botón de CAPCOM y 2475 Hz al soltarlo. Encendían y apagaban los transmisores remotos. Fuentes: [Quindar tones (Wikipedia)](https://en.wikipedia.org/wiki/Quindar_tones), que en esas cifras no tiene cita en línea, y [Apollo S-band, part 27: adding Quindar tones](https://scanalyst.fourmilab.ch/t/apollo-spacecraft-s-band-communication-system-part-27-adding-quindar-tones-to-voice-communication/3104), que coincide. Sin verificar directamente (la página del Apollo Lunar Surface Journal ya no está en línea): un ingeniero cita 2474 Hz para el segundo tono, y la tripulación casi no los oía porque un filtro los quitaba del enlace. El juego los usa como señal de radio, que es como los conoce el público.
+1. **There is no sound in a vacuum.** In orbit or in an outside shot, you only hear what can be heard inside the ship or the suit.
+2. **Mars has less than 1% of Earth's pressure:** 6.36 mb at the surface compared with 1014 mb. Sources: NASA, [Mars Fact Sheet](https://nssdc.gsfc.nasa.gov/planetary/factsheet/marsfact.html) and [Earth Fact Sheet](https://nssdc.gsfc.nasa.gov/planetary/factsheet/earthfact.html).
+3. **Sound on Mars (Perseverance microphones).** Source: S. Maurice et al., "In situ recording of Mars soundscape", *Nature* 605, 653-658 (2022), [doi:10.1038/s41586-022-04679-0](https://doi.org/10.1038/s41586-022-04679-0).
+   - Because of the low acoustic impedance of the air, the same source sounds about 20 dB weaker than on Earth. The engine uses that factor (0.1 in amplitude) for what travels through the outside air in `descenso` with `marte: 1`. Applying it to all outside noise is a game approximation.
+   - Attenuation is very large, especially above 1 kHz. Compared with 1 m, an 8 kHz wave loses 40 dB at 8 m; on Earth you would need to be 65 m away. That is why wind and footsteps on Mars sound low and muffled.
+   - **Two speeds of sound.** There are two values about 10 m/s apart, below and above 240 Hz: about 240 m/s for low notes and about 250 m/s for high notes (on Earth, about 340 m/s). The engine does not simulate it, because there are no distant sources, but it is a fact worth showing the player. CNRS summary: [Perseverance records the first ever sounds from Mars](https://www.cnrs.fr/en/perseverance-records-first-ever-sounds-mars) (April 1, 2022), which also gives the 170 times lower pressure and the difficulty of talking at 5 m. NASA: [Sounds of Mars](https://science.nasa.gov/mission/mars-2020-perseverance/sounds-of-mars/), about an atmosphere roughly 100 times less dense and the loss of high-pitched sounds.
+4. **Spacecraft are noisy.** On the ISS, 56-60 dBA was measured in Node 1 and the FGB, 69 dBA in the Service Module and 77 dBA during treadmill exercise. Caution and warning alarms sound between 0.5 and 2 kHz and must be 20 dBA above the background noise. The U.S. specification is NC-50 awake and NC-40 asleep. Source: J. B. Clark, "Acoustic Issues in Human Spaceflight", NASA Johnson Space Center, [NTRS 20100031889](https://ntrs.nasa.gov/citations/20100031889). These are old measurements: fans are quieter today.
+5. **Where launch and entry noise comes from:** combustion, the jet mixing with the air, boundary layer pressures and shock waves. Source: NASA, [NASA-STD-3001 Technical Brief: Acoustics (OCHMO-TB-035 Rev C, 2023)](https://www.nasa.gov/sites/default/files/atoms/files/acoustics_technical_brief_ochmo_0.pdf). The engine separates what arrives through the structure (lasts while there is thrust) from what arrives through the air. The latter is scaled by the relative density exp(−h / 8.5 km), where 8.5 km is the scale height from the Earth Fact Sheet. This is an isothermal game approximation.
+6. **Inside the suit**, what you hear most are the pumps and fans moving air and water. It is not "just your breathing", and tool impacts in a vacuum cannot be heard. Source: astronaut Garrett Reisman in [What Sounds Do Astronauts Hear During a Spacewalk?](https://www.slate.com/blogs/quora/2013/10/14/what_sounds_do_astronauts_hear_during_a_spacewalk.html) (Slate/Quora, October 14, 2013).
+7. **Quindar tones (Apollo):** a pure 250 ms sine wave, 2525 Hz when CAPCOM pressed the button and 2475 Hz on release. They switched the remote transmitters on and off. Sources: [Quindar tones (Wikipedia)](https://en.wikipedia.org/wiki/Quindar_tones), which has no inline citation for those figures, and [Apollo S-band, part 27: adding Quindar tones](https://scanalyst.fourmilab.ch/t/apollo-spacecraft-s-band-communication-system-part-27-adding-quindar-tones-to-voice-communication/3104), which agrees. Not verified directly (the Apollo Lunar Surface Journal page is no longer online): one engineer cites 2474 Hz for the second tone, and the crew barely heard them because a filter removed them from the link. The game uses them as a radio signal, which is how the public knows them.
 
-## Decisiones de diseño (no son datos)
+## Design choices (not data)
 
-Son decisiones del juego y no reproducen niveles en dBA:
+These are game choices and do not reproduce dBA levels:
 
-- los niveles de la mezcla;
-- los timbres, y las frecuencias de los zumbidos, la alarma, los pasos, el latido y el metal de la separación;
-- la respiración por defecto (14 por minuto) y su reparto entre inhalar, pausa y exhalar;
-- los perfiles de las simulaciones de `Demo.tsx`, en tiempo comprimido;
-- la duración de la esclusa, también en tiempo comprimido.
+- the mix levels;
+- the tones, and the frequencies of the hums, the alarm, the footsteps, the heartbeat and the separation metal;
+- the default breathing rate (14 per minute) and how it is split between breathing in, pausing and breathing out;
+- the simulation profiles in `Demo.tsx`, in compressed time;
+- the airlock duration, also in compressed time.
 
-Los niveles se afinan en `NIVEL` (en `motor.ts`) y en cada pieza.
+Levels are tuned in `NIVEL` (in `motor.ts`) and in each piece.
 
-## Límites
+## Limits
 
-- No se escuchó en un navegador durante la construcción. Se verificó con `tsc` y con una prueba en Node contra un Web Audio simulado: sin llamadas inválidas, todas las fuentes se detienen y los nodos se desconectan. Los niveles se calcularon, no se midieron. Conviene escucharlo con `DemoSonido` y afinar.
-- Los graves (latido, separación, retumbo) apenas se oyen en parlantes de laptop. Con audífonos se oyen bien.
-- En iPhone, el interruptor de silencio puede apagar el audio web.
-- El compresor de Web Audio aplica una ganancia de compensación automática. El `recorte` de la cadena maestra la compensa aproximadamente.
+- It was not listened to in a browser during construction. It was checked with `tsc` and with a Node test against a simulated Web Audio: no invalid calls, all sources stop and the nodes disconnect. Levels were calculated, not measured. It is worth listening with `DemoSonido` and tuning.
+- Low sounds (heartbeat, separation, rumble) can barely be heard on laptop speakers. With headphones they sound fine.
+- On iPhone, the silent switch can turn off web audio.
+- The Web Audio compressor applies automatic makeup gain. The `recorte` in the master chain roughly compensates for it.

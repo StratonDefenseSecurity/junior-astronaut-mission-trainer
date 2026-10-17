@@ -120,7 +120,7 @@ class Voz {
         await this.pares.get(de)?.pc.addIceCandidate(d.datos as RTCIceCandidateInit)
       } else if (d.tipo === 'adios') this.cerrarPar(de, false)
     } catch (e) {
-      this.fijar({ error: 'No se pudo conectar la voz con un compañero.' })
+      this.fijar({ error: 'Could not connect voice with a crewmate.' })
       console.warn('[voz]', e)
     }
   }

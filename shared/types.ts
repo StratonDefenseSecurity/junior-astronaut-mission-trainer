@@ -26,50 +26,50 @@ export interface RoleInfo {
 export const ROLES: RoleInfo[] = [
   {
     id: 'comandante',
-    nombre: 'Comandante de misión',
+    nombre: 'Mission Commander',
     corto: 'CMD',
-    descripcion: 'Supervisa cada rol, autoriza el lanzamiento, controla la escala de tiempo y aprueba o rechaza las decisiones en disputa.',
-    consecuencias: 'Una mala aprobación la paga toda la tripulación. Sin comandante nadie resuelve las controversias.',
+    descripcion: 'Oversees every role, authorizes the launch, controls the time scale and approves or rejects disputed decisions.',
+    consecuencias: 'The whole crew pays for a bad approval. Without a commander, nobody settles disputes.',
     color: '#f5b942',
   },
   {
     id: 'piloto',
-    nombre: 'Piloto y navegación',
-    corto: 'PIL',
-    descripcion: 'Lleva la nave, corrige la trayectoria, elige el sitio de aterrizaje con el comandante y despliega los equipos al llegar.',
-    consecuencias: 'Un mal sitio limita la luz o el agua toda la misión. Una corrección tardía gasta más propelente.',
+    nombre: 'Pilot & Navigator',
+    corto: 'PLT',
+    descripcion: 'Flies the ship, corrects the trajectory, picks the landing site with the commander and deploys the equipment on arrival.',
+    consecuencias: 'A bad site limits light or water for the whole mission. A late correction burns more propellant.',
     color: '#4fc3f7',
   },
   {
     id: 'medico',
-    nombre: 'Médico de expedición',
+    nombre: 'Flight Surgeon',
     corto: 'MED',
-    descripcion: 'Vigila pulso, respiración, oxígeno en sangre y dosis de radiación de cada integrante. Decide el plan de ejercicio y cuándo ir al refugio.',
-    consecuencias: 'Ignorar una tormenta solar suma dosis que no se recupera. Sin ejercicio la tripulación llega débil a Marte.',
+    descripcion: 'Watches the pulse, breathing, blood oxygen and radiation dose of every crew member. Decides the exercise plan and when to go to the shelter.',
+    consecuencias: 'Ignoring a solar storm adds dose that never goes away. Without exercise, the crew reaches Mars weak.',
     color: '#ef5350',
   },
   {
     id: 'logistica',
-    nombre: 'Recursos y logística',
+    nombre: 'Resources & Logistics',
     corto: 'LOG',
-    descripcion: 'Controla agua, oxígeno, alimentos y energía. Decide las raciones, el reciclaje y cómo repartir lo que escasea.',
-    consecuencias: 'Racionar de más debilita a la tripulación; racionar de menos agota las reservas antes de tiempo.',
+    descripcion: 'Tracks water, oxygen, food and power. Decides the rations, the recycling and how to share what is running low.',
+    consecuencias: 'Rationing too much weakens the crew. Rationing too little uses up the reserves too early.',
     color: '#66bb6a',
   },
   {
     id: 'cientifico',
-    nombre: 'Especialista científico',
-    corto: 'CIE',
-    descripcion: 'Se encarga de que se cumplan los planes y el objetivo de la misión: recoge muestras, las analiza y establece el huerto.',
-    consecuencias: 'Sin muestras analizadas la misión no cumple su objetivo aunque todos sobrevivan.',
+    nombre: 'Science Specialist',
+    corto: 'SCI',
+    descripcion: 'Makes sure the mission plans and objective are met: collects samples, analyzes them and sets up the garden.',
+    consecuencias: 'Without analyzed samples, the mission misses its objective even if everyone survives.',
     color: '#ab47bc',
   },
   {
     id: 'sistemas',
-    nombre: 'Responsable de sistemas',
-    corto: 'SIS',
-    descripcion: 'Activa el soporte vital y la energía, comprueba las instalaciones y repara los equipos yendo hasta ellos.',
-    consecuencias: 'Un equipo sin mantenimiento falla en el peor momento. Los repuestos son limitados.',
+    nombre: 'Systems Engineer',
+    corto: 'SYS',
+    descripcion: 'Turns on life support and power, checks the facilities and repairs equipment by going to it.',
+    consecuencias: 'Equipment without maintenance fails at the worst moment. Spare parts are limited.',
     color: '#ffa726',
   },
 ]
@@ -92,11 +92,11 @@ export const TRAJE_VISORES = ['#f5b942', '#38bdf8', '#111827', '#f472b6']
 export const TRAJE_PIELES = ['#f3d2b8', '#e8b48f', '#d39a6e', '#b97a4f', '#8d5a3b', '#5e3b26']
 export const TRAJE_PELOS = ['#1b1410', '#3b2417', '#6b4226', '#a8743f', '#d8b16a', '#9a9a9a']
 export const PEINADOS: { id: Peinado; nombre: string }[] = [
-  { id: 'corto', nombre: 'Corto' },
-  { id: 'largo', nombre: 'Largo' },
-  { id: 'rizado', nombre: 'Rizado' },
-  { id: 'mono', nombre: 'Moño' },
-  { id: 'rapado', nombre: 'Rapado' },
+  { id: 'corto', nombre: 'Short' },
+  { id: 'largo', nombre: 'Long' },
+  { id: 'rizado', nombre: 'Curly' },
+  { id: 'mono', nombre: 'Bun' },
+  { id: 'rapado', nombre: 'Buzz cut' },
 ]
 export const trajePorDefecto = (): Traje => ({ color: '#f2f4f7', acento: '#ff7a1a', visor: '#f5b942', piel: '#d39a6e', pelo: '#1b1410', peinado: 'corto' })
 
@@ -104,17 +104,17 @@ export const trajePorDefecto = (): Traje => ({ color: '#f2f4f7', acento: '#ff7a1
 
 export interface PerfilInfo { id: PerfilId; nombre: string; soles: number; muestras: number; descripcion: string }
 export const PERFILES: PerfilInfo[] = [
-  { id: 'corta', nombre: 'Reconocimiento', soles: 10, muestras: 3, descripcion: '10 soles en la superficie y 3 muestras analizadas.' },
-  { id: 'estandar', nombre: 'Exploración', soles: 20, muestras: 5, descripcion: '20 soles en la superficie y 5 muestras analizadas.' },
-  { id: 'larga', nombre: 'Puesto avanzado', soles: 40, muestras: 8, descripcion: '40 soles en la superficie y 8 muestras analizadas.' },
+  { id: 'corta', nombre: 'Reconnaissance', soles: 10, muestras: 3, descripcion: '10 sols on the surface and 3 analyzed samples.' },
+  { id: 'estandar', nombre: 'Exploration', soles: 20, muestras: 5, descripcion: '20 sols on the surface and 5 analyzed samples.' },
+  { id: 'larga', nombre: 'Outpost', soles: 40, muestras: 8, descripcion: '40 sols on the surface and 8 analyzed samples.' },
 ]
 export const PERFIL_BY_ID = Object.fromEntries(PERFILES.map((p) => [p.id, p])) as Record<PerfilId, PerfilInfo>
 
 export interface TrayectoriaInfo { id: TrayectoriaId; nombre: string; dias: number; factorCarga: number; descripcion: string }
 export const TRAYECTORIAS: TrayectoriaInfo[] = [
-  { id: 'rapida', nombre: 'Rápida', dias: 150, factorCarga: 0.75, descripcion: '150 días. Menos radiación y menos consumo, pero el propelente extra quita un 25% de carga.' },
-  { id: 'estandar', nombre: 'Estándar', dias: 210, factorCarga: 1, descripcion: '210 días. El equilibrio habitual entre tiempo y carga.' },
-  { id: 'economica', nombre: 'Económica (Hohmann)', dias: 259, factorCarga: 1.15, descripcion: '259 días. La de menor energía: 15% más de carga, a cambio de más radiación y más consumo.' },
+  { id: 'rapida', nombre: 'Fast', dias: 150, factorCarga: 0.75, descripcion: '150 days. Less radiation and fewer supplies used, but the extra propellant takes away 25% of the cargo.' },
+  { id: 'estandar', nombre: 'Standard', dias: 210, factorCarga: 1, descripcion: '210 days. The usual balance between time and cargo.' },
+  { id: 'economica', nombre: 'Economy (Hohmann)', dias: 259, factorCarga: 1.15, descripcion: '259 days. The lowest-energy option: 15% more cargo, but more radiation and more supplies used.' },
 ]
 export const TRAYECTORIA_BY_ID = Object.fromEntries(TRAYECTORIAS.map((t) => [t.id, t])) as Record<TrayectoriaId, TrayectoriaInfo>
 
@@ -125,10 +125,10 @@ export const TRAYECTORIA_BY_ID = Object.fromEntries(TRAYECTORIAS.map((t) => [t.i
  * situación, después se asignan los roles, se establece el objetivo y se eligen los suministros.
  */
 export const PASOS_CONTEXTO = [
-  { id: 'situacion', titulo: 'La situación', corto: 'Situación' },
-  { id: 'roles', titulo: 'Asignación de roles', corto: 'Tu rol' },
-  { id: 'objetivo', titulo: 'Objetivo de la misión', corto: 'Objetivo' },
-  { id: 'suministros', titulo: 'Suministros', corto: 'Suministros' },
+  { id: 'situacion', titulo: 'The Situation', corto: 'Situation' },
+  { id: 'roles', titulo: 'Role Assignment', corto: 'Your Role' },
+  { id: 'objetivo', titulo: 'Mission Objective', corto: 'Objective' },
+  { id: 'suministros', titulo: 'Supplies', corto: 'Supplies' },
 ] as const
 
 /**
@@ -162,18 +162,18 @@ export interface SupplyItem {
 }
 
 export const SUPPLIES: SupplyItem[] = [
-  { id: 'agua', nombre: 'Agua', unidad: '× 100 kg', masa: 0.1, min: 2, max: 60, consecuencia: 'Se bebe, se usa en higiene y el generador de oxígeno la convierte en aire. El reciclaje recupera hasta el 98%.' },
-  { id: 'oxigeno', nombre: 'Oxígeno en tanques', unidad: '× 100 kg', masa: 0.16, min: 0, max: 20, consecuencia: 'Reserva directa de aire. Cada persona consume 0.84 kg por día. El tanque pesa más que el gas.' },
-  { id: 'alimentos', nombre: 'Alimentos', unidad: '× 100 kg', masa: 0.1, min: 2, max: 50, consecuencia: 'Cada persona come 1.83 kg por día. No se pueden reciclar.' },
-  { id: 'lioh', nombre: 'Cartuchos de hidróxido de litio', unidad: 'cartuchos', masa: 0.005, min: 0, max: 60, consecuencia: 'Absorben CO2 si falla el depurador. Fue lo que salvó al Apolo 13. Cada uno retira 2.7 kg.' },
-  { id: 'repuestos', nombre: 'Repuestos', unidad: 'kits', masa: 0.05, min: 0, max: 30, consecuencia: 'La única forma de reparar un equipo dañado. Cada reparación usa uno o dos kits.' },
-  { id: 'paneles', nombre: 'Campos solares', unidad: '× 50 m²', masa: 0.25, min: 1, max: 8, consecuencia: 'Cada campo da hasta 7 kW al mediodía con cielo limpio. De noche y con polvo no producen.' },
-  { id: 'baterias', nombre: 'Baterías', unidad: '× 100 kWh', masa: 0.6, min: 1, max: 5, consecuencia: 'Sostienen la base durante la noche marciana, que dura más de 12 horas a −70 °C.' },
-  { id: 'reactor', nombre: 'Reactor Kilopower', unidad: 'unidad', masa: 1.5, min: 0, max: 1, consecuencia: 'Da 10 kW día y noche sin importar el polvo. Pesa tanto como seis campos solares.' },
-  { id: 'blindaje', nombre: 'Refugio blindado', unidad: 'capas', masa: 1.0, min: 0, max: 3, consecuencia: 'Reduce la dosis durante las tormentas solares. Pesa mucho y no protege fuera del refugio.' },
-  { id: 'botiquin', nombre: 'Botiquines', unidad: 'kits', masa: 0.02, min: 0, max: 10, consecuencia: 'Cada kit permite tratar una lesión o enfermedad.' },
-  { id: 'huerto', nombre: 'Kit de huerto', unidad: 'kit', masa: 0.3, min: 0, max: 1, consecuencia: 'Semillas, sustrato y luces para el huerto artificial. Da comida fresca y algo de oxígeno.' },
-  { id: 'isru', nombre: 'Extractor de hielo', unidad: 'equipo', masa: 0.8, min: 0, max: 1, consecuencia: 'Saca agua del hielo enterrado. Solo sirve si aterrizan donde hay hielo.' },
+  { id: 'agua', nombre: 'Water', unidad: '× 100 kg', masa: 0.1, min: 2, max: 60, consecuencia: 'For drinking and hygiene, and the oxygen generator turns it into air. Recycling recovers up to 98%.' },
+  { id: 'oxigeno', nombre: 'Oxygen tanks', unidad: '× 100 kg', masa: 0.16, min: 0, max: 20, consecuencia: 'A direct reserve of air. Each person uses 0.84 kg per day. The tank weighs more than the gas.' },
+  { id: 'alimentos', nombre: 'Food', unidad: '× 100 kg', masa: 0.1, min: 2, max: 50, consecuencia: 'Each person eats 1.83 kg per day. Food cannot be recycled.' },
+  { id: 'lioh', nombre: 'Lithium hydroxide cartridges', unidad: 'cartridges', masa: 0.005, min: 0, max: 60, consecuencia: 'They absorb CO2 if the scrubber fails. This is what saved Apollo 13. Each one removes 2.7 kg.' },
+  { id: 'repuestos', nombre: 'Spare parts', unidad: 'kits', masa: 0.05, min: 0, max: 30, consecuencia: 'The only way to repair damaged equipment. Each repair uses one or two kits.' },
+  { id: 'paneles', nombre: 'Solar arrays', unidad: '× 50 m²', masa: 0.25, min: 1, max: 8, consecuencia: 'Each array gives up to 7 kW at noon under a clear sky. They produce nothing at night or under dust.' },
+  { id: 'baterias', nombre: 'Batteries', unidad: '× 100 kWh', masa: 0.6, min: 1, max: 5, consecuencia: 'They keep the base running through the Martian night, which lasts more than 12 hours at −70 °C.' },
+  { id: 'reactor', nombre: 'Kilopower reactor', unidad: 'unit', masa: 1.5, min: 0, max: 1, consecuencia: 'Gives 10 kW day and night, no matter the dust. It weighs as much as six solar arrays.' },
+  { id: 'blindaje', nombre: 'Shielded shelter', unidad: 'layers', masa: 1.0, min: 0, max: 3, consecuencia: 'Lowers the dose during solar storms. It is very heavy and gives no protection outside the shelter.' },
+  { id: 'botiquin', nombre: 'Medical kits', unidad: 'kits', masa: 0.02, min: 0, max: 10, consecuencia: 'Each kit treats one injury or illness.' },
+  { id: 'huerto', nombre: 'Garden kit', unidad: 'kit', masa: 0.3, min: 0, max: 1, consecuencia: 'Seeds, growing medium and lights for the plant garden. It gives fresh food and some oxygen.' },
+  { id: 'isru', nombre: 'Ice extractor', unidad: 'unit', masa: 0.8, min: 0, max: 1, consecuencia: 'Gets water from buried ice. It only works if you land where there is ice.' },
 ]
 export const SUPPLY_BY_ID = Object.fromEntries(SUPPLIES.map((s) => [s.id, s])) as Record<SupplyId, SupplyItem>
 
@@ -196,9 +196,9 @@ export interface SiteInfo {
   bonoCiencia: number
 }
 export const SITES: SiteInfo[] = [
-  { id: 'gale', nombre: 'Cráter Gale', latitud: '4.6° S', descripcion: 'Donde trabaja el rover Curiosity. El clima del juego es el que se midió aquí. Zona ecuatorial con buena luz. Sin hielo accesible.', ajusteTemp: 0, solar: 1, hielo: false, bonoCiencia: 0 },
-  { id: 'jezero', nombre: 'Cráter Jezero', latitud: '18.4° N', descripcion: 'Delta de un antiguo río, donde trabaja el rover Perseverance. Alto valor científico: una muestra menos en el objetivo. Sin hielo accesible.', ajusteTemp: -3, solar: 0.95, hielo: false, bonoCiencia: 1 },
-  { id: 'utopia', nombre: 'Utopia Planitia', latitud: '45° N', descripcion: 'Llanura con hielo enterrado detectado por radar. Con el extractor se obtiene agua. Más fría y con un 25% menos de luz.', ajusteTemp: -15, solar: 0.75, hielo: true, bonoCiencia: 0 },
+  { id: 'gale', nombre: 'Gale Crater', latitud: '4.6° S', descripcion: 'Where the Curiosity rover works. The game weather is the weather measured here. Equatorial zone with good light. No ice you can reach.', ajusteTemp: 0, solar: 1, hielo: false, bonoCiencia: 0 },
+  { id: 'jezero', nombre: 'Jezero Crater', latitud: '18.4° N', descripcion: 'The delta of an ancient river, where the Perseverance rover works. High science value: one fewer sample in the objective. No ice you can reach.', ajusteTemp: -3, solar: 0.95, hielo: false, bonoCiencia: 1 },
+  { id: 'utopia', nombre: 'Utopia Planitia', latitud: '45° N', descripcion: 'A plain with buried ice found by radar. The extractor can get water from it. Colder, with 25% less light.', ajusteTemp: -15, solar: 0.75, hielo: true, bonoCiencia: 0 },
 ]
 export const SITE_BY_ID = Object.fromEntries(SITES.map((s) => [s.id, s])) as Record<string, SiteInfo>
 
@@ -206,21 +206,22 @@ export const SITE_BY_ID = Object.fromEntries(SITES.map((s) => [s.id, s])) as Rec
 
 export interface SistemaInfo { id: SistemaId; nombre: string; descripcion: string; exterior: boolean }
 export const SISTEMAS: SistemaInfo[] = [
-  { id: 'oga', nombre: 'Generador de oxígeno', descripcion: 'Separa el agua en oxígeno e hidrógeno por electrólisis.', exterior: false },
-  { id: 'cdra', nombre: 'Depurador de CO2', descripcion: 'Retira del aire el CO2 que exhala la tripulación.', exterior: false },
-  { id: 'wrs', nombre: 'Reciclador de agua', descripcion: 'Recupera agua de la orina y de la humedad del aire.', exterior: false },
-  { id: 'termico', nombre: 'Control térmico', descripcion: 'Mantiene la cabina a 22 °C.', exterior: false },
-  { id: 'esclusa', nombre: 'Esclusa', descripcion: 'Permite salir y entrar sin perder el aire de la cabina. Recarga los trajes.', exterior: false },
-  { id: 'energia', nombre: 'Planta de energía', descripcion: 'Campos solares, reactor y baterías.', exterior: true },
-  { id: 'huerto', nombre: 'Huerto artificial', descripcion: 'Cultivo bajo luces LED.', exterior: false },
-  { id: 'isru', nombre: 'Extractor de hielo', descripcion: 'Derrite hielo enterrado y bombea el agua.', exterior: true },
+  { id: 'oga', nombre: 'Oxygen Generator', descripcion: 'Splits water into oxygen and hydrogen by electrolysis.', exterior: false },
+  { id: 'cdra', nombre: 'CO2 Scrubber', descripcion: 'Removes the CO2 that the crew breathes out.', exterior: false },
+  { id: 'wrs', nombre: 'Water Recycler', descripcion: 'Recovers water from urine and from moisture in the air.', exterior: false },
+  { id: 'termico', nombre: 'Thermal Control', descripcion: 'Keeps the cabin at 22 °C.', exterior: false },
+  { id: 'esclusa', nombre: 'Airlock', descripcion: 'Lets you go out and come in without losing cabin air. Recharges the suits.', exterior: false },
+  { id: 'energia', nombre: 'Power Plant', descripcion: 'Solar arrays, reactor and batteries.', exterior: true },
+  { id: 'huerto', nombre: 'Plant Garden', descripcion: 'Crops grown under LED lights.', exterior: false },
+  { id: 'isru', nombre: 'Ice Extractor', descripcion: 'Melts buried ice and pumps out the water.', exterior: true },
 ]
 export const SISTEMA_BY_ID = Object.fromEntries(SISTEMAS.map((s) => [s.id, s])) as Record<SistemaId, SistemaInfo>
 /** Nombre del equipo para usar en mitad de una frase (inicial en minúscula, siglas intactas). */
-export const nombreSistema = (id: SistemaId) => {
-  const n = SISTEMA_BY_ID[id].nombre
-  return n.charAt(0).toLowerCase() + n.slice(1)
-}
+export const nombreSistema = (id: SistemaId) =>
+  SISTEMA_BY_ID[id].nombre
+    .split(' ')
+    .map((w) => (/^[A-Z0-9]+$/.test(w) ? w : w.toLowerCase()))
+    .join(' ')
 
 export interface SistemaEstado {
   id: SistemaId
@@ -245,18 +246,18 @@ export interface TareaEnsamblaje {
   zona: Zona
 }
 export const PASOS_ENSAMBLAJE = [
-  { paso: 0, titulo: 'Elegir la ubicación de la base', descripcion: 'Desde la órbita, el piloto propone un sitio y el comandante lo aprueba.', roles: ['piloto', 'comandante'] as Role[] },
-  { paso: 1, titulo: 'Desplegar el hábitat y los equipos', descripcion: 'Logística y piloto salen con el traje a desplegar los campos solares y descargar la carga.', roles: ['logistica', 'piloto'] as Role[] },
-  { paso: 2, titulo: 'Activar el soporte vital y la energía', descripcion: 'Sistemas y comandante conectan la energía de superficie y encienden el soporte vital.', roles: ['sistemas', 'comandante'] as Role[] },
-  { paso: 3, titulo: 'Comprobar las instalaciones', descripcion: 'Sistemas revisa la esclusa por dentro y el casco por fuera antes de iniciar las operaciones.', roles: ['sistemas'] as Role[] },
+  { paso: 0, titulo: 'Choose the base location', descripcion: 'From orbit, the pilot proposes a site and the commander approves it.', roles: ['piloto', 'comandante'] as Role[] },
+  { paso: 1, titulo: 'Deploy the habitat and equipment', descripcion: 'Logistics and the pilot suit up and go outside to deploy the solar arrays and unload the cargo.', roles: ['logistica', 'piloto'] as Role[] },
+  { paso: 2, titulo: 'Turn on life support and power', descripcion: 'Systems and the commander connect surface power and turn on life support.', roles: ['sistemas', 'comandante'] as Role[] },
+  { paso: 3, titulo: 'Check the facilities', descripcion: 'Systems checks the airlock from inside and the hull from outside before operations begin.', roles: ['sistemas'] as Role[] },
 ]
 export const TAREAS_ENSAMBLAJE: TareaEnsamblaje[] = [
-  { id: 'paneles', paso: 1, titulo: 'Desplegar los campos solares', roles: ['logistica', 'piloto'], estacion: 'campoSolar', zona: 'exterior' },
-  { id: 'carga', paso: 1, titulo: 'Descargar equipos y suministros', roles: ['logistica', 'piloto'], estacion: 'carga', zona: 'exterior' },
-  { id: 'energia', paso: 2, titulo: 'Conectar la energía de superficie', roles: ['sistemas', 'comandante'], estacion: 'energia', zona: 'nave' },
-  { id: 'soporte', paso: 2, titulo: 'Activar el soporte vital de superficie', roles: ['sistemas', 'comandante'], estacion: 'soporte', zona: 'nave' },
-  { id: 'revisionInt', paso: 3, titulo: 'Comprobar la esclusa y los sellos', roles: ['sistemas'], estacion: 'esclusa', zona: 'nave' },
-  { id: 'revisionExt', paso: 3, titulo: 'Inspeccionar el casco por fuera', roles: ['sistemas'], estacion: 'antena', zona: 'exterior' },
+  { id: 'paneles', paso: 1, titulo: 'Deploy the solar arrays', roles: ['logistica', 'piloto'], estacion: 'campoSolar', zona: 'exterior' },
+  { id: 'carga', paso: 1, titulo: 'Unload equipment and supplies', roles: ['logistica', 'piloto'], estacion: 'carga', zona: 'exterior' },
+  { id: 'energia', paso: 2, titulo: 'Connect surface power', roles: ['sistemas', 'comandante'], estacion: 'energia', zona: 'nave' },
+  { id: 'soporte', paso: 2, titulo: 'Turn on surface life support', roles: ['sistemas', 'comandante'], estacion: 'soporte', zona: 'nave' },
+  { id: 'revisionInt', paso: 3, titulo: 'Check the airlock and seals', roles: ['sistemas'], estacion: 'esclusa', zona: 'nave' },
+  { id: 'revisionExt', paso: 3, titulo: 'Inspect the hull from outside', roles: ['sistemas'], estacion: 'antena', zona: 'exterior' },
 ]
 
 // ---------- Página principal de la base ----------
@@ -276,43 +277,43 @@ export interface OpcionBase {
 export const GESTION_BASE: OpcionBase[] = [
   {
     id: 'controlar',
-    titulo: 'Controlar agua, oxígeno, alimentos y energía',
-    descripcion: 'Cuánto queda de cada cosa y para cuántos días alcanza.',
+    titulo: 'Track water, oxygen, food and power',
+    descripcion: 'How much of each is left and how many days it will last.',
     roles: ['logistica', 'comandante', 'medico'],
     estaciones: ['almacen', 'energia'],
   },
   {
     id: 'distribuir',
-    titulo: 'Decidir cómo distribuir recursos limitados',
-    descripcion: 'Las raciones de comida y agua, y qué se protege si falta energía.',
+    titulo: 'Decide how to share limited resources',
+    descripcion: 'Food and water rations, and what stays on if power runs short.',
     roles: ['logistica', 'comandante'],
     estaciones: ['almacen', 'energia'],
   },
   {
     id: 'produccion',
-    titulo: 'Administrar producción y reciclaje',
-    descripcion: 'El generador de oxígeno, el depurador de CO2 y el reciclador de agua.',
+    titulo: 'Manage production and recycling',
+    descripcion: 'The oxygen generator, the CO2 scrubber and the water recycler.',
     roles: ['logistica', 'comandante', 'medico'],
     estaciones: ['soporte'],
   },
   {
     id: 'equipos',
-    titulo: 'Mantener los equipos',
-    descripcion: 'Revisar el desgaste y reparar antes de que fallen. Hay que ir hasta el equipo.',
+    titulo: 'Maintain the equipment',
+    descripcion: 'Check the wear and repair things before they fail. You have to go to the equipment.',
     roles: ['sistemas'],
     estaciones: ['soporte', 'energia', 'esclusa'],
   },
   {
     id: 'radiacion',
-    titulo: 'Proteger a la tripulación de la radiación',
-    descripcion: 'La dosis de cada integrante, la orden de refugio y el plan de ejercicio.',
+    titulo: 'Protect the crew from radiation',
+    descripcion: 'Each crew member\'s dose, the order to take shelter and the exercise plan.',
     roles: ['medico', 'comandante'],
     estaciones: ['enfermeria', 'refugio'],
   },
   {
     id: 'huerto',
-    titulo: 'Huerto artificial de la base',
-    descripcion: 'Montarlo, cuidarlo y cosechar. También las muestras del terreno.',
+    titulo: 'Base plant garden',
+    descripcion: 'Set it up, look after it and harvest. Also the ground samples.',
     roles: ['cientifico'],
     estaciones: ['laboratorio'],
   },
@@ -322,7 +323,7 @@ export const GESTION_BASE: OpcionBase[] = [
 export const tareasDeRol = (rol: Role): string[] => [
   ...PASOS_ENSAMBLAJE.filter((p) => p.roles.includes(rol)).map((p) => p.titulo),
   ...GESTION_BASE.filter((o) => o.roles.includes(rol)).map((o) => o.titulo),
-  ...(rol === 'cientifico' ? ['Recoger y analizar las muestras del terreno'] : []),
+  ...(rol === 'cientifico' ? ['Collect and analyze the ground samples'] : []),
 ]
 
 // ---------- Estado ----------
@@ -724,13 +725,13 @@ export interface MemoriaBot {
 
 export interface EscalaInfo { valor: number; nombre: string; detalle: string }
 export const ESCALAS: EscalaInfo[] = [
-  { valor: 1, nombre: '×1', detalle: 'tiempo real' },
+  { valor: 1, nombre: '×1', detalle: 'real time' },
   { valor: 10, nombre: '×10', detalle: '1 s = 10 s' },
   { valor: 60, nombre: '×60', detalle: '1 s = 1 min' },
   { valor: 600, nombre: '×600', detalle: '1 s = 10 min' },
-  { valor: 3600, nombre: '×3 600', detalle: '1 s = 1 hora' },
-  { valor: 21600, nombre: '×21 600', detalle: '1 s = 6 horas' },
-  { valor: 86400, nombre: '×86 400', detalle: '1 s = 1 día' },
+  { valor: 3600, nombre: '×3,600', detalle: '1 s = 1 hour' },
+  { valor: 21600, nombre: '×21,600', detalle: '1 s = 6 hours' },
+  { valor: 86400, nombre: '×86,400', detalle: '1 s = 1 day' },
 ]
 /** Escala más alta que se permite en cada fase. */
 export const ESCALA_MAXIMA: Record<Phase, number> = {
@@ -765,13 +766,13 @@ export const HORA_ATERRIZAJE = 9
 
 /** Etiqueta corta del momento de la misión para el registro. */
 export function etiquetaTiempo(e: { t: number; fase: Phase }, tAterrizaje: number, solS: number): string {
-  if (e.fase === 'lobby' || e.fase === 'contexto') return 'Tierra'
+  if (e.fase === 'lobby' || e.fase === 'contexto') return 'Earth'
   if (e.fase === 'lanzamiento') return formatoMET(e.t)
   if (tAterrizaje > 0 && e.t >= tAterrizaje) {
     const s = e.t - tAterrizaje + (HORA_ATERRIZAJE / 24) * solS
     return `Sol ${Math.floor(s / solS) + 1} ${formatoHora(((s % solS) / solS) * 24)}`
   }
-  return `Día ${Math.floor(Math.max(0, e.t) / 86400) + 1}`
+  return `Day ${Math.floor(Math.max(0, e.t) / 86400) + 1}`
 }
 
 /** Segundo de misión en que la nave alcanza la órbita y sale hacia Marte. */

@@ -28,91 +28,91 @@ const reduccionRefugio = (room: RoomState) => Math.round(Math.max(0.07, 0.25 - 0
 
 const FALLOS: Record<SistemaId, { problema: string; pasiva: EmergencyAlternative }> = {
   cdra: {
-    problema: 'Una válvula del depurador de CO2 se atascó. El CO2 que exhala la tripulación se acumula en la cabina: sin depurar, se supera el límite de 3 mmHg en un par de horas.',
-    pasiva: { id: 'lioh', etiqueta: 'Instalar cartuchos de hidróxido de litio', consecuencia: 'Usa 2 cartuchos, que absorben 5.4 kg de CO2. El depurador sigue averiado.' },
+    problema: 'A valve in the CO2 Scrubber got stuck. The CO2 the crew breathes out builds up in the cabin. Without scrubbing, it goes over the 3 mmHg limit in a couple of hours.',
+    pasiva: { id: 'lioh', etiqueta: 'Install lithium hydroxide cartridges', consecuencia: 'Uses 2 cartridges, which absorb 5.4 kg of CO2. The scrubber stays broken.' },
   },
   oga: {
-    problema: 'La pila de electrólisis del generador de oxígeno se apagó por una lectura anómala. El aire se mantiene con los tanques mientras duren.',
-    pasiva: { id: 'nada', etiqueta: 'Seguir con los tanques de oxígeno', consecuencia: 'No gasta repuestos. La reserva de oxígeno baja 0.84 kg por persona y día.' },
+    problema: 'The electrolysis stack of the Oxygen Generator shut down after an abnormal reading. The air is kept up with the tanks while they last.',
+    pasiva: { id: 'nada', etiqueta: 'Keep using the oxygen tanks', consecuencia: 'Uses no spare parts. The oxygen supply drops 0.84 kg per person per day.' },
   },
   wrs: {
-    problema: 'Falló el destilador del reciclador de agua. El agua usada se acumula sin recuperarse.',
-    pasiva: { id: 'nada', etiqueta: 'Dejarlo apagado', consecuencia: 'No gasta repuestos. Se pierde toda el agua que se use hasta repararlo.' },
+    problema: 'The distiller of the Water Recycler failed. Used water builds up and is not recovered.',
+    pasiva: { id: 'nada', etiqueta: 'Leave it off', consecuencia: 'Uses no spare parts. All water used is lost until it is repaired.' },
   },
   termico: {
-    problema: 'Una bomba del circuito térmico se detuvo. La temperatura de la cabina empezará a alejarse de los 22 °C.',
-    pasiva: { id: 'nada', etiqueta: 'Dejarlo apagado', consecuencia: 'No gasta repuestos. La cabina se enfría en Marte o se calienta en el espacio.' },
+    problema: 'A pump in the thermal loop stopped. The cabin temperature will start to drift away from 22 °C.',
+    pasiva: { id: 'nada', etiqueta: 'Leave it off', consecuencia: 'Uses no spare parts. The cabin cools down on Mars or heats up in space.' },
   },
   energia: {
-    problema: 'Un regulador de la planta de energía entró en modo seguro. La generación cae casi a cero y la base vive de las baterías.',
-    pasiva: { id: 'nada', etiqueta: 'Esperar', consecuencia: 'No gasta repuestos. Cuando se agoten las baterías se apagan los equipos.' },
+    problema: 'A regulator in the Power Plant went into safe mode. Generation drops almost to zero and the base runs on its batteries.',
+    pasiva: { id: 'nada', etiqueta: 'Wait', consecuencia: 'Uses no spare parts. When the batteries run out, the equipment shuts down.' },
   },
   esclusa: {
-    problema: 'El sello de la esclusa pierde presión. No se puede salir ni recargar los trajes hasta repararlo.',
-    pasiva: { id: 'nada', etiqueta: 'Dejarla cerrada', consecuencia: 'No gasta repuestos. Nadie puede salir al exterior.' },
+    problema: 'The Airlock seal is losing pressure. Nobody can go outside or recharge the suits until it is repaired.',
+    pasiva: { id: 'nada', etiqueta: 'Keep it closed', consecuencia: 'Uses no spare parts. Nobody can go outside.' },
   },
   huerto: {
-    problema: 'Las luces del huerto se apagaron por un fallo del controlador. Las plantas dejan de crecer.',
-    pasiva: { id: 'nada', etiqueta: 'Dejarlo apagado', consecuencia: 'No gasta repuestos. El cultivo se detiene.' },
+    problema: 'The garden lights went out because of a controller failure. The plants stop growing.',
+    pasiva: { id: 'nada', etiqueta: 'Leave it off', consecuencia: 'Uses no spare parts. The crop stops growing.' },
   },
   isru: {
-    problema: 'La bomba del extractor de hielo se bloqueó. Deja de entrar agua nueva.',
-    pasiva: { id: 'nada', etiqueta: 'Dejarlo apagado', consecuencia: 'No gasta repuestos. No se obtiene agua del subsuelo.' },
+    problema: 'The pump of the Ice Extractor jammed. No new water is coming in.',
+    pasiva: { id: 'nada', etiqueta: 'Leave it off', consecuencia: 'Uses no spare parts. No water is drawn from underground.' },
   },
 }
 
 const ESCASEZ: Record<string, { nombre: string; alternativas: EmergencyAlternative[] }> = {
   comida: {
-    nombre: 'alimentos',
+    nombre: 'food',
     alternativas: [
-      { id: 'ahorro', etiqueta: 'Pasar a ración de ahorro (80%)', consecuencia: 'La comida dura un 25% más. La tripulación pierde reservas poco a poco.' },
-      { id: 'estricto', etiqueta: 'Pasar a ración estricta (60%)', consecuencia: 'La comida dura un 67% más. Pasadas unas semanas la salud se resiente.' },
-      { id: 'nada', etiqueta: 'Mantener la ración', consecuencia: 'Nada cambia. La comida puede acabarse antes de terminar la misión.' },
+      { id: 'ahorro', etiqueta: 'Switch to the saver ration (80%)', consecuencia: 'Food lasts 25% longer. The crew loses body reserves little by little.' },
+      { id: 'estricto', etiqueta: 'Switch to the strict ration (60%)', consecuencia: 'Food lasts 67% longer. After a few weeks health suffers.' },
+      { id: 'nada', etiqueta: 'Keep the ration', consecuencia: 'Nothing changes. Food may run out before the mission ends.' },
     ],
   },
   agua: {
-    nombre: 'agua',
+    nombre: 'water',
     alternativas: [
-      { id: 'ahorro', etiqueta: 'Ahorro de agua', consecuencia: 'Se recorta la higiene al mínimo. No afecta a lo que bebe la tripulación.' },
-      { id: 'ejercicio', etiqueta: 'Suspender el ejercicio', consecuencia: 'Se suda y se respira menos, así que se gasta menos agua y oxígeno. Se pierde músculo y hueso.' },
-      { id: 'nada', etiqueta: 'Mantener el consumo', consecuencia: 'Nada cambia. El agua puede acabarse antes de terminar la misión.' },
+      { id: 'ahorro', etiqueta: 'Save water', consecuencia: 'Hygiene is cut to the minimum. What the crew drinks does not change.' },
+      { id: 'ejercicio', etiqueta: 'Stop exercise', consecuencia: 'The crew sweats and breathes less, so less water and oxygen are used. Muscle and bone are lost.' },
+      { id: 'nada', etiqueta: 'Keep the same use', consecuencia: 'Nothing changes. Water may run out before the mission ends.' },
     ],
   },
   aire: {
-    nombre: 'oxígeno',
+    nombre: 'oxygen',
     alternativas: [
-      { id: 'oga', etiqueta: 'Encender el generador de oxígeno', consecuencia: 'Produce oxígeno a partir del agua: 1.125 kg de agua por kg de oxígeno.' },
-      { id: 'ejercicio', etiqueta: 'Suspender el ejercicio', consecuencia: 'El consumo de oxígeno baja cerca de un 25%. Se pierde músculo y hueso.' },
-      { id: 'nada', etiqueta: 'Mantener el consumo', consecuencia: 'Nada cambia. El oxígeno puede acabarse antes de terminar la misión.' },
+      { id: 'oga', etiqueta: 'Turn on the Oxygen Generator', consecuencia: 'It makes oxygen from water: 1.125 kg of water per kg of oxygen.' },
+      { id: 'ejercicio', etiqueta: 'Stop exercise', consecuencia: 'Oxygen use drops by about 25%. Muscle and bone are lost.' },
+      { id: 'nada', etiqueta: 'Keep the same use', consecuencia: 'Nothing changes. Oxygen may run out before the mission ends.' },
     ],
   },
 }
 
-export const DOLENCIAS = ['dolor lumbar', 'cálculo renal', 'congestión y dolor de cabeza', 'lesión en la mano', 'erupción en la piel', 'insomnio']
+export const DOLENCIAS = ['lower back pain', 'a kidney stone', 'congestion and a headache', 'a hand injury', 'a skin rash', 'insomnia']
 
 export const EMERGENCIAS: Record<string, Definicion> = {
   // Evento real de partículas solares (DONKI).
   particulas: {
     segundos: 90,
     roles: () => ['medico', 'comandante'],
-    titulo: () => 'Tormenta de radiación solar',
+    titulo: () => 'Solar radiation storm',
     descripcion: (room, d) =>
-      `Llega una tormenta de partículas del Sol, la que se registró el ${d.fecha}. ` +
+      `A storm of particles from the Sun is arriving, the one recorded on ${d.fecha}. ` +
       (enSuperficie(room)
-        ? `La atmósfera de Marte frena buena parte, pero fuera del hábitat la dosis sube a unos ${Math.round(Number(d.tasa) * 0.15)} mSv por día durante ${d.horas} horas.`
-        : `En la cabina la dosis sube a unos ${Math.round(Number(d.tasa) * 0.5)} mSv por día durante ${d.horas} horas. Lo normal en el viaje son ${C.GCR_CRUCERO_MSV_DIA}.`),
-    fuente: (_room, d) => `NASA DONKI, evento ${d.id}`,
+        ? `The atmosphere of Mars stops a good part of it, but outside the habitat the dose rises to about ${Math.round(Number(d.tasa) * 0.15)} mSv per day for ${d.horas} hours.`
+        : `In the cabin the dose rises to about ${Math.round(Number(d.tasa) * 0.5)} mSv per day for ${d.horas} hours. The normal level during the cruise is ${C.GCR_CRUCERO_MSV_DIA}.`),
+    fuente: (_room, d) => `NASA DONKI, event ${d.id}`,
     alOcurrir: (room, d) => {
       room.ambiente.tormentaSolar = { id: String(d.id), fecha: String(d.fecha), tasa: Number(d.tasa), hasta: room.t + Number(d.horas) * 3600 }
     },
     alternativas: (room, d) => [
-      { id: 'refugio', etiqueta: 'Toda la tripulación al refugio', consecuencia: `La dosis de la tormenta baja al ${reduccionRefugio(room)}%. Nadie trabaja ni repara durante ${d.horas} horas.` },
-      { id: 'parcial', etiqueta: 'Refugio, salvo sistemas', consecuencia: 'Quien lleva los sistemas sigue en su puesto y recibe la dosis de cabina. El resto se protege.' },
-      { id: 'seguir', etiqueta: 'Seguir trabajando', consecuencia: 'Todo sigue funcionando. Toda la tripulación recibe la dosis de cabina.' },
+      { id: 'refugio', etiqueta: 'Whole crew to the Storm Shelter', consecuencia: `The storm dose drops to ${reduccionRefugio(room)}%. Nobody works or repairs anything for ${d.horas} hours.` },
+      { id: 'parcial', etiqueta: 'Shelter, except the Systems Engineer', consecuencia: 'The Systems Engineer stays at their station and gets the cabin dose. The rest take cover.' },
+      { id: 'seguir', etiqueta: 'Keep working', consecuencia: 'Everything keeps running. The whole crew gets the cabin dose.' },
     ],
     aplicar: (room, _d, alt) => {
       const hasta = room.ambiente.tormentaSolar?.hasta ?? room.t
-      if (alt === 'seguir') return 'La tripulación sigue en sus puestos y acumula dosis.'
+      if (alt === 'seguir') return 'The crew stays at their stations and builds up dose.'
       for (const j of tripulacion(room)) {
         if (alt === 'parcial' && j.rol === 'sistemas') continue
         j.zona = 'nave'
@@ -120,109 +120,109 @@ export const EMERGENCIAS: Record<string, Definicion> = {
         j.manual = null
       }
       room.refugioHasta = Math.max(room.refugioHasta, hasta)
-      return alt === 'parcial' ? 'La tripulación se protege; quien lleva los sistemas recibe la dosis de cabina.' : 'Toda la tripulación está en el refugio.'
+      return alt === 'parcial' ? 'The crew takes cover. The Systems Engineer gets the cabin dose.' : 'The whole crew is in the Storm Shelter.'
     },
   },
 
   fallo: {
     roles: (_room, d) => (d.sistema === 'wrs' ? ['sistemas', 'logistica'] : ['sistemas']),
-    titulo: (_room, d) => `Avería: ${nombreSistema(d.sistema as SistemaId)}`,
-    descripcion: (room, d) => `${FALLOS[d.sistema as SistemaId].problema} Quedan ${room.rec.repuestos} kits de repuestos.`,
+    titulo: (_room, d) => `Failure: ${nombreSistema(d.sistema as SistemaId)}`,
+    descripcion: (room, d) => `${FALLOS[d.sistema as SistemaId].problema} ${room.rec.repuestos} spare part kits left.`,
     alOcurrir: (room, d) => {
       const s = sis(room, d.sistema as SistemaId)
       s.integridad = Math.min(s.integridad, 10)
       s.operativo = false
     },
     alternativas: (_room, d) => [
-      { id: 'reparar', etiqueta: 'Reparar con repuestos', consecuencia: 'Usa 2 kits. El equipo vuelve al 85%.' },
-      { id: 'reinicio', etiqueta: 'Reinicio de emergencia', consecuencia: 'No gasta repuestos. Mitad de probabilidad de que vuelva al 45%; si falla, queda inservible hasta repararlo.' },
+      { id: 'reparar', etiqueta: 'Repair with spare parts', consecuencia: 'Uses 2 kits. The equipment goes back to 85%.' },
+      { id: 'reinicio', etiqueta: 'Emergency restart', consecuencia: 'Uses no spare parts. A 50% chance it goes back to 45%. If it fails, it stays useless until repaired.' },
       FALLOS[d.sistema as SistemaId].pasiva,
     ],
     aplicar: (room, d, alt) => {
       const s = sis(room, d.sistema as SistemaId)
       const nombre = SISTEMA_BY_ID[s.id].nombre
       if (alt === 'reparar') {
-        if (room.rec.repuestos < 2) return `No había repuestos suficientes. ${nombre} sigue averiado.`
+        if (room.rec.repuestos < 2) return `There were not enough spare parts. The ${nombre} is still broken.`
         room.rec.repuestos -= 2
         s.integridad = 85
         s.activo = true
-        return `${nombre} reparado y en marcha.`
+        return `The ${nombre} is repaired and running.`
       }
       if (alt === 'reinicio') {
         if (azar(room) < 0.5) {
           s.integridad = 45
           s.activo = true
-          return `El reinicio funcionó. ${nombre} vuelve al 45%.`
+          return `The restart worked. The ${nombre} is back at 45%.`
         }
         s.integridad = 3
-        return `El reinicio falló. ${nombre} queda inservible hasta que se repare.`
+        return `The restart failed. The ${nombre} is useless until it is repaired.`
       }
       if (alt === 'lioh') {
         const usados = Math.min(2, room.rec.lioh)
-        if (usados === 0) return 'No quedaban cartuchos. El CO2 sigue subiendo.'
+        if (usados === 0) return 'There were no cartridges left. CO2 keeps rising.'
         room.rec.lioh -= usados
         room.rec.liohActivo += usados * C.LIOH_KG_CO2
-        return `Se instalaron ${usados} cartuchos. El depurador sigue averiado.`
+        return `${usados} cartridge${usados === 1 ? ' was' : 's were'} installed. The scrubber is still broken.`
       }
-      return `${nombre} sigue averiado.`
+      return `The ${nombre} is still broken.`
     },
   },
 
   fuga: {
     roles: () => ['sistemas', 'comandante'],
-    titulo: () => 'Fuga de presión',
-    descripcion: () => 'Un impacto pequeño perforó el casco. La cabina pierde 1.5 kg de aire por hora y el oxígeno se repone desde las reservas.',
+    titulo: () => 'Pressure leak',
+    descripcion: () => 'A small impact punched a hole in the hull. The cabin loses 1.5 kg of air per hour and oxygen is topped up from the reserves.',
     alOcurrir: (room) => {
       room.cabina.fuga = 1.5
     },
     alternativas: () => [
-      { id: 'sellar', etiqueta: 'Sellar con un kit de reparación', consecuencia: 'Usa 1 kit. La fuga se detiene.' },
-      { id: 'aislar', etiqueta: 'Cerrar la sección dañada', consecuencia: 'La fuga se detiene sin gastar repuestos, pero se pierde el 6% del agua y la comida guardadas allí.' },
-      { id: 'nada', etiqueta: 'Compensar con las reservas', consecuencia: 'La fuga sigue hasta que sistemas la selle. Cada hora se pierde aire.' },
+      { id: 'sellar', etiqueta: 'Seal it with a repair kit', consecuencia: 'Uses 1 kit. The leak stops.' },
+      { id: 'aislar', etiqueta: 'Close off the damaged section', consecuencia: 'The leak stops without using spare parts, but 6% of the water and food stored there is lost.' },
+      { id: 'nada', etiqueta: 'Make up for it with the reserves', consecuencia: 'The leak goes on until the Systems Engineer seals it. Air is lost every hour.' },
     ],
     aplicar: (room, _d, alt) => {
       if (alt === 'sellar') {
-        if (room.rec.repuestos < 1) return 'No quedaban repuestos. La fuga continúa.'
+        if (room.rec.repuestos < 1) return 'There were no spare parts left. The leak goes on.'
         room.rec.repuestos -= 1
         room.cabina.fuga = 0
-        return 'Fuga sellada.'
+        return 'Leak sealed.'
       }
       if (alt === 'aislar') {
         room.cabina.fuga = 0
         room.rec.agua *= 0.94
         room.rec.comida *= 0.94
-        return 'Sección cerrada. Se perdió parte del agua y la comida.'
+        return 'Section closed. Some of the water and food was lost.'
       }
-      return 'La fuga continúa.'
+      return 'The leak goes on.'
     },
   },
 
   polvo: {
     roles: () => ['logistica', 'comandante'],
-    titulo: () => 'Tormenta de polvo',
+    titulo: () => 'Dust storm',
     descripcion: (room, d) =>
-      `Se acerca una tormenta de polvo. La opacidad del cielo sube a ${d.tau} y la energía solar cae al ${Math.round(Math.exp(-0.35 * (Number(d.tau) - 0.5)) * 100)}% durante unos ${d.soles} soles. El polvo también se deposita sobre los paneles.` +
-      (room.cargamento.reactor > 0 ? ' El reactor no se ve afectado.' : ''),
+      `A dust storm is coming. The sky opacity rises to ${d.tau} and solar power drops to ${Math.round(Math.exp(-0.35 * (Number(d.tau) - 0.5)) * 100)}% for about ${d.soles} sols. Dust also settles on the panels.` +
+      (room.cargamento.reactor > 0 ? ' The reactor is not affected.' : ''),
     alternativas: () => [
-      { id: 'ahorro', etiqueta: 'Modo ahorro', consecuencia: 'Se apagan el huerto y el extractor de hielo. La energía se reserva para el aire y el calor.' },
-      { id: 'limpiar', etiqueta: 'Mantener todo y limpiar paneles', consecuencia: 'Nada se apaga. Alguien debe salir a limpiar los paneles cada sol, con poca visibilidad.' },
-      { id: 'nada', etiqueta: 'Seguir igual', consecuencia: 'Nada cambia. Si las baterías se agotan, los equipos se apagan solos.' },
+      { id: 'ahorro', etiqueta: 'Power saving mode', consecuencia: 'The garden and the Ice Extractor are turned off. Power is kept for air and heat.' },
+      { id: 'limpiar', etiqueta: 'Keep everything on and clean the panels', consecuencia: 'Nothing is turned off. Someone has to go out and clean the panels every sol, with poor visibility.' },
+      { id: 'nada', etiqueta: 'Carry on as usual', consecuencia: 'Nothing changes. If the batteries run out, the equipment shuts down on its own.' },
     ],
     aplicar: (room, _d, alt) => {
       if (alt === 'ahorro') {
         sis(room, 'huerto').activo = false
         sis(room, 'isru').activo = false
         room.ajustes.prioridad = 'vida'
-        return 'Modo ahorro activado: huerto y extractor apagados.'
+        return 'Power saving mode on: garden and Ice Extractor turned off.'
       }
-      return alt === 'limpiar' ? 'Se mantiene todo encendido. Hay que limpiar los paneles.' : 'Sin cambios.'
+      return alt === 'limpiar' ? 'Everything stays on. The panels need cleaning.' : 'No changes.'
     },
   },
 
   medico: {
     roles: () => ['medico'],
-    titulo: (_room, d) => `Problema médico: ${d.dolencia}`,
-    descripcion: (room, d) => `${d.nombre} presenta ${d.dolencia}. Quedan ${room.rec.botiquines} botiquines.`,
+    titulo: (_room, d) => `Medical problem: ${d.dolencia}`,
+    descripcion: (room, d) => `${d.nombre} has ${d.dolencia}. ${room.rec.botiquines} medical kits left.`,
     alOcurrir: (room, d) => {
       const j = jugador(room, String(d.jugadorId))
       if (j) {
@@ -231,106 +231,109 @@ export const EMERGENCIAS: Record<string, Definicion> = {
       }
     },
     alternativas: () => [
-      { id: 'tratar', etiqueta: 'Tratar con un botiquín', consecuencia: 'Usa 1 botiquín. Se recupera y sigue trabajando.' },
-      { id: 'reposo', etiqueta: 'Reposo de 12 horas', consecuencia: 'No gasta botiquín. Queda fuera de servicio medio día.' },
-      { id: 'nada', etiqueta: 'Que siga trabajando', consecuencia: 'Pierde salud y la dolencia continúa hasta que el médico la trate.' },
+      { id: 'tratar', etiqueta: 'Treat with a medical kit', consecuencia: 'Uses 1 medical kit. They recover and keep working.' },
+      { id: 'reposo', etiqueta: '12 hours of rest', consecuencia: 'Uses no medical kit. They are out of action for half a day.' },
+      { id: 'nada', etiqueta: 'Keep working', consecuencia: 'They lose health and the problem goes on until the Flight Surgeon treats it.' },
     ],
     aplicar: (room, d, alt) => {
       const j = jugador(room, String(d.jugadorId))
-      if (!j) return 'Sin paciente.'
+      if (!j) return 'No patient.'
       if (alt === 'tratar') {
         if (room.rec.botiquines < 1) {
           j.incapacitado = 12 * 3600
           j.dolencia = null
-          return `No quedaban botiquines. ${j.nombre} queda en reposo 12 horas.`
+          return `There were no medical kits left. ${j.nombre} rests for 12 hours.`
         }
         room.rec.botiquines -= 1
         j.dolencia = null
         j.vit.salud = limitar(j.vit.salud + 5, 0, 100)
-        return `${j.nombre} recibió tratamiento y sigue en servicio.`
+        return `${j.nombre} was treated and stays on duty.`
       }
       if (alt === 'reposo') {
         j.incapacitado = 12 * 3600
         j.dolencia = null
-        return `${j.nombre} queda en reposo 12 horas.`
+        return `${j.nombre} rests for 12 hours.`
       }
       j.vit.salud = limitar(j.vit.salud - 12, 0, 100)
-      return `${j.nombre} sigue trabajando con ${d.dolencia}.`
+      return `${j.nombre} keeps working with ${d.dolencia}.`
     },
   },
 
   mareo: {
     roles: () => ['medico'],
-    titulo: () => 'Mareo espacial',
-    descripcion: (_room, d) => `${d.nombre} tiene náuseas y desorientación. Le ocurre a más de la mitad de los astronautas en sus primeros días sin gravedad.`,
+    titulo: () => 'Space sickness',
+    descripcion: (_room, d) => `${d.nombre} feels sick and disoriented. This happens to more than half of astronauts in their first days without gravity.`,
     alOcurrir: (room, d) => {
       const j = jugador(room, String(d.jugadorId))
       if (j) {
-        j.dolencia = 'mareo espacial'
+        j.dolencia = 'space sickness'
         j.dolenciaHasta = room.t + 3 * 86400
       }
     },
     alternativas: () => [
-      { id: 'tratar', etiqueta: 'Medicación contra el mareo', consecuencia: 'Usa 1 botiquín. Se recupera en poco tiempo.' },
-      { id: 'reposo', etiqueta: 'Reposo de 12 horas', consecuencia: 'No gasta botiquín. El cuerpo se adapta solo, pero queda fuera de servicio.' },
-      { id: 'nada', etiqueta: 'Que siga trabajando', consecuencia: 'Pierde salud y el mareo sigue hasta recibir tratamiento.' },
+      { id: 'tratar', etiqueta: 'Motion sickness medicine', consecuencia: 'Uses 1 medical kit. They recover quickly.' },
+      { id: 'reposo', etiqueta: '12 hours of rest', consecuencia: 'Uses no medical kit. The body adapts on its own, but they are out of action.' },
+      { id: 'nada', etiqueta: 'Keep working', consecuencia: 'They lose health and the sickness goes on until treated.' },
     ],
-    aplicar: (room, d, alt) => EMERGENCIAS.medico.aplicar(room, { ...d, dolencia: 'mareo espacial' }, alt),
+    aplicar: (room, d, alt) => EMERGENCIAS.medico.aplicar(room, { ...d, dolencia: 'space sickness' }, alt),
   },
 
   escasez: {
     roles: () => ['logistica', 'comandante'],
-    titulo: (_room, d) => `Escasez de ${ESCASEZ[String(d.recurso)].nombre}`,
+    titulo: (_room, d) => {
+      const nombre = ESCASEZ[String(d.recurso)].nombre
+      return `${nombre.charAt(0).toUpperCase() + nombre.slice(1)} shortage`
+    },
     descripcion: (_room, d) =>
-      `Al ritmo actual, las reservas de ${ESCASEZ[String(d.recurso)].nombre} alcanzan para ${d.dias} días y la misión necesita ${d.necesarios}.`,
+      `At the current rate, the ${ESCASEZ[String(d.recurso)].nombre} supply lasts ${d.dias} days and the mission needs ${d.necesarios}.`,
     alternativas: (_room, d) => ESCASEZ[String(d.recurso)].alternativas,
     aplicar: (room, d, alt) => {
       if (alt === 'ahorro' && d.recurso === 'comida') {
         room.ajustes.racionComida = 'ahorro'
-        return 'Ración de ahorro activada.'
+        return 'Saver ration on.'
       }
       if (alt === 'estricto') {
         room.ajustes.racionComida = 'estricto'
-        return 'Ración estricta activada.'
+        return 'Strict ration on.'
       }
       if (alt === 'ahorro') {
         room.ajustes.racionAgua = 'ahorro'
-        return 'Ahorro de agua activado.'
+        return 'Water saving on.'
       }
       if (alt === 'ejercicio') {
         room.ajustes.ejercicio = 0
-        return 'Ejercicio suspendido.'
+        return 'Exercise stopped.'
       }
       if (alt === 'oga') {
         const oga = sis(room, 'oga')
         oga.activo = true
-        return oga.integridad > UMBRAL_AVERIA ? 'Generador de oxígeno encendido.' : 'El generador está averiado: hay que repararlo primero.'
+        return oga.integridad > UMBRAL_AVERIA ? 'Oxygen Generator on.' : 'The generator is broken. It has to be repaired first.'
       }
-      return 'Sin cambios.'
+      return 'No changes.'
     },
   },
 
   correccion: {
     roles: () => ['piloto', 'comandante'],
-    titulo: () => 'Corrección de trayectoria',
+    titulo: () => 'Trajectory correction',
     descripcion: (room) =>
-      `La navegación indica una desviación respecto al punto de entrada en Marte. Margen de propelente: ${Math.round(room.rec.propelente)}%. La señal a la Tierra tarda ${Math.round(room.vuelo.retardo / 60)} minutos: la decisión es de la tripulación.`,
+      `Navigation shows a drift from the entry point at Mars. Propellant margin: ${Math.round(room.rec.propelente)}%. A signal to Earth takes ${Math.round(room.vuelo.retardo / 60)} minutes, so the decision is up to the crew.`,
     alternativas: () => [
-      { id: 'ahora', etiqueta: 'Corregir ahora', consecuencia: 'Gasta 3% de propelente. Cuanto antes se corrige, menos cuesta.' },
-      { id: 'tarde', etiqueta: 'Corregir en la aproximación', consecuencia: 'Gasta 9% de propelente más adelante.' },
-      { id: 'nada', etiqueta: 'No corregir', consecuencia: 'No gasta propelente. El aterrizaje será impreciso y más duro para los equipos.' },
+      { id: 'ahora', etiqueta: 'Correct now', consecuencia: 'Uses 3% of propellant. The sooner you correct, the less it costs.' },
+      { id: 'tarde', etiqueta: 'Correct on approach', consecuencia: 'Uses 9% of propellant later on.' },
+      { id: 'nada', etiqueta: 'Do not correct', consecuencia: 'Uses no propellant. The landing will be off target and harder on the equipment.' },
     ],
     aplicar: (room, _d, alt) => {
       if (alt === 'ahora') {
         room.rec.propelente = Math.max(0, room.rec.propelente - 3)
-        return 'Maniobra hecha. Trayectoria nominal.'
+        return 'Maneuver done. Trajectory on track.'
       }
       if (alt === 'tarde') {
         room.rec.propelente = Math.max(0, room.rec.propelente - 9)
-        return 'La maniobra se hará en la aproximación.'
+        return 'The maneuver will be done on approach.'
       }
       room.avisos.desvio = (room.avisos.desvio ?? 0) + 1
-      return 'La nave sigue desviada.'
+      return 'The ship is still off course.'
     },
   },
 }
@@ -355,7 +358,7 @@ function crear(room: RoomState, tipo: string, datos: Datos) {
   }
   room.emergencias.unshift(em)
   if (room.emergencias.length > 8) room.emergencias.length = 8
-  log(room, `ALERTA: ${em.titulo}.`, 'alerta')
+  log(room, `ALERT: ${em.titulo}.`, 'alerta')
 }
 
 /** Ocurre una emergencia. Su efecto es inmediato; la decisión espera turno si ya hay otra abierta. */
@@ -376,5 +379,5 @@ export function despacharCola(room: RoomState) {
 }
 
 export function aplicarAlternativa(room: RoomState, em: Emergency, alt: string): string {
-  return EMERGENCIAS[em.tipo]?.aplicar(room, em.datos, alt) ?? 'Sin efecto.'
+  return EMERGENCIAS[em.tipo]?.aplicar(room, em.datos, alt) ?? 'No effect.'
 }

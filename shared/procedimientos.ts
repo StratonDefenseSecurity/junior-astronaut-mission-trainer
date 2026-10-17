@@ -108,6 +108,8 @@ export function latitudDe(sitio: string | null): number {
 
 /** Punto cardinal hacia el que queda el ecuador desde el sitio. */
 export const haciaEcuador = (sitio: string | null) => (latitudDe(sitio) < 0 ? 'norte' : 'sur')
+/** Nombre en pantalla de cada punto cardinal (los ids siguen en español). */
+const RUMBO: Record<string, string> = { norte: 'north', sur: 'south', este: 'east', oeste: 'west' }
 
 /**
  * Modelo del juego: fracción de la luz que aprovecha un panel fijo, según el coseno del ángulo
@@ -135,6 +137,8 @@ export const ALMOHADILLAS = 6
 export interface CultivoInfo {
   id: CultivoId
   nombre: string
+  /** Nombre corto para usar en mitad de una frase. */
+  corto: string
   /** Días de la siembra a la cosecha. */
   dias: number
   /** kg comestibles por almohadilla y cosecha completa (modelo del juego). */
@@ -146,51 +150,55 @@ export interface CultivoInfo {
 }
 
 const CORTES_HOJA: CultivoInfo['cortes'] = [
-  { id: 'hojas', texto: 'Cortar las hojas de fuera y dejar el centro', calidad: 1, consecuencia: 'Es el corte y rebrote que se probó en la ISS en 2017: la planta sigue dando hojas y se vuelve a cosechar antes.', factor: 0.6, rebrota: true },
-  { id: 'entera', texto: 'Cortar la planta entera', calidad: 0.7, consecuencia: 'Hoy hay más comida, pero hay que volver a sembrar y esperar el ciclo completo.', factor: 1, rebrota: false },
+  { id: 'hojas', texto: 'Cut the outer leaves and leave the center', calidad: 1, consecuencia: 'This is the cut-and-regrow method tested on the ISS in 2017: the plant keeps growing leaves and you can harvest again sooner.', factor: 0.6, rebrota: true },
+  { id: 'entera', texto: 'Cut the whole plant', calidad: 0.7, consecuencia: 'There is more food today, but you have to plant again and wait for the full cycle.', factor: 1, rebrota: false },
 ]
 
 export const CULTIVOS: CultivoInfo[] = [
   {
     id: 'lechuga',
-    nombre: 'Lechuga romana roja Outredgeous',
+    nombre: 'Outredgeous red romaine lettuce',
+    corto: 'lettuce',
     dias: 33,
     kg: 0.9,
     rebrote: 0.5,
-    historia: 'La primera verdura cultivada y comida en la ISS. Crecía 33 días y la tripulación la comió el 10 de agosto de 2015.',
+    historia: 'The first vegetable grown and eaten on the ISS. It grew for 33 days and the crew ate it on August 10, 2015.',
     cortes: CORTES_HOJA,
   },
   {
     id: 'mizuna',
-    nombre: 'Mizuna, una mostaza japonesa de hoja',
+    nombre: 'Mizuna, a Japanese leafy mustard',
+    corto: 'mizuna',
     dias: 28,
     kg: 0.8,
     rebrote: 0.5,
-    historia: 'Se cultivó en Veggie en 2017 y 2019 para comparar distintas luces y cosechas repetidas.',
+    historia: 'It was grown in Veggie in 2017 and 2019 to compare different lights and repeated harvests.',
     cortes: CORTES_HOJA,
   },
   {
     id: 'rabano',
-    nombre: 'Rábano',
+    nombre: 'Radish',
+    corto: 'radish',
     dias: 27,
     kg: 0.6,
     rebrote: 0,
-    historia: 'El experimento PH-02 lo cultivó en el Hábitat Avanzado de Plantas en 2020. Madura en 27 días.',
+    historia: 'The PH-02 experiment grew it in the Advanced Plant Habitat in 2020. It matures in 27 days.',
     cortes: [
-      { id: 'entera', texto: 'Sacar la planta entera con su raíz', calidad: 1, consecuencia: 'El rábano es la raíz: se cosecha entero y se vuelve a sembrar.', factor: 1, rebrota: false },
-      { id: 'hojas', texto: 'Cortar solo las hojas', calidad: 0.3, consecuencia: 'Te quedas con unas hojas y la raíz deja de engordar.', factor: 0.3, rebrota: true },
+      { id: 'entera', texto: 'Pull up the whole plant with its root', calidad: 1, consecuencia: 'The radish is the root: you harvest it whole and plant again.', factor: 1, rebrota: false },
+      { id: 'hojas', texto: 'Cut only the leaves', calidad: 0.3, consecuencia: 'You get a few leaves and the root stops growing.', factor: 0.3, rebrota: true },
     ],
   },
   {
     id: 'chile',
-    nombre: 'Chile Española mejorado',
+    nombre: 'Improved Española chile pepper',
+    corto: 'chile pepper',
     dias: 110,
     kg: 1.2,
     rebrote: 0.75,
-    historia: 'El experimento PH-04 lo cultivó en 2021 durante 137 días. Fue el primer fruto cosechado en la ISS, en dos cosechas.',
+    historia: 'The PH-04 experiment grew it in 2021 for 137 days. It was the first fruit harvested on the ISS, in two harvests.',
     cortes: [
-      { id: 'frutos', texto: 'Cortar los chiles maduros con tijera', calidad: 1, consecuencia: 'La planta sigue floreciendo y da otra cosecha, como en PH-04.', factor: 1, rebrota: true },
-      { id: 'entera', texto: 'Arrancar la planta', calidad: 0.2, consecuencia: 'Se pierde una planta que tardó meses en dar fruto.', factor: 1, rebrota: false },
+      { id: 'frutos', texto: 'Cut the ripe peppers with scissors', calidad: 1, consecuencia: 'The plant keeps flowering and gives another harvest, as in PH-04.', factor: 1, rebrota: true },
+      { id: 'entera', texto: 'Pull out the plant', calidad: 0.2, consecuencia: 'You lose a plant that took months to bear fruit.', factor: 1, rebrota: false },
     ],
   },
 ]
@@ -202,9 +210,9 @@ function calidadRiego(final: number): { calidad: number; mensaje: string } {
   const error = Math.abs(final - HUMEDAD_IDEAL)
   const calidad = r2(limitar(1 - Math.max(0, error - 10) / 30, 0, 1))
   const mensaje =
-    final > 88 ? `El sustrato queda al ${Math.round(final)}% y encharcado. Con tanta humedad aparece moho, como en las zinnias de la ISS.`
-    : final < 45 ? `El sustrato queda al ${Math.round(final)}%. Es poco: las raíces siguen con sed.`
-    : `El sustrato queda al ${Math.round(final)}% de humedad. Bien.`
+    final > 88 ? `The growing medium is at ${Math.round(final)}% and soaked. With that much moisture, mold appears, like on the ISS zinnias.`
+    : final < 45 ? `The growing medium is at ${Math.round(final)}%. That is too little: the roots are still thirsty.`
+    : `The growing medium is at ${Math.round(final)}% moisture. Good.`
   return { calidad, mensaje }
 }
 
@@ -246,14 +254,14 @@ export const LUZ_HUERTO = LUZ
 export const PROCEDIMIENTOS: Procedimiento[] = [
   deTarea('paneles', {
     intro:
-      'En el espacio, NASA ya usa paneles flexibles que viajan enrollados como una alfombra: el ROSA se probó en la ISS en junio de 2017 y los iROSA los instalaron astronautas en caminatas espaciales desde junio de 2021. Se extienden solos con la energía elástica de sus largueros. En el suelo, un panel fijo se orienta hacia el ecuador y se inclina más o menos como la latitud del sitio, para que el Sol del mediodía le llegue de frente.',
+      'In space, NASA already uses flexible panels that travel rolled up like a carpet. ROSA was tested on the ISS in June 2017, and astronauts have installed iROSA panels on spacewalks since June 2021. They unroll on their own using the stored spring energy in their side beams. On the ground, a fixed panel faces the equator and is tilted about as much as the latitude of the site, so the noon Sun hits it straight on.',
     pasos: [
       {
         id: 'orientacion',
         tipo: 'elegir',
-        titulo: 'Orientar el campo',
-        instruccion: (room) => `La base está a ${Math.abs(latitudDe(room.sitio))}° de latitud ${latitudDe(room.sitio) < 0 ? 'sur' : 'norte'}. ¿Hacia dónde miran los paneles?`,
-        porque: 'Un panel fijo recibe más luz al año si mira hacia el ecuador, porque el Sol del mediodía pasa por ese lado del cielo.',
+        titulo: 'Point the array',
+        instruccion: (room) => `The base is at latitude ${Math.abs(latitudDe(room.sitio))}° ${latitudDe(room.sitio) < 0 ? 'south' : 'north'}. Which way do the panels face?`,
+        porque: 'A fixed panel gets more light over the year if it faces the equator, because the noon Sun crosses that side of the sky.',
         segundos: 8,
         opciones: (room) =>
           ['norte', 'sur', 'este', 'oeste'].map((az) => {
@@ -261,45 +269,45 @@ export const PROCEDIMIENTOS: Procedimiento[] = [
             const ecuador = az === haciaEcuador(room.sitio)
             return {
               id: az,
-              texto: `Hacia el ${az}`,
+              texto: `Facing ${RUMBO[az]}`,
               calidad: ecuador ? 1 : r2(f),
               consecuencia: ecuador
-                ? 'Hacia el ecuador: el Sol del mediodía les llega de frente.'
-                : `Así aprovechan el ${pct(f)} de la luz del mediodía. ${Math.abs(latitudDe(room.sitio)) < 10 ? 'Cerca del ecuador casi no importa, lejos de él importa mucho.' : 'A esta latitud se pierde mucho.'}`,
+                ? 'Facing the equator: the noon Sun hits them straight on.'
+                : `This way they use ${pct(f)} of the noon light. ${Math.abs(latitudDe(room.sitio)) < 10 ? 'Near the equator it hardly matters. Far from it, it matters a lot.' : 'At this latitude you lose a lot.'}`,
             }
           }),
       },
       {
         id: 'anclaje',
         tipo: 'secuencia',
-        titulo: 'Anclar el marco',
-        instruccion: 'Aprieta los anclajes de las cuatro esquinas. Toca las esquinas en el orden en que las aprietas.',
-        porque: 'Los pernos de una pieza grande se aprietan en cruz, alternando esquinas opuestas, para que el marco asiente parejo y no se tuerza.',
+        titulo: 'Anchor the frame',
+        instruccion: 'Tighten the anchors at the four corners. Tap the corners in the order you tighten them.',
+        porque: 'The bolts on a large part are tightened in a cross pattern, switching between opposite corners, so the frame sits evenly and does not twist.',
         segundos: 10,
         elementos: [
-          { id: 'no', nombre: 'Esquina noroeste' },
-          { id: 'ne', nombre: 'Esquina noreste' },
-          { id: 'so', nombre: 'Esquina suroeste' },
-          { id: 'se', nombre: 'Esquina sureste' },
+          { id: 'no', nombre: 'Northwest corner' },
+          { id: 'ne', nombre: 'Northeast corner' },
+          { id: 'so', nombre: 'Southwest corner' },
+          { id: 'se', nombre: 'Southeast corner' },
         ],
         ordenes: ORDENES_CRUZ,
-        error: 'Después de una esquina va la opuesta, en diagonal. Si aprietas dos seguidas del mismo lado, el marco se tuerce.',
+        error: 'After one corner comes the opposite one, across the diagonal. If you tighten two in a row on the same side, the frame twists.',
       },
       {
         id: 'desenrollar',
         tipo: 'mantener',
-        titulo: 'Desenrollar las alas',
-        instruccion: 'Suelta el seguro y acompaña el ala mientras se extiende. Mantén pulsado hasta que se extienda entera.',
-        porque: 'El ala se despliega sola, pero alguien la acompaña para que no se tuerza ni se enganche en las rocas. Si se suelta antes, se queda a medias.',
+        titulo: 'Unroll the wings',
+        instruccion: 'Release the latch and guide the wing while it extends. Press and hold until it is fully extended.',
+        porque: 'The wing unrolls on its own, but someone guides it so it does not twist or catch on rocks. If you let go too early, it stays half open.',
         segundos: 6,
-        boton: 'Mantener para desenrollar',
+        boton: 'Hold to unroll',
       },
       {
         id: 'inclinacion',
         tipo: 'ajustar',
-        titulo: 'Inclinar los paneles',
-        instruccion: (room) => `Ajusta la inclinación de los paneles. La base está a ${Math.abs(latitudDe(room.sitio))}° de latitud.`,
-        porque: 'Inclinado como la latitud, el panel queda perpendicular al Sol del mediodía en los equinoccios. Más plano o más empinado pierde luz.',
+        titulo: 'Tilt the panels',
+        instruccion: (room) => `Adjust the tilt of the panels. The base is at latitude ${Math.abs(latitudDe(room.sitio))}°.`,
+        porque: 'Tilted to match the latitude, the panel is at a right angle to the noon Sun at the equinoxes. Flatter or steeper, it loses light.',
         segundos: 8,
         min: 0,
         max: 60,
@@ -314,7 +322,7 @@ export const PROCEDIMIENTOS: Procedimiento[] = [
           const az = String(room.procedimientos?.paneles?.valores?.[0] ?? haciaEcuador(room.sitio))
           const f = factorPanel(room.sitio, az, v)
           const mejor = factorPanel(room.sitio, az, mejorInclinacion(room.sitio, az))
-          return { calidad: r2(Math.min(1, f / mejor)), mensaje: `Con ${v}° hacia el ${az}, los paneles aprovechan el ${pct(f)} de la luz del mediodía.` }
+          return { calidad: r2(Math.min(1, f / mejor)), mensaje: `At ${v}° facing ${RUMBO[az] ?? az}, the panels use ${pct(f)} of the noon light.` }
         },
       },
     ],
@@ -322,49 +330,49 @@ export const PROCEDIMIENTOS: Procedimiento[] = [
 
   deTarea('carga', {
     intro:
-      'Para bajar hábitats y rovers de un módulo de aterrizaje, NASA Langley diseñó una grúa ligera de celosía movida por cables, el Lunar Surface Manipulation System. Su versión de vuelo levantaría cerca de una tonelada en la Luna. El problema más conocido es el balanceo de la carga, porque en otro planeta no hay gente en el suelo para frenarla. Si viajó el reactor, también hay que decidir dónde dejarlo.',
+      'To lower habitats and rovers from a lander, NASA Langley designed a light lattice crane moved by cables, the Lunar Surface Manipulation System. Its flight version would lift about one ton on the Moon. The best-known problem is the load swinging, because on another planet there is nobody on the ground to stop it. If the reactor came along, you also have to decide where to put it.',
     pasos: [
       {
         id: 'aparejo',
         tipo: 'secuencia',
-        titulo: 'Preparar el izado',
-        instruccion: 'Prepara la carga para levantarla. Toca los pasos en el orden en que los harías.',
-        porque: 'Primero la carga cuelga de la grúa y el cable está tenso. Solo entonces se sueltan los amarres del viaje, para que nada se mueva solo al liberarlo.',
+        titulo: 'Get ready to lift',
+        instruccion: 'Get the load ready to lift. Tap the steps in the order you would do them.',
+        porque: 'First the load hangs from the crane and the cable is tight. Only then are the launch tie-downs released, so nothing moves on its own when it is freed.',
         segundos: 10,
         elementos: [
-          { id: 'soltar', nombre: 'Soltar los amarres de lanzamiento' },
-          { id: 'eslingas', nombre: 'Enganchar las eslingas a los cuatro puntos de izado' },
-          { id: 'tensar', nombre: 'Tensar el cable de la grúa' },
-          { id: 'guia', nombre: 'Atar un cabo guía para frenar el balanceo' },
+          { id: 'soltar', nombre: 'Release the launch tie-downs' },
+          { id: 'eslingas', nombre: 'Hook the slings to the four lifting points' },
+          { id: 'tensar', nombre: 'Tighten the crane cable' },
+          { id: 'guia', nombre: 'Tie a guide rope to stop the swinging' },
         ],
         ordenes: [
           ['eslingas', 'guia', 'tensar', 'soltar'],
           ['guia', 'eslingas', 'tensar', 'soltar'],
           ['eslingas', 'tensar', 'guia', 'soltar'],
         ],
-        error: 'Si sueltas los amarres antes de que el cable esté tenso, la carga se desliza sola por la cubierta.',
+        error: 'If you release the tie-downs before the cable is tight, the load slides across the deck on its own.',
       },
       {
         id: 'bajar',
         tipo: 'mantener',
-        titulo: 'Bajar la carga',
-        instruccion: 'Baja cada palé despacio hasta el suelo. Mantén pulsado mientras baja.',
-        porque: 'En Marte la carga pesa un tercio que en la Tierra, pero conserva toda su masa: si coge velocidad o se balancea, cuesta lo mismo frenarla.',
+        titulo: 'Lower the load',
+        instruccion: 'Lower each pallet slowly to the ground. Press and hold while it goes down.',
+        porque: 'On Mars the load weighs a third of what it weighs on Earth, but it keeps all its mass. If it picks up speed or swings, it is just as hard to stop.',
         segundos: 8,
-        boton: 'Mantener para bajar',
+        boton: 'Hold to lower',
       },
       {
         id: 'reactor',
         tipo: 'elegir',
-        titulo: 'Dónde dejar el reactor',
-        instruccion: 'El reactor de fisión da energía día y noche, pero emite radiación. ¿Dónde lo dejas?',
-        porque: 'Los estudios de NASA para un reactor de superficie fijan la dosis aceptable a 1 km y proponen meterlo en un hoyo para que el propio suelo lo blinde. El reactor Kilopower superó en 2018 una prueba de 28 horas a plena potencia en Nevada.',
+        titulo: 'Where to put the reactor',
+        instruccion: 'The fission reactor gives power day and night, but it gives off radiation. Where do you put it?',
+        porque: 'NASA studies for a surface reactor set the acceptable dose at 1 km and suggest putting it in a pit so the soil itself shields it. In 2018 the Kilopower reactor passed a 28-hour full-power test in Nevada.',
         segundos: 8,
         aplica: (room) => room.cargamento.reactor > 0,
         opciones: () => [
-          { id: 'enterrado', texto: 'A 1 km, dentro de un hoyo cubierto con regolito', calidad: 1, consecuencia: 'El suelo hace de blindaje y la distancia baja la dosis. Hace falta tender un cable largo.' },
-          { id: 'lejos', texto: 'A 1 km, sobre la superficie', calidad: 0.7, consecuencia: 'La distancia ayuda, pero sin suelo alrededor la radiación llega más lejos. Quien salga recibe algo más de dosis.' },
-          { id: 'cerca', texto: 'Junto al hábitat, para ahorrar cable', calidad: 0.1, consecuencia: 'La tripulación recibe radiación del reactor día y noche. Por eso los planes de NASA lo alejan.' },
+          { id: 'enterrado', texto: '1 km away, inside a pit covered with regolith', calidad: 1, consecuencia: 'The soil acts as shielding and the distance lowers the dose. You need to lay a long cable.' },
+          { id: 'lejos', texto: '1 km away, on the surface', calidad: 0.7, consecuencia: 'The distance helps, but with no soil around it the radiation reaches farther. Anyone who goes outside gets a bit more dose.' },
+          { id: 'cerca', texto: 'Next to the habitat, to save cable', calidad: 0.1, consecuencia: 'The crew gets radiation from the reactor day and night. That is why NASA plans keep it far away.' },
         ],
       },
     ],
@@ -372,47 +380,47 @@ export const PROCEDIMIENTOS: Procedimiento[] = [
 
   deTarea('energia', {
     intro:
-      'En la ISS, los paneles dan entre 150 y 170 voltios de corriente continua. Unas unidades los fijan en 160 V, el bus primario, del que se cargan las baterías. Después, convertidores bajan la tensión a 124.5 V, el bus secundario que llega a los laboratorios y a la tripulación. Aquí se conecta igual, con el circuito bloqueado y de la fuente hacia las cargas.',
+      'On the ISS, the panels give between 150 and 170 volts of direct current. Some units hold it at 160 V, the primary bus, which charges the batteries. Then converters step the voltage down to 124.5 V, the secondary bus that reaches the labs and the crew. Here you connect it the same way, with the circuit locked out and working from the source toward the loads.',
     pasos: [
       {
         id: 'seguridad',
         tipo: 'elegir',
-        titulo: 'Asegurar el circuito',
-        instruccion: 'Vas a conectar los cables de superficie al cuadro del hábitat. ¿Cómo lo preparas?',
-        porque: 'Antes de tocar un conector se abre el interruptor, se le pone candado y etiqueta, y se mide que no haya tensión. Así nadie lo cierra mientras trabajas.',
+        titulo: 'Make the circuit safe',
+        instruccion: 'You are about to connect the surface cables to the habitat panel. How do you prepare?',
+        porque: 'Before touching a connector, you open the breaker, put a lock and a tag on it, and measure that there is no voltage. That way nobody can close it while you work.',
         segundos: 8,
         opciones: () => [
-          { id: 'bloqueo', texto: 'Abrir el interruptor, ponerle candado y etiqueta y medir que no hay tensión', calidad: 1, consecuencia: 'Así se trabaja con circuitos: nadie puede cerrarlo mientras conectas, y lo compruebas con el medidor.' },
-          { id: 'apagar', texto: 'Abrir el interruptor sin candado', calidad: 0.6, consecuencia: 'Funciona, pero alguien que no sabe que estás conectando podría cerrarlo.' },
-          { id: 'caliente', texto: 'Conectar con el circuito encendido para no cortar la luz', calidad: 0, repetir: true, consecuencia: 'No. En corriente continua el arco eléctrico no se apaga solo como en la alterna: quema el conector y a quien lo sostiene. Elige otra forma.' },
+          { id: 'bloqueo', texto: 'Open the breaker, lock and tag it, and measure that there is no voltage', calidad: 1, consecuencia: 'This is how you work with circuits: nobody can close it while you connect, and you check it with the meter.' },
+          { id: 'apagar', texto: 'Open the breaker without a lock', calidad: 0.6, consecuencia: 'It works, but someone who does not know you are connecting could close it.' },
+          { id: 'caliente', texto: 'Connect with the circuit on so the lights stay on', calidad: 0, repetir: true, consecuencia: 'No. With direct current, an electric arc does not go out on its own like with alternating current. It burns the connector and the person holding it. Choose another way.' },
         ],
       },
       {
         id: 'cierre',
         tipo: 'secuencia',
-        titulo: 'Energizar el sistema',
-        instruccion: 'Cierra los interruptores uno a uno. Toca cada etapa en el orden en que la energizas.',
-        porque: 'Se energiza de la fuente hacia las cargas, una etapa cada vez, comprobando la tensión antes de seguir. Así un fallo se ve en la etapa donde aparece.',
+        titulo: 'Power up the system',
+        instruccion: 'Close the breakers one by one. Tap each stage in the order you power it up.',
+        porque: 'You power up from the source toward the loads, one stage at a time, checking the voltage before moving on. That way a fault shows up at the stage where it happens.',
         segundos: 12,
         elementos: [
-          { id: 'cargas', nombre: 'Cargas del hábitat' },
-          { id: 'convertidor', nombre: 'Convertidor a 124.5 V' },
-          { id: 'fuente', nombre: 'Generación de superficie' },
-          { id: 'baterias', nombre: 'Baterías' },
-          { id: 'primario', nombre: 'Bus primario de 160 V' },
+          { id: 'cargas', nombre: 'Habitat loads' },
+          { id: 'convertidor', nombre: '124.5 V converter' },
+          { id: 'fuente', nombre: 'Surface power generation' },
+          { id: 'baterias', nombre: 'Batteries' },
+          { id: 'primario', nombre: '160 V primary bus' },
         ],
         ordenes: [
           ['fuente', 'primario', 'baterias', 'convertidor', 'cargas'],
           ['fuente', 'primario', 'convertidor', 'baterias', 'cargas'],
         ],
-        error: 'Va de la fuente hacia las cargas. Cerrar una etapa antes que la que la alimenta provoca un pico al conectarla y daña el equipo.',
+        error: 'It goes from the source toward the loads. Closing a stage before the one that feeds it causes a spike when it connects and damages the equipment.',
       },
       {
         id: 'tension',
         tipo: 'ajustar',
-        titulo: 'Ajustar el convertidor',
-        instruccion: 'Ajusta la tensión de salida del convertidor que alimenta el hábitat.',
-        porque: 'Los equipos están hechos para la tensión del bus secundario, 124.5 V en la ISS. Con más tensión se dañan; con menos piden más corriente y los cables se calientan.',
+        titulo: 'Adjust the converter',
+        instruccion: 'Adjust the output voltage of the converter that powers the habitat.',
+        porque: 'The equipment is built for the secondary bus voltage, 124.5 V on the ISS. With more voltage it gets damaged. With less, it draws more current and the cables heat up.',
         segundos: 8,
         min: 100,
         max: 170,
@@ -425,7 +433,7 @@ export const PROCEDIMIENTOS: Procedimiento[] = [
           const calidad = r2(limitar(1 - Math.max(0, e - 1) / 15, 0, 1))
           return {
             calidad,
-            mensaje: v > 130 ? `${v} V es demasiado: los equipos de soporte vital sufren por sobretensión.` : v < 119 ? `Con ${v} V los equipos piden más corriente y se pierde energía en calor.` : `${v} V. Los equipos reciben la tensión para la que están hechos.`,
+            mensaje: v > 130 ? `${v} V is too much: the life support equipment suffers from overvoltage.` : v < 119 ? `At ${v} V the equipment draws more current and energy is lost as heat.` : `${v} V. The equipment gets the voltage it was built for.`,
           }
         },
       },
@@ -434,39 +442,39 @@ export const PROCEDIMIENTOS: Procedimiento[] = [
 
   deTarea('soporte', {
     intro:
-      'El soporte vital de la ISS tiene tres equipos principales: el reciclador de agua, que recupera el 98% del agua; el generador de oxígeno, que separa agua en oxígeno e hidrógeno; y el depurador, que retira el CO2 del aire. Todos se enfrían con los lazos de agua del control térmico. Aquí se encienden en orden y se ajustan para la tripulación que hay.',
+      'ISS life support has three main machines: the water recycler, which recovers 98% of the water; the oxygen generator, which splits water into oxygen and hydrogen; and the scrubber, which removes CO2 from the air. They are all cooled by the water loops of the thermal control system. Here you turn them on in order and set them for the crew you have.',
     pasos: [
       {
         id: 'arranque',
         tipo: 'secuencia',
-        titulo: 'Encender los equipos',
-        instruccion: 'Enciende los cuatro equipos. Toca cada uno en el orden en que lo enciendes.',
-        porque: 'Primero la refrigeración, porque los equipos se calientan al trabajar. El generador de oxígeno va después del reciclador, porque separa el agua que este le da.',
+        titulo: 'Turn on the equipment',
+        instruccion: 'Turn on the four machines. Tap each one in the order you turn it on.',
+        porque: 'Cooling comes first, because the machines heat up while they work. The oxygen generator goes after the recycler, because it splits the water the recycler gives it.',
         segundos: 12,
         elementos: [
-          { id: 'oga', nombre: 'Generador de oxígeno' },
-          { id: 'cdra', nombre: 'Depurador de CO2' },
-          { id: 'termico', nombre: 'Control térmico' },
-          { id: 'wrs', nombre: 'Reciclador de agua' },
+          { id: 'oga', nombre: 'Oxygen Generator' },
+          { id: 'cdra', nombre: 'CO2 Scrubber' },
+          { id: 'termico', nombre: 'Thermal Control' },
+          { id: 'wrs', nombre: 'Water Recycler' },
         ],
         ordenes: [
           ['termico', 'wrs', 'cdra', 'oga'],
           ['termico', 'cdra', 'wrs', 'oga'],
           ['termico', 'wrs', 'oga', 'cdra'],
         ],
-        error: 'Primero el control térmico, que enfría a los demás. Y el generador de oxígeno necesita el agua del reciclador: arrancarlo en seco lo daña.',
+        error: 'Thermal control comes first, because it cools the others. And the oxygen generator needs water from the recycler: starting it dry damages it.',
       },
       {
         id: 'oxigeno',
         tipo: 'ajustar',
-        titulo: 'Producción de oxígeno',
-        instruccion: (room) => `Ajusta cuánto oxígeno produce el generador al día. En la base viven ${room.jugadores.filter((j) => j.rol).length} personas.`,
-        porque: `Cada persona consume unos ${0.84} kg de oxígeno al día. El generador de la ISS da hasta ${C.OGA_KG_DIA} kg. Producir de más gasta agua y energía; de menos, se vacían los tanques.`,
+        titulo: 'Oxygen production',
+        instruccion: (room) => `Set how much oxygen the generator makes per day. ${room.jugadores.filter((j) => j.rol).length} people live in the base.`,
+        porque: `Each person uses about ${0.84} kg of oxygen per day. The ISS generator makes up to ${C.OGA_KG_DIA} kg. Making too much wastes water and power. Making too little empties the tanks.`,
         segundos: 10,
         min: 0,
         max: C.OGA_KG_DIA,
         paso: 0.1,
-        unidad: 'kg/día',
+        unidad: 'kg/day',
         inicial: 2,
         objetivo: (room) => r1(room.jugadores.filter((j) => j.rol).length * 0.84),
         evaluar: (room, v) => {
@@ -475,21 +483,21 @@ export const PROCEDIMIENTOS: Procedimiento[] = [
           const calidad = r2(r < 0.95 ? limitar(1 - (0.95 - r) * 2.5, 0, 1) : r > 1.2 ? limitar(1 - (r - 1.2) * 0.6, 0.5, 1) : 1)
           return {
             calidad,
-            mensaje: r < 0.95 ? `${v} kg al día no alcanza: hacen falta ${r1(necesario)}. El resto saldrá de los tanques.` : r > 1.2 ? `${v} kg al día es más de lo necesario: gasta agua y energía de más.` : `${v} kg al día cubre lo que respira la tripulación.`,
+            mensaje: r < 0.95 ? `${v} kg per day is not enough: you need ${r1(necesario)}. The rest will come from the tanks.` : r > 1.2 ? `${v} kg per day is more than you need: it wastes water and power.` : `${v} kg per day covers what the crew breathes.`,
           }
         },
       },
       {
         id: 'alarma',
         tipo: 'elegir',
-        titulo: 'Alarma de CO2',
-        instruccion: '¿A cuánto CO2 en el aire debe saltar la alarma?',
-        porque: 'NASA bajó el límite de CO2 en cabina a 3 mmHg porque con más la tripulación tiene dolores de cabeza y rinde menos. Una alarma tardía deja pasar el problema.',
+        titulo: 'CO2 alarm',
+        instruccion: 'At what level of CO2 in the air should the alarm go off?',
+        porque: 'NASA lowered the cabin CO2 limit to 3 mmHg because above it the crew gets headaches and works less well. A late alarm lets the problem slip by.',
         segundos: 6,
         opciones: () => [
-          { id: '3', texto: 'A 3 mmHg', calidad: 1, consecuencia: 'Es el límite vigente de NASA. La alarma avisa a tiempo.' },
-          { id: '5.3', texto: 'A 5.3 mmHg', calidad: 0.6, consecuencia: 'Era el límite anterior. La alarma avisa cuando ya hay síntomas.' },
-          { id: '10', texto: 'A 10 mmHg', calidad: 0.2, consecuencia: 'La alarma saltará muy tarde: el aire ya hará daño antes de que se note.' },
+          { id: '3', texto: 'At 3 mmHg', calidad: 1, consecuencia: 'This is the current NASA limit. The alarm warns you in time.' },
+          { id: '5.3', texto: 'At 5.3 mmHg', calidad: 0.6, consecuencia: 'This was the old limit. The alarm warns you when there are already symptoms.' },
+          { id: '10', texto: 'At 10 mmHg', calidad: 0.2, consecuencia: 'The alarm will go off very late: the air will already be doing harm before anyone notices.' },
         ],
       },
     ],
@@ -497,42 +505,42 @@ export const PROCEDIMIENTOS: Procedimiento[] = [
 
   deTarea('revisionInt', {
     intro:
-      'En la ISS nunca se abre una escotilla sin comprobar antes que no hay fuga. Se presuriza el espacio entre las dos escotillas y se vigila que la presión no baje. Al llegar una nave Dragon en 2015, Samantha Cristoforetti lo presurizó a 260 mmHg y comprobó durante 20 minutos que se mantenía.',
+      'On the ISS, a hatch is never opened without first checking that there is no leak. The space between the two hatches is pressurized and the crew watches that the pressure does not drop. When a Dragon spacecraft arrived in 2015, Samantha Cristoforetti pressurized it to 260 mmHg and checked for 20 minutes that the pressure held.',
     pasos: [
       {
         id: 'sello',
         tipo: 'secuencia',
-        titulo: 'Preparar el sello',
-        instruccion: 'Prepara la escotilla interior de la esclusa. Toca los pasos en orden.',
-        porque: 'El polvo de Marte es muy fino y se pega a todo. Un grano en el sello basta para una fuga lenta, así que se revisa y se limpia antes de cerrar.',
+        titulo: 'Prepare the seal',
+        instruccion: 'Prepare the inner hatch of the airlock. Tap the steps in order.',
+        porque: 'Martian dust is very fine and sticks to everything. One grain on the seal is enough for a slow leak, so the seal is checked and cleaned before closing.',
         segundos: 10,
         elementos: [
-          { id: 'cerrar', nombre: 'Cerrar la escotilla' },
-          { id: 'limpiar', nombre: 'Limpiar el polvo del sello' },
-          { id: 'trabas', nombre: 'Asegurar las trabas' },
-          { id: 'revisar', nombre: 'Revisar el sello buscando cortes' },
+          { id: 'cerrar', nombre: 'Close the hatch' },
+          { id: 'limpiar', nombre: 'Clean the dust off the seal' },
+          { id: 'trabas', nombre: 'Lock the latches' },
+          { id: 'revisar', nombre: 'Check the seal for cuts' },
         ],
         ordenes: [
           ['revisar', 'limpiar', 'cerrar', 'trabas'],
           ['limpiar', 'revisar', 'cerrar', 'trabas'],
         ],
-        error: 'El sello se revisa y se limpia con la escotilla abierta. Las trabas se aseguran al final.',
+        error: 'The seal is checked and cleaned with the hatch open. The latches are locked at the end.',
       },
       {
         id: 'presurizar',
         tipo: 'mantener',
-        titulo: 'Presurizar',
-        instruccion: 'Abre la válvula y presuriza la esclusa a 260 mmHg. Mantén pulsado hasta llegar.',
-        porque: 'Se usa una presión menor que la de cabina: si hay una fuga se nota igual, y si algo cede el golpe es menor.',
+        titulo: 'Pressurize',
+        instruccion: 'Open the valve and pressurize the airlock to 260 mmHg. Press and hold until it gets there.',
+        porque: 'A pressure lower than the cabin is used: a leak still shows up, and if something gives way the blow is smaller.',
         segundos: 5,
-        boton: 'Mantener para presurizar',
+        boton: 'Hold to pressurize',
       },
       {
         id: 'caida',
         tipo: 'comprobar',
-        titulo: 'Leer la caída de presión',
-        instruccion: 'Observa la presión durante 20 minutos y decide si la esclusa es estanca.',
-        porque: 'Si la presión baja más de lo que el sensor puede explicar, hay una fuga. Se busca y se repite la prueba antes de abrir.',
+        titulo: 'Read the pressure drop',
+        instruccion: 'Watch the pressure for 20 minutes and decide if the airlock is airtight.',
+        porque: 'If the pressure drops more than the sensor can explain, there is a leak. You find it and repeat the test before opening.',
         segundos: 10,
         lectura: (room) => {
           const d = room.procedimientos?.revisionInt?.datos ?? {}
@@ -544,17 +552,17 @@ export const PROCEDIMIENTOS: Procedimiento[] = [
           })
           return {
             forma: 'linea',
-            titulo: 'Presión en la esclusa',
+            titulo: 'Airlock pressure',
             unidad: 'mmHg',
-            eje: 'minutos',
+            eje: 'minutes',
             puntos,
             limite: 259,
-            limiteTexto: 'Caída máxima: 1 mmHg en 20 minutos',
-            pregunta: '¿La esclusa es estanca?',
+            limiteTexto: 'Maximum drop: 1 mmHg in 20 minutes',
+            pregunta: 'Is the airlock airtight?',
             correcto: fuga ? 'falla' : 'pasa',
             explicacion: fuga
-              ? `La presión bajó ${r1(caida * 20)} mmHg en 20 minutos. Es más que el ruido del sensor: hay una fuga.`
-              : 'La presión se mantiene. Lo que sube y baja es el ruido del sensor.',
+              ? `The pressure dropped ${r1(caida * 20)} mmHg in 20 minutes. That is more than sensor noise: there is a leak.`
+              : 'The pressure holds. The small ups and downs are sensor noise.',
           }
         },
       },
@@ -563,41 +571,41 @@ export const PROCEDIMIENTOS: Procedimiento[] = [
 
   deTarea('revisionExt', {
     intro:
-      'En la ISS el exterior se fotografía con cámaras de mano y con las del brazo robótico. Las fotos se comparan con las anteriores para encontrar impactos de micrometeoritos. Aquí hay que buscar además los golpes del aterrizaje antes de dar la base por buena.',
+      'On the ISS, the outside is photographed with handheld cameras and with the cameras on the robotic arm. The photos are compared with earlier ones to find micrometeoroid hits. Here you also have to look for dents from the landing before calling the base good.',
     pasos: [
       {
         id: 'fotos',
         tipo: 'mantener',
-        titulo: 'Fotografiar el casco',
-        instruccion: 'Recorre el casco y fotografía cada tramo. Mantén pulsado mientras avanzas.',
-        porque: 'Una marca pequeña no se ve a simple vista con el traje puesto. Las fotos se amplían y se comparan con las del despegue.',
+        titulo: 'Photograph the hull',
+        instruccion: 'Walk along the hull and photograph each section. Press and hold while you move.',
+        porque: 'A small mark is hard to see with the naked eye while wearing the suit. The photos are enlarged and compared with the ones from launch.',
         segundos: 6,
-        boton: 'Mantener para fotografiar',
+        boton: 'Hold to photograph',
       },
       {
         id: 'marcas',
         tipo: 'comprobar',
-        titulo: 'Medir las marcas',
-        instruccion: 'Revisa la marca más profunda de cada tramo del casco y decide si hay que repararla.',
-        porque: 'Una marca poco profunda es normal. Si pasa del límite, la capa de aislamiento quedó dañada y el hábitat pierde calor.',
+        titulo: 'Measure the marks',
+        instruccion: 'Check the deepest mark on each section of the hull and decide if it needs repair.',
+        porque: 'A shallow mark is normal. If it goes past the limit, the insulation layer is damaged and the habitat loses heat.',
         segundos: 10,
         lectura: (room) => {
           const d = room.procedimientos?.revisionExt?.datos ?? {}
           const dano = (d.dano ?? 0) > 0
           const zona = (d.semilla ?? 0) % 6
-          const nombres = ['Proa', 'Puente', 'Centro', 'Huerto', 'Popa', 'Esclusa']
+          const nombres = ['Bow', 'Bridge', 'Center', 'Garden', 'Stern', 'Airlock']
           const puntos = nombres.map((x, i) => ({ x, y: dano && i === zona ? 1.6 + ((d.semilla ?? 0) % 5) * 0.15 : r2(0.15 + Math.abs(Math.sin((d.semilla ?? 1) + i * 1.7)) * 0.4) }))
           return {
             forma: 'barras',
-            titulo: 'Marca más profunda por tramo',
+            titulo: 'Deepest mark per section',
             unidad: 'mm',
-            eje: 'tramo del casco',
+            eje: 'hull section',
             puntos,
             limite: 1,
-            limiteTexto: 'Límite: 1 mm',
-            pregunta: '¿El casco está en buen estado?',
+            limiteTexto: 'Limit: 1 mm',
+            pregunta: 'Is the hull in good shape?',
             correcto: dano ? 'falla' : 'pasa',
-            explicacion: dano ? `La marca del tramo ${nombres[zona].toLowerCase()} pasa del límite. Hay que parchearla.` : 'Todas las marcas están por debajo del límite.',
+            explicacion: dano ? `The mark on the ${nombres[zona].toLowerCase()} section is past the limit. It needs a patch.` : 'All the marks are below the limit.',
           }
         },
       },
@@ -606,9 +614,9 @@ export const PROCEDIMIENTOS: Procedimiento[] = [
 
   proc({
     id: 'huerto',
-    titulo: 'Montar el huerto',
+    titulo: 'Set up the garden',
     intro:
-      'El huerto sigue al Veggie de la ISS. Las plantas crecen en almohadillas de tela rellenas de arcilla cocida y abono de liberación lenta, con mechas que llevan el agua a las raíces. Encima hay una tapa de luces LED rojas, azules y verdes que tiñen todo de rosa, y un fuelle transparente que se alarga según crecen. La tripulación riega cada almohadilla con una jeringa.',
+      'The garden follows the ISS Veggie system. The plants grow in fabric pillows filled with baked clay and slow-release fertilizer, with wicks that carry water to the roots. On top is a lid of red, blue and green LED lights that make everything look pink, and a clear bellows that gets longer as the plants grow. The crew waters each pillow with a syringe.',
     roles: ['cientifico'],
     zona: 'nave',
     estacion: 'laboratorio',
@@ -616,58 +624,58 @@ export const PROCEDIMIENTOS: Procedimiento[] = [
       {
         id: 'cultivo',
         tipo: 'elegir',
-        titulo: 'Elegir el cultivo',
-        instruccion: '¿Qué vas a cultivar? Todos se cultivaron en la ISS.',
-        porque: 'Las primeras pruebas se hicieron con hojas que crecen rápido. Los frutos llegaron después: tardan meses y piden más cuidado.',
+        titulo: 'Choose the crop',
+        instruccion: 'What are you going to grow? All of these were grown on the ISS.',
+        porque: 'The first tests used leafy plants that grow fast. Fruit came later: it takes months and needs more care.',
         segundos: 10,
-        opciones: () => CULTIVOS.map((c) => ({ id: c.id, texto: c.nombre, calidad: 1, consecuencia: `${c.historia} En el juego se cosecha a los ${c.dias} días.` })),
+        opciones: () => CULTIVOS.map((c) => ({ id: c.id, texto: c.nombre, calidad: 1, consecuencia: `${c.historia} In the game it is harvested after ${c.dias} days.` })),
       },
       {
         id: 'camara',
         tipo: 'mantener',
-        titulo: 'Desplegar la cámara',
-        instruccion: 'Extiende el fuelle transparente bajo la tapa de luces. Mantén pulsado mientras lo despliegas.',
-        porque: 'El fuelle encierra a las plantas y guarda su humedad. Se sujeta con imanes y se alarga según crecen.',
+        titulo: 'Deploy the chamber',
+        instruccion: 'Extend the clear bellows under the light lid. Press and hold while you deploy it.',
+        porque: 'The bellows encloses the plants and keeps their moisture in. It is held on with magnets and gets longer as they grow.',
         segundos: 4,
-        boton: 'Mantener para desplegar',
+        boton: 'Hold to deploy',
       },
       {
         id: 'luces',
         tipo: 'elegir',
-        titulo: 'Encender las luces',
-        instruccion: '¿Qué luces enciendes sobre las plantas?',
-        porque: 'Las plantas usan sobre todo la luz roja y la azul. Veggie añade verde para que la tripulación vea las hojas con un color más natural.',
+        titulo: 'Turn on the lights',
+        instruccion: 'Which lights do you turn on over the plants?',
+        porque: 'Plants mostly use red and blue light. Veggie adds green so the crew can see the leaves in a more natural color.',
         segundos: 6,
         opciones: () => [
-          { id: 'rgb', texto: 'Rojo, azul y verde', calidad: 1, consecuencia: 'Como en Veggie. Crecen bien y se ve a tiempo si una hoja se mancha o amarillea.' },
-          { id: 'rb', texto: 'Solo rojo y azul', calidad: 0.85, consecuencia: 'Crecen, pero se ven casi negras y cuesta notar un problema a tiempo.' },
-          { id: 'blanca', texto: 'Las luces blancas de la cabina', calidad: 0.4, consecuencia: 'Son para la tripulación, no para cultivar. Llega poca luz a las hojas y crecen despacio.' },
+          { id: 'rgb', texto: 'Red, blue and green', calidad: 1, consecuencia: 'Like Veggie. They grow well, and you can see in time if a leaf gets spots or turns yellow.' },
+          { id: 'rb', texto: 'Only red and blue', calidad: 0.85, consecuencia: 'They grow, but they look almost black and it is hard to spot a problem in time.' },
+          { id: 'blanca', texto: 'The white cabin lights', calidad: 0.4, consecuencia: 'Those are for the crew, not for growing plants. Little light reaches the leaves and they grow slowly.' },
         ],
       },
       {
         id: 'almohadillas',
         tipo: 'secuencia',
-        titulo: 'Colocar las almohadillas',
-        instruccion: `Coloca las ${ALMOHADILLAS} almohadillas con semillas. Toca los pasos en orden.`,
-        porque: 'Las mechas solo llevan agua si tocan el tapete de raíces. En el viaje no hay gravedad: lo que no se sujeta, flota.',
+        titulo: 'Place the pillows',
+        instruccion: `Place the ${ALMOHADILLAS} pillows with seeds. Tap the steps in order.`,
+        porque: 'The wicks only carry water if they touch the root mat. During the trip there is no gravity: anything not held down floats away.',
         segundos: 10,
         elementos: [
-          { id: 'sujetar', nombre: 'Sujetarlas con las cintas' },
-          { id: 'mechas', nombre: 'Comprobar que las mechas tocan el tapete' },
-          { id: 'colocar', nombre: 'Colocarlas sobre el tapete de raíces' },
+          { id: 'sujetar', nombre: 'Strap them down' },
+          { id: 'mechas', nombre: 'Check that the wicks touch the mat' },
+          { id: 'colocar', nombre: 'Place them on the root mat' },
         ],
         ordenes: [
           ['colocar', 'mechas', 'sujetar'],
           ['colocar', 'sujetar', 'mechas'],
         ],
-        error: 'Primero hay que colocarlas sobre el tapete. No se puede comprobar ni sujetar lo que todavía no está en su sitio.',
+        error: 'First they have to be placed on the mat. You cannot check or strap down something that is not in place yet.',
       },
       {
         id: 'cebado',
         tipo: 'ajustar',
-        titulo: 'Cebar con agua',
-        instruccion: `Inyecta agua en cada almohadilla seca con la jeringa. Cada mL sube la humedad un ${HUMEDAD_POR_ML}%. Lo ideal es dejarla cerca del ${HUMEDAD_IDEAL}%.`,
-        porque: 'En el primer cultivo de Veggie, en 2014, las mechas no subían suficiente agua y hubo que regar a mano. En 2015, el exceso de agua dio moho a las zinnias.',
+        titulo: 'Prime with water',
+        instruccion: `Inject water into each dry pillow with the syringe. Each mL raises the moisture by ${HUMEDAD_POR_ML}%. The ideal is to leave it close to ${HUMEDAD_IDEAL}%.`,
+        porque: 'In the first Veggie crop, in 2014, the wicks did not draw up enough water and the crew had to water by hand. In 2015, too much water gave the zinnias mold.',
         segundos: 10,
         min: 0,
         max: 250,
@@ -682,9 +690,9 @@ export const PROCEDIMIENTOS: Procedimiento[] = [
 
   proc({
     id: 'regar',
-    titulo: 'Regar el huerto',
+    titulo: 'Water the garden',
     recurrente: true,
-    intro: 'En Veggie la tripulación riega cada almohadilla con una jeringa por un puerto de agua. Scott Kelly aprendió en 2016 que no hay un horario fijo: se mira la planta y el sustrato, y se riega cuando lo necesitan.',
+    intro: 'In Veggie the crew waters each pillow with a syringe through a water port. In 2016 Scott Kelly learned that there is no fixed schedule: you look at the plant and the growing medium, and you water when they need it.',
     roles: ['cientifico'],
     zona: 'nave',
     estacion: 'laboratorio',
@@ -692,29 +700,29 @@ export const PROCEDIMIENTOS: Procedimiento[] = [
       {
         id: 'jeringa',
         tipo: 'secuencia',
-        titulo: 'Preparar la jeringa',
-        instruccion: 'Prepara la jeringa. Toca los pasos en orden.',
-        porque: 'Sin gravedad, una burbuja no sube sola: se inyecta en la almohadilla y deja una zona seca. Por eso se saca el aire antes de conectar.',
+        titulo: 'Prepare the syringe',
+        instruccion: 'Prepare the syringe. Tap the steps in order.',
+        porque: 'Without gravity, a bubble does not rise on its own: it gets injected into the pillow and leaves a dry spot. That is why the air is pushed out before connecting.',
         segundos: 8,
         elementos: [
-          { id: 'inyectar', nombre: 'Inyectar el agua despacio' },
-          { id: 'conectar', nombre: 'Conectar al puerto de la almohadilla' },
-          { id: 'desconectar', nombre: 'Desconectar y tapar el puerto' },
-          { id: 'purgar', nombre: 'Sacar el aire de la jeringa' },
+          { id: 'inyectar', nombre: 'Inject the water slowly' },
+          { id: 'conectar', nombre: 'Connect to the pillow port' },
+          { id: 'desconectar', nombre: 'Disconnect and cap the port' },
+          { id: 'purgar', nombre: 'Push the air out of the syringe' },
         ],
         ordenes: [['purgar', 'conectar', 'inyectar', 'desconectar']],
-        error: 'El aire se saca antes de conectar, y se inyecta con la jeringa ya conectada.',
+        error: 'The air is pushed out before connecting, and the water is injected with the syringe already connected.',
       },
       {
         id: 'agua',
         tipo: 'ajustar',
-        titulo: 'Cuánta agua',
+        titulo: 'How much water',
         instruccion: (room) => {
           const s = secas(room)
           const min = s.length ? Math.round(Math.min(...s.map((a) => a.humedad))) : 50
-          return `${s.length === 1 ? 'Hay una almohadilla' : `Hay ${s.length} almohadillas`} por debajo del 50%. La más seca está al ${min}%. Cada mL sube un ${HUMEDAD_POR_ML}%; lo ideal es dejarla cerca del ${HUMEDAD_IDEAL}%.`
+          return `${s.length === 1 ? 'One pillow is' : `${s.length} pillows are`} below 50%. The driest is at ${min}%. Each mL raises it by ${HUMEDAD_POR_ML}%. The ideal is to leave it close to ${HUMEDAD_IDEAL}%.`
         },
-        porque: 'Poca agua deja las raíces con sed. Demasiada encharca la arcilla, las raíces se asfixian y aparece el moho.',
+        porque: 'Too little water leaves the roots thirsty. Too much soaks the clay, the roots cannot breathe and mold appears.',
         segundos: 8,
         min: 0,
         max: 200,
@@ -737,9 +745,9 @@ export const PROCEDIMIENTOS: Procedimiento[] = [
 
   proc({
     id: 'ralear',
-    titulo: 'Ralear las plántulas',
+    titulo: 'Thin the seedlings',
     recurrente: true,
-    intro: 'En cada almohadilla se siembran varias semillas por si alguna no brota. Cuando crecen, se deja solo una por almohadilla, como se hizo en el primer cultivo de Veggie, para que no compitan por el agua y el abono.',
+    intro: 'Several seeds are planted in each pillow in case some do not sprout. When they grow, only one is left per pillow, as in the first Veggie crop, so they do not compete for water and fertilizer.',
     roles: ['cientifico'],
     zona: 'nave',
     estacion: 'laboratorio',
@@ -747,14 +755,14 @@ export const PROCEDIMIENTOS: Procedimiento[] = [
       {
         id: 'como',
         tipo: 'elegir',
-        titulo: 'Dejar una por almohadilla',
-        instruccion: 'Brotaron varias plántulas en cada almohadilla. ¿Qué haces?',
-        porque: 'Varias plantas en el mismo puñado de arcilla se quitan el agua y el abono, y ninguna crece bien.',
+        titulo: 'Leave one per pillow',
+        instruccion: 'Several seedlings sprouted in each pillow. What do you do?',
+        porque: 'Several plants in the same handful of clay take water and fertilizer from each other, and none of them grows well.',
         segundos: 8,
         opciones: () => [
-          { id: 'cortar', texto: 'Dejar la más fuerte y cortar las demás a ras con tijera', calidad: 1, consecuencia: 'La que queda tiene todo el sustrato para ella y sus raíces no se tocan.' },
-          { id: 'arrancar', texto: 'Arrancar las sobrantes de raíz', calidad: 0.6, consecuencia: 'Las raíces están enredadas: al tirar dañas también las de la planta que se queda.' },
-          { id: 'dejar', texto: 'Dejarlas todas', calidad: 0.3, consecuencia: 'Compiten entre ellas y crecen más despacio.' },
+          { id: 'cortar', texto: 'Keep the strongest and cut the others at the base with scissors', calidad: 1, consecuencia: 'The one that stays has all the growing medium to itself and its roots are not disturbed.' },
+          { id: 'arrancar', texto: 'Pull out the extra ones by the roots', calidad: 0.6, consecuencia: 'The roots are tangled: when you pull, you also damage the roots of the plant that stays.' },
+          { id: 'dejar', texto: 'Leave them all', calidad: 0.3, consecuencia: 'They compete with each other and grow more slowly.' },
         ],
       },
     ],
@@ -762,9 +770,9 @@ export const PROCEDIMIENTOS: Procedimiento[] = [
 
   proc({
     id: 'moho',
-    titulo: 'Revisar las hojas: manchas blancas',
+    titulo: 'Check the leaves: white spots',
     recurrente: true,
-    intro: 'En diciembre de 2015 las zinnias de la ISS se llenaron de moho: el agua se salía de las mechas y el aire se movía poco. Scott Kelly cortó lo dañado y subió el ventilador. NASA lo nombró jardinero autónomo para que decidiera él, sin esperar instrucciones de la Tierra.',
+    intro: 'In December 2015 the zinnias on the ISS got covered in mold: water was leaking out of the wicks and the air was barely moving. Scott Kelly cut off the damaged parts and turned up the fan. NASA named him an autonomous gardener so he could decide for himself, without waiting for instructions from Earth.',
     roles: ['cientifico'],
     zona: 'nave',
     estacion: 'laboratorio',
@@ -772,23 +780,23 @@ export const PROCEDIMIENTOS: Procedimiento[] = [
       {
         id: 'revisar',
         tipo: 'mantener',
-        titulo: 'Revisar hoja por hoja',
-        instruccion: 'Mira cada hoja por arriba y por debajo. Mantén pulsado mientras revisas.',
-        porque: 'El moho empieza como una pelusa blanca bajo las hojas y en el sustrato húmedo.',
+        titulo: 'Check leaf by leaf',
+        instruccion: 'Look at each leaf from above and below. Press and hold while you check.',
+        porque: 'Mold starts as white fuzz under the leaves and on the wet growing medium.',
         segundos: 4,
-        boton: 'Mantener para revisar',
+        boton: 'Hold to check',
       },
       {
         id: 'que',
         tipo: 'elegir',
-        titulo: 'Qué hacer',
-        instruccion: 'Hay hojas con pelusa blanca y el sustrato está empapado. ¿Qué haces?',
-        porque: 'El moho crece con mucha humedad y poco aire. Se corta lo dañado, se guarda en bolsa para no esparcir esporas y se mueve más el aire.',
+        titulo: 'What to do',
+        instruccion: 'Some leaves have white fuzz and the growing medium is soaked. What do you do?',
+        porque: 'Mold grows with lots of moisture and little air. You cut off the damaged parts, seal them in a bag so the spores do not spread, and move more air.',
         segundos: 8,
         opciones: () => [
-          { id: 'retirar', texto: 'Cortar las hojas con moho, guardarlas en bolsa y subir el ventilador', calidad: 1, consecuencia: 'Lo que hizo Kelly. Ojo: con más aire el sustrato se seca antes y habrá que regar más seguido.' },
-          { id: 'nada', texto: 'Esperar a ver si se pasa', calidad: 0.2, consecuencia: 'El moho sigue avanzando y debilita a las plantas.' },
-          { id: 'regar', texto: 'Regar más para que se recuperen', calidad: 0, consecuencia: 'Más agua es justo lo que necesita el moho para crecer.' },
+          { id: 'retirar', texto: 'Cut off the moldy leaves, seal them in a bag and turn up the fan', calidad: 1, consecuencia: 'This is what Kelly did. Careful: with more air the growing medium dries faster and you will have to water more often.' },
+          { id: 'nada', texto: 'Wait and see if it goes away', calidad: 0.2, consecuencia: 'The mold keeps spreading and weakens the plants.' },
+          { id: 'regar', texto: 'Water more so they recover', calidad: 0, consecuencia: 'More water is exactly what the mold needs to grow.' },
         ],
       },
     ],
@@ -796,9 +804,9 @@ export const PROCEDIMIENTOS: Procedimiento[] = [
 
   proc({
     id: 'amarillas',
-    titulo: 'Revisar las hojas: hojas caídas',
+    titulo: 'Check the leaves: drooping leaves',
     recurrente: true,
-    intro: 'Tras combatir el moho, las zinnias de la ISS se secaron: el ventilador alto se llevaba la humedad. Kelly aprendió a mirar las plantas y regar cuando lo pedían, sin esperar al calendario.',
+    intro: 'After fighting the mold, the zinnias on the ISS dried out: the fan on high was carrying the moisture away. Kelly learned to look at the plants and water when they needed it, without waiting for the calendar.',
     roles: ['cientifico'],
     zona: 'nave',
     estacion: 'laboratorio',
@@ -806,23 +814,23 @@ export const PROCEDIMIENTOS: Procedimiento[] = [
       {
         id: 'revisar',
         tipo: 'mantener',
-        titulo: 'Revisar hoja por hoja',
-        instruccion: 'Mira las hojas y toca el sustrato. Mantén pulsado mientras revisas.',
-        porque: 'Las hojas caídas, curvadas o amarillas avisan de que algo falla en las raíces.',
+        titulo: 'Check leaf by leaf',
+        instruccion: 'Look at the leaves and touch the growing medium. Press and hold while you check.',
+        porque: 'Drooping, curled or yellow leaves warn you that something is wrong with the roots.',
         segundos: 4,
-        boton: 'Mantener para revisar',
+        boton: 'Hold to check',
       },
       {
         id: 'que',
         tipo: 'elegir',
-        titulo: 'Qué hacer',
-        instruccion: 'Hay hojas caídas y amarillentas. ¿Qué haces?',
-        porque: 'Hay que buscar la causa. Aquí las hojas se caen por falta de agua en las raíces.',
+        titulo: 'What to do',
+        instruccion: 'Some leaves are drooping and turning yellow. What do you do?',
+        porque: 'You have to find the cause. Here the leaves droop because the roots lack water.',
         segundos: 8,
         opciones: () => [
-          { id: 'regar', texto: 'Medir la humedad de cada almohadilla, regar las secas y bajar el ventilador', calidad: 1, consecuencia: 'Se ataca la causa. En unos días las hojas se levantan.' },
-          { id: 'cortar', texto: 'Cortar las hojas amarillas y nada más', calidad: 0.4, consecuencia: 'Se ve mejor, pero las raíces siguen sin agua.' },
-          { id: 'ventilador', texto: 'Subir el ventilador', calidad: 0.1, consecuencia: 'Seca todavía más las plantas. Fue lo que dejó sedientas a las zinnias.' },
+          { id: 'regar', texto: 'Measure the moisture of each pillow, water the dry ones and turn down the fan', calidad: 1, consecuencia: 'This goes after the cause. In a few days the leaves perk up.' },
+          { id: 'cortar', texto: 'Cut off the yellow leaves and nothing else', calidad: 0.4, consecuencia: 'It looks better, but the roots still have no water.' },
+          { id: 'ventilador', texto: 'Turn up the fan', calidad: 0.1, consecuencia: 'It dries the plants out even more. This is what left the zinnias thirsty.' },
         ],
       },
     ],
@@ -830,9 +838,9 @@ export const PROCEDIMIENTOS: Procedimiento[] = [
 
   proc({
     id: 'cosechar',
-    titulo: 'Cosechar',
+    titulo: 'Harvest',
     recurrente: true,
-    intro: 'El 10 de agosto de 2015 la tripulación de la ISS comió por primera vez lo que había cultivado: lechuga romana roja. La limpió con toallitas desinfectantes de ácido cítrico, comió la mitad y congeló la otra mitad para analizarla en la Tierra.',
+    intro: 'On August 10, 2015, the ISS crew ate something they had grown for the first time: red romaine lettuce. They cleaned it with citric acid sanitizing wipes, ate half and froze the other half to be analyzed on Earth.',
     roles: ['cientifico'],
     zona: 'nave',
     estacion: 'laboratorio',
@@ -840,23 +848,23 @@ export const PROCEDIMIENTOS: Procedimiento[] = [
       {
         id: 'corte',
         tipo: 'elegir',
-        titulo: 'Cómo cosechar',
-        instruccion: (room) => `${cultivoDe(room).nombre} ya está lista. ¿Cómo la cosechas?`,
-        porque: 'Cada planta se cosecha según la parte que se come. Si se deja rebrotar, se vuelve a cosechar sin esperar todo el ciclo.',
+        titulo: 'How to harvest',
+        instruccion: (room) => `The ${cultivoDe(room).corto} is ready. How do you harvest it?`,
+        porque: 'Each plant is harvested based on the part you eat. If you let it regrow, you can harvest again without waiting for the full cycle.',
         segundos: 8,
         opciones: (room) => cultivoDe(room).cortes,
       },
       {
         id: 'consumo',
         tipo: 'elegir',
-        titulo: 'Antes de comer',
-        instruccion: '¿Qué haces con lo cosechado?',
-        porque: 'En la Tierra la verdura se lava. En el espacio no se puede enjuagar: se limpia con toallitas. Y una parte se guarda para saber si es segura.',
+        titulo: 'Before eating',
+        instruccion: 'What do you do with the harvest?',
+        porque: 'On Earth, vegetables get washed. In space you cannot rinse them, so they are cleaned with wipes. And part is kept to find out if it is safe.',
         segundos: 8,
         opciones: () => [
-          { id: 'mitad', texto: 'Limpiar con toallitas, comer la mitad y congelar el resto para analizarlo', calidad: 1, consecuencia: 'Como en la ISS. Comida fresca hoy y datos para la próxima misión.' },
-          { id: 'todo', texto: 'Limpiar con toallitas y comerla toda', calidad: 0.8, consecuencia: 'Más comida fresca hoy, pero nadie sabrá si estaba limpia de microbios.' },
-          { id: 'sucia', texto: 'Comerla sin limpiar', calidad: 0, repetir: true, consecuencia: 'No. Las hojas pueden llevar microbios del hábitat. Primero se limpian con las toallitas.' },
+          { id: 'mitad', texto: 'Clean it with wipes, eat half and freeze the rest for analysis', calidad: 1, consecuencia: 'Like on the ISS. Fresh food today and data for the next mission.' },
+          { id: 'todo', texto: 'Clean it with wipes and eat it all', calidad: 0.8, consecuencia: 'More fresh food today, but nobody will know if it was free of microbes.' },
+          { id: 'sucia', texto: 'Eat it without cleaning', calidad: 0, repetir: true, consecuencia: 'No. The leaves may carry microbes from the habitat. Clean them with the wipes first.' },
         ],
       },
     ],
@@ -925,12 +933,12 @@ export const prefijoValido = (paso: PasoSecuencia, orden: string[]) => paso.orde
 /** Qué tan bien está hecho un paso con el valor dado. La misma regla en el servidor y en pantalla. */
 export function evaluarPaso(room: RoomState, p: Procedimiento, i: number, valor: unknown): Evaluacion {
   const paso = p.pasos[i]
-  if (!paso) return { ok: false, mensaje: 'Paso inválido.' }
+  if (!paso) return { ok: false, mensaje: 'Invalid step.' }
   switch (paso.tipo) {
     case 'mantener': {
       const s = Number(valor)
-      if (!Number.isFinite(s) || s < paso.segundos - 0.3) return { ok: false, mensaje: 'Hay que mantenerlo hasta el final.' }
-      return { ok: true, calidad: 1, mensaje: 'Hecho.', valor: paso.segundos }
+      if (!Number.isFinite(s) || s < paso.segundos - 0.3) return { ok: false, mensaje: 'You have to hold it until the end.' }
+      return { ok: true, calidad: 1, mensaje: 'Done.', valor: paso.segundos }
     }
     case 'secuencia': {
       const v = (valor && typeof valor === 'object' ? valor : {}) as { orden?: unknown; errores?: unknown }
@@ -938,26 +946,26 @@ export function evaluarPaso(room: RoomState, p: Procedimiento, i: number, valor:
       const errores = Math.max(0, Math.min(10, Math.round(Number(v.errores) || 0)))
       if (orden.length !== paso.elementos.length || !prefijoValido(paso, orden)) return { ok: false, mensaje: paso.error }
       const calidad = r2(Math.max(0.4, 1 - 0.15 * errores))
-      return { ok: true, calidad, mensaje: errores ? `Orden correcto, con ${errores === 1 ? 'un error' : `${errores} errores`} antes.` : 'Orden correcto.', valor: errores }
+      return { ok: true, calidad, mensaje: errores ? `Correct order, after ${errores === 1 ? 'one mistake' : `${errores} mistakes`}.` : 'Correct order.', valor: errores }
     }
     case 'ajustar': {
       const v = Number(valor)
-      if (!Number.isFinite(v) || v < paso.min || v > paso.max) return { ok: false, mensaje: `El valor tiene que estar entre ${paso.min} y ${paso.max} ${paso.unidad}.` }
+      if (!Number.isFinite(v) || v < paso.min || v > paso.max) return { ok: false, mensaje: `The value has to be between ${paso.min} and ${paso.max} ${paso.unidad}.` }
       const redondo = Math.round(v / paso.paso) * paso.paso
       const e = paso.evaluar(room, r2(redondo))
       return { ok: true, calidad: e.calidad, mensaje: e.mensaje, valor: r2(redondo) }
     }
     case 'elegir': {
       const o = paso.opciones(room).find((x) => x.id === valor)
-      if (!o) return { ok: false, mensaje: 'Opción inválida.' }
+      if (!o) return { ok: false, mensaje: 'Invalid option.' }
       if (o.repetir) return { ok: false, mensaje: o.consecuencia }
       return { ok: true, calidad: o.calidad, mensaje: o.consecuencia, valor: o.id }
     }
     case 'comprobar': {
-      if (valor !== 'pasa' && valor !== 'falla') return { ok: false, mensaje: 'Decide si pasa o falla la comprobación.' }
+      if (valor !== 'pasa' && valor !== 'falla') return { ok: false, mensaje: 'Decide if the check passes or fails.' }
       const l = paso.lectura(room)
-      if (valor === 'falla' && l.correcto === 'pasa') return { ok: false, mensaje: `Vuelve a mirar. ${l.explicacion}` }
-      return { ok: true, calidad: valor === l.correcto ? 1 : 0, mensaje: valor === l.correcto ? l.explicacion : 'Se da por buena.', valor }
+      if (valor === 'falla' && l.correcto === 'pasa') return { ok: false, mensaje: `Look again. ${l.explicacion}` }
+      return { ok: true, calidad: valor === l.correcto ? 1 : 0, mensaje: valor === l.correcto ? l.explicacion : 'It is marked as good.', valor }
     }
   }
 }

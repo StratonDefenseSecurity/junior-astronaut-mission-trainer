@@ -33,7 +33,7 @@ export default function App() {
   else if (!sala && reanudando)
     pantalla = (
       <div className="center-screen">
-        <p className="muted">Volviendo a tu sala…</p>
+        <p className="muted">Returning to your room…</p>
       </div>
     )
   else if (!sala) pantalla = <HomeScreen />

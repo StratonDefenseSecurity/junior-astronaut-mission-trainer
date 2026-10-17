@@ -37,4 +37,4 @@ if (process.env.NODE_ENV === 'production') {
 
 // En desarrollo Vite ocupa PORT (5173); el servidor de juego usa SERVER_PORT o 3001.
 const PORT = Number(process.env.SERVER_PORT ?? (process.env.NODE_ENV === 'production' ? process.env.PORT : undefined) ?? 3001)
-app.listen(PORT, () => console.log(`Mission Trainer servidor en http://localhost:${PORT}`))
+app.listen(PORT, () => console.log(`Mission Trainer server at http://localhost:${PORT}`))

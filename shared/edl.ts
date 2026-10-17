@@ -143,21 +143,21 @@ function aceleracion(t: number): number {
 
 /** Nombre de la etapa en pantalla. */
 export function etapaEDL(t: number): string {
-  if (t >= EDL.contacto) return 'Contacto'
-  if (t >= EDL.gruaCeleste) return 'Grúa celeste'
-  if (t >= EDL.cubierta + 3) return 'Descenso propulsado'
-  if (t >= EDL.cubierta) return 'Separación de la cubierta trasera'
-  if (t >= EDL.navegacion) return 'Navegación por el terreno'
-  if (t >= EDL.escudo + 20) return 'El radar mide la altura'
-  if (t >= EDL.escudo) return 'Escudo térmico separado'
-  if (t >= EDL.paracaidas) return 'Paracaídas supersónico'
-  if (t >= EDL.masasEquilibrio) return 'Masas de equilibrio soltadas'
-  if (t >= EDL.cargaMaxima - 4 && t < EDL.cargaMaxima + 12) return 'Desaceleración máxima'
-  if (t >= EDL.cargaMaxima + 12) return 'Frenado en la atmósfera'
-  if (t >= EDL.calorMaximo - 8 && t < EDL.cargaMaxima - 4) return 'Calentamiento máximo'
-  if (t >= EDL.guiado) return 'Guiado de entrada'
-  if (t >= 6) return 'Entrada atmosférica'
-  return 'Etapa de crucero separada'
+  if (t >= EDL.contacto) return 'Touchdown'
+  if (t >= EDL.gruaCeleste) return 'Sky crane'
+  if (t >= EDL.cubierta + 3) return 'Powered descent'
+  if (t >= EDL.cubierta) return 'Backshell separation'
+  if (t >= EDL.navegacion) return 'Terrain navigation'
+  if (t >= EDL.escudo + 20) return 'Radar measuring altitude'
+  if (t >= EDL.escudo) return 'Heat shield separated'
+  if (t >= EDL.paracaidas) return 'Supersonic parachute'
+  if (t >= EDL.masasEquilibrio) return 'Balance masses released'
+  if (t >= EDL.cargaMaxima - 4 && t < EDL.cargaMaxima + 12) return 'Peak deceleration'
+  if (t >= EDL.cargaMaxima + 12) return 'Braking in the atmosphere'
+  if (t >= EDL.calorMaximo - 8 && t < EDL.cargaMaxima - 4) return 'Peak heating'
+  if (t >= EDL.guiado) return 'Guided entry'
+  if (t >= 6) return 'Atmospheric entry'
+  return 'Cruise stage separated'
 }
 
 /** Ángulo de la trayectoria (grados) `t` segundos después de la entrada. */

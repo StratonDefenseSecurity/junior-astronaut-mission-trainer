@@ -169,14 +169,14 @@ for (let i = 0; i < 90 && sala.fase === 'lanzamiento'; i++) {
   pulsoMax = Math.max(pulsoMax, sala.jugadores[0].vit.fc)
 }
 comprobar(sala.fase === 'transito', `órbita y rumbo a Marte (${sala.vuelo.etapa})`)
-comprobar(sala.energia.usada > 0.3 && sala.registro.some((l) => /Órbita alcanzada.*kWh/.test(l.texto)), `el lanzamiento registra la energía usada: ${sala.energia.usada} kWh`)
+comprobar(sala.energia.usada > 0.3 && sala.registro.some((l) => /Orbit reached.*kWh/.test(l.texto)), `el lanzamiento registra la energía usada: ${sala.energia.usada} kWh`)
 comprobar(gMax > 2.5 && pulsoMax > 95, `el cuerpo siente el despegue: ${gMax} g, pulso ${Math.round(pulsoMax)} lpm`)
 const c = sala.cabina
 comprobar(c.ppO2 > 20 && c.ppO2 < 22 && c.ppCO2 > 0.05 && c.ppCO2 < 0.6, `aire de cabina normal: ${c.ppO2.toFixed(1)} kPa O2, ${(c.ppCO2 * 7.5).toFixed(1)} mmHg CO2`)
 await paso(B, 'escala', { valor: 86400 }, 'solo el comandante cambia la escala', 400)
 await paso(A, 'escala', { valor: 86400 }, 'A acelera el tiempo a 1 día por segundo')
-const bot = await llamar('bot', { codigo, v: sala.version, texto: '¿por qué mi pulso?' }, B)
-comprobar(typeof bot.d.respuesta === 'string' && /latidos/.test(bot.d.respuesta), 'el asistente explica el pulso con datos propios')
+const bot = await llamar('bot', { codigo, v: sala.version, texto: 'why is my pulse high?' }, B)
+comprobar(typeof bot.d.respuesta === 'string' && /beats per minute/.test(bot.d.respuesta), 'el asistente explica el pulso con datos propios')
 await paso(B, 'actividad', { actividad: 'ejercicio' }, 'B se pone a hacer ejercicio')
 comprobar(sala.jugadores[1].manual === 'ejercicio', 'la sesión de ejercicio queda registrada')
 // A un día por segundo la hora pasa enseguida; si salta una emergencia el tiempo baja a ×60 y
@@ -221,9 +221,9 @@ if (!corto) {
     await atender()
   }
   comprobar(sala.fase === 'llegada' && sala.subfase === 'orbita', `órbita de Marte tras ${Math.round(sala.t / 86400)} días`)
-  comprobar(sala.registro.some((l) => l.tipo === 'radio' && /Centro de control/.test(l.texto)), 'llegan transmisiones del centro de control durante el viaje')
-  comprobar(sala.registro.some((l) => /Bitácora: \d+ días en el espacio/.test(l.texto)), 'la bitácora registra los días en el espacio, el combustible y la energía')
-  comprobar(sala.registro.some((l) => /Órbita de Marte.*combustible.*kWh/.test(l.texto)), `al llegar se anota lo gastado: ${Math.round(sala.rec.propelente)}% de combustible, ${Math.round(sala.energia.usada)} kWh`)
+  comprobar(sala.registro.some((l) => l.tipo === 'radio' && /Mission Control/.test(l.texto)), 'llegan transmisiones del centro de control durante el viaje')
+  comprobar(sala.registro.some((l) => /Logbook: \d+ days in space/.test(l.texto)), 'la bitácora registra los días en el espacio, el combustible y la energía')
+  comprobar(sala.registro.some((l) => /Mars orbit.*fuel.*kWh/.test(l.texto)), `al llegar se anota lo gastado: ${Math.round(sala.rec.propelente)}% de combustible, ${Math.round(sala.energia.usada)} kWh`)
   comprobar(emergencias.size >= 3, `hubo ${emergencias.size} emergencias en el viaje: ${[...new Set([...emergencias].map((e) => e.split(':')[0]))].join(', ')}`)
   const dosis = sala.jugadores[0].vit.dosis
   comprobar(dosis > 200 && dosis < 600, `dosis acumulada en el viaje: ${Math.round(dosis)} mSv`)
@@ -311,7 +311,7 @@ if (!corto) {
   await paso(B, 'accion', { id: 'reparar', payload: { sistema: 'cdra' } }, 'en el refugio no se puede trabajar', 400)
   await paso(A, 'accion', { id: 'refugio', payload: { salir: true } }, 'desde el refugio el comandante sí puede levantar la orden')
   comprobar(sala.jugadores.every((x) => !x.enRefugio), 'la tripulación sale del refugio')
-  const clima = await llamar('bot', { codigo, v: sala.version, texto: '¿qué clima hace afuera?' }, A)
+  const clima = await llamar('bot', { codigo, v: sala.version, texto: 'what is the weather outside?' }, A)
   comprobar(/Curiosity/.test(clima.d.respuesta ?? ''), 'el asistente cita el clima medido por Curiosity')
 }
 

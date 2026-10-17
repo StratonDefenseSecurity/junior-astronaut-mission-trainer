@@ -35,12 +35,12 @@ interface P {
 }
 
 /** Lo que está haciendo cada integrante, para verlo desde los demás puestos. */
-const HACIENDO = ['Lee la situación', 'Elige su rol', 'Revisa el objetivo', 'Elige los suministros']
+const HACIENDO = ['Reading the situation', 'Choosing a role', 'Checking the objective', 'Choosing supplies']
 
 function Asistente({ children }: { children: ReactNode }) {
   return (
     <div className="assistant">
-      <strong>Asistente:</strong> {children}
+      <strong>Assistant:</strong> {children}
     </div>
   )
 }
@@ -55,34 +55,34 @@ function Situacion({ sala, alSeguir }: { sala: RoomState; alSeguir: () => void }
   const presion = ((REMS_RESUMEN.pMax / PRESION_TIERRA_PA) * 100).toFixed(1)
   const datos = [
     {
-      etiqueta: 'El viaje',
-      valor: `${Math.min(...dias)} a ${Math.max(...dias)} días`,
-      texto: 'Según la trayectoria que elijan. Todo ese tiempo vivirán dentro de la nave, sin gravedad y sin poder bajar.',
+      etiqueta: 'The trip',
+      valor: `${Math.min(...dias)} to ${Math.max(...dias)} days`,
+      texto: 'It depends on the trajectory you choose. The whole time you will live inside the ship, with no gravity and no way to get off.',
     },
     {
-      etiqueta: 'La Tierra, lejos',
-      valor: `${Math.min(...senal)} a ${Math.max(...senal)} minutos`,
-      texto: 'Lo que tardará en llegar un mensaje cuando estén en Marte. Las decisiones urgentes las tomarán ustedes.',
+      etiqueta: 'Earth, far away',
+      valor: `${Math.min(...senal)} to ${Math.max(...senal)} minutes`,
+      texto: 'That is how long a message will take to arrive once you are at Mars. You will make the urgent decisions yourselves.',
     },
     {
-      etiqueta: 'El aire de Marte',
-      valor: `${REMS_RESUMEN.pMin} a ${REMS_RESUMEN.pMax} pascales`,
-      texto: `Lo que midió Curiosity: como mucho el ${presion}% de la presión de la Tierra. Es casi todo dióxido de carbono. Fuera del hábitat solo se sobrevive con traje.`,
+      etiqueta: 'The air on Mars',
+      valor: `${REMS_RESUMEN.pMin} to ${REMS_RESUMEN.pMax} pascals`,
+      texto: `Measured by Curiosity: at most ${presion}% of the pressure on Earth. It is almost all carbon dioxide. Outside the habitat you only survive in a suit.`,
     },
     {
-      etiqueta: 'El frío',
-      valor: `${REMS_RESUMEN.tMin} a ${REMS_RESUMEN.tMax} °C`,
-      texto: `Lo que midió el rover Curiosity durante ${REMS_RESUMEN.soles} soles, un año marciano entero. Ese será el clima de su base.`,
+      etiqueta: 'The cold',
+      valor: `${REMS_RESUMEN.tMin} to ${REMS_RESUMEN.tMax} °C`,
+      texto: `Measured by the Curiosity rover over ${REMS_RESUMEN.soles} sols, a full Martian year. That will be the weather at your base.`,
     },
     {
-      etiqueta: 'La radiación',
-      valor: `${C.GCR_CRUCERO_MSV_DIA} mSv cada día`,
-      texto: `de rayos cósmicos durante el viaje. El límite de NASA para toda una carrera es ${C.LIMITE_CARRERA_MSV} mSv, y las tormentas solares suman más.`,
+      etiqueta: 'Radiation',
+      valor: `${C.GCR_CRUCERO_MSV_DIA} mSv every day`,
+      texto: `from cosmic rays during the trip. The NASA limit for a whole career is ${C.LIMITE_CARRERA_MSV} mSv, and solar storms add more.`,
     },
     {
-      etiqueta: 'Cada persona, cada día',
-      valor: '0.84 kg de oxígeno',
-      texto: `más ${C.AGUA_BEBIDA_KG_DIA} kg de agua para beber y ${C.COMIDA_KG_DIA} kg de comida. Multiplicado por ${n} tripulantes y por cientos de días.`,
+      etiqueta: 'Each person, each day',
+      valor: '0.84 kg of oxygen',
+      texto: `plus ${C.AGUA_BEBIDA_KG_DIA} kg of drinking water and ${C.COMIDA_KG_DIA} kg of food. Multiply that by ${n} crew members and hundreds of days.`,
     },
   ]
   const esc = escenarioDe(sala.escenario)
@@ -90,7 +90,7 @@ function Situacion({ sala, alSeguir }: { sala: RoomState; alSeguir: () => void }
     <div className="stack">
       <div className="escenario-cabecera">
         <h2>{esc.nombre}</h2>
-        <span className="fecha">Despegue: {fechaLarga(new Date(esc.lanzamiento))}</span>
+        <span className="fecha">Liftoff: {fechaLarga(new Date(esc.lanzamiento))}</span>
       </div>
       {esc.situacion.map((t, i) => (
         <p key={i} className="entrada">{t}</p>
@@ -105,11 +105,11 @@ function Situacion({ sala, alSeguir }: { sala: RoomState; alSeguir: () => void }
         ))}
       </div>
       <div className="reto">
-        <strong>El reto de esta misión</strong>
+        <strong>The challenge of this mission</strong>
         {esc.reto}
       </div>
-      <h3>Lo que afronta cualquier tripulación que viaje a Marte</h3>
-      <p className="mini muted">Son {n}. Nadie los espera allá y nadie puede ir a buscarlos: lo que lleven en la nave es todo lo que tendrán.</p>
+      <h3>What every crew traveling to Mars faces</h3>
+      <p className="mini muted">You are a crew of {n}. Nobody is waiting for you there and nobody can come to get you. What you carry on the ship is all you will have.</p>
       <div className="situacion">
         {datos.map((d) => (
           <div key={d.etiqueta} className="hecho">
@@ -120,15 +120,15 @@ function Situacion({ sala, alSeguir }: { sala: RoomState; alSeguir: () => void }
         ))}
       </div>
       <div className="action">
-        <strong>Lo que tienen que lograr</strong>
-        <p className="mini">Llegar a Marte, montar la base, mantener con vida a toda la tripulación y analizar muestras del terreno. Cuántos soles se quedan y cuántas muestras analizan lo establecerán más adelante, al fijar el objetivo.</p>
+        <strong>What you have to achieve</strong>
+        <p className="mini">Reach Mars, build the base, keep the whole crew alive and analyze soil samples. You will decide how many sols you stay and how many samples you analyze later, when you set the objective.</p>
       </div>
       <Asistente>
-        Voy a acompañarlos toda la misión. Ahora cada uno recibirá su rol, después se establecerá el objetivo y al final elegirán los suministros. En cada elección les diré qué consecuencias tiene.
+        I will be with you for the whole mission. Now each of you gets a role. Then you set the objective, and last you choose the supplies. For each choice, I will tell you what it means.
       </Asistente>
       {esc.supuestos.length > 0 && (
         <div>
-          <span className="mini muted">Supuestos del juego en esta situación:</span>
+          <span className="mini muted">Game assumptions for this situation:</span>
           <ul className="supuestos">
             {esc.supuestos.map((t) => (
               <li key={t}>{t}</li>
@@ -137,9 +137,9 @@ function Situacion({ sala, alSeguir }: { sala: RoomState; alSeguir: () => void }
         </div>
       )}
       <div className="row">
-        <button className="small plano" onClick={() => setFuentes(true)}>De dónde salen estos datos</button>
+        <button className="small plano" onClick={() => setFuentes(true)}>Where the data comes from</button>
         <div className="grow" />
-        <button className="primary" onClick={alSeguir}>Entendido: ver los roles</button>
+        <button className="primary" onClick={alSeguir}>Got it: see the roles</button>
       </div>
     </div>
   )
@@ -154,7 +154,7 @@ function Roles({ sala, yo, alSeguir }: P & { alSeguir: () => void }) {
   return (
     <div className="lobby">
       <div className="stack">
-        <p className="mini muted">Cada rol tiene tareas que le corresponden y consecuencias distintas si falla. Elige el tuyo; no puede repetirse.</p>
+        <p className="mini muted">Each role has its own tasks and different consequences if it fails. Pick yours. Two people cannot have the same role.</p>
         <div className="roles-grid">
           {ROLES.map((r) => {
             const dueno = sala.jugadores.find((j) => j.rol === r.id)
@@ -168,13 +168,13 @@ function Roles({ sala, yo, alSeguir }: P & { alSeguir: () => void }) {
                   <strong className="grow">{r.nombre}</strong>
                   {dueno && (
                     <span className="muted">
-                      {esMio ? 'tú' : dueno.nombre}
+                      {esMio ? 'you' : dueno.nombre}
                       <MarcaIA bot={dueno.bot} />
                     </span>
                   )}
                 </div>
                 <span className="muted">{r.descripcion}</span>
-                <span className="mini">Le toca: {tareasDeRol(r.id).map((t) => t.charAt(0).toLowerCase() + t.slice(1)).join('; ')}.</span>
+                <span className="mini">Tasks: {tareasDeRol(r.id).map((t) => t.charAt(0).toLowerCase() + t.slice(1)).join('; ')}.</span>
                 <span className="consecuencia">{r.consecuencias}</span>
               </button>
             )
@@ -183,18 +183,18 @@ function Roles({ sala, yo, alSeguir }: P & { alSeguir: () => void }) {
       </div>
 
       <div className="stack lobby-lado">
-        <h3>{mio ? `Tu rol: ${mio.nombre}` : 'Aún no tienes rol'}</h3>
+        <h3>{mio ? `Your role: ${mio.nombre}` : 'You have no role yet'}</h3>
         <VistaTraje traje={yo.traje} distintivo={mio?.color ?? '#94a3b8'} />
         <Asistente>
-          {mio ? `${mio.consecuencias} Puedes cambiar de rol mientras no hayan despegado.` : 'Elige un rol de la lista. Te diré qué consecuencias tiene.'}
+          {mio ? `${mio.consecuencias} You can change roles until liftoff.` : 'Pick a role from the list. I will tell you what it means.'}
         </Asistente>
-        {!hayComandante && <div className="help">Todavía nadie es comandante. Sin comandante no se puede despegar.</div>}
+        {!hayComandante && <div className="help">Nobody is the Mission Commander yet. You cannot launch without one.</div>}
         {n < ROLES.length && (
           <p className="mini muted">
-            Son {n}, así que quedarán {ROLES.length - n} roles sin cubrir. Sus tareas las podrá hacer cualquiera de ustedes.
+            You are {n}, so {ROLES.length - n} roles will stay empty. Any of you can do their tasks.
           </p>
         )}
-        <button className="primary" disabled={!mio} onClick={alSeguir}>Continuar: objetivo de la misión</button>
+        <button className="primary" disabled={!mio} onClick={alSeguir}>Continue: mission objective</button>
       </div>
     </div>
   )
@@ -209,13 +209,13 @@ function NombreMision({ sala, editable }: { sala: RoomState; editable: boolean }
   const guardar = () => {
     if (texto.trim() !== sala.nombreMision) void api.nombrarMision(texto)
   }
-  if (!editable) return <div className="nombre-mision">{sala.nombreMision || 'Todavía sin nombre'}</div>
+  if (!editable) return <div className="nombre-mision">{sala.nombreMision || 'No name yet'}</div>
   return (
     <input
       className="nombre-mision"
       value={texto}
       maxLength={28}
-      placeholder="Por ejemplo: Inti 1, Chaski, Esperanza…"
+      placeholder="For example: Inti 1, Chaski, Hope…"
       onChange={(e) => setTexto(e.target.value)}
       onBlur={guardar}
       onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && (e.currentTarget.blur(), guardar())}
@@ -232,7 +232,7 @@ function Objetivo({ sala, yo, alSeguir }: P & { alSeguir: () => void }) {
   return (
     <div className="contexto-rejilla">
       <div className="stack">
-        <h3>¿Cuánto se quedan en Marte? {mando ? '' : '· lo establece el comandante'}</h3>
+        <h3>How long do you stay on Mars? {mando ? '' : '· the Mission Commander decides'}</h3>
         <div className="opciones">
           {PERFILES.map((p) => (
             <button key={p.id} className={`opcion ${sala.perfil === p.id ? 'activa' : ''}`} disabled={!mando || sala.perfil === p.id} onClick={() => api.perfil(p.id)}>
@@ -241,7 +241,7 @@ function Objetivo({ sala, yo, alSeguir }: P & { alSeguir: () => void }) {
             </button>
           ))}
         </div>
-        <h3>¿Por dónde viajan? {navega ? '' : '· lo eligen el piloto o el comandante'}</h3>
+        <h3>Which route do you take? {navega ? '' : '· the Pilot or the Mission Commander decides'}</h3>
         <div className="opciones">
           {TRAYECTORIAS.map((t) => (
             <button key={t.id} className={`opcion ${sala.trayectoria === t.id ? 'activa' : ''}`} disabled={!navega || sala.trayectoria === t.id} onClick={() => api.trayectoria(t.id)}>
@@ -254,38 +254,38 @@ function Objetivo({ sala, yo, alSeguir }: P & { alSeguir: () => void }) {
 
       <div className="stack">
         <div className="action objetivo">
-          <span className="brand">Objetivo de la misión</span>
+          <span className="brand">Mission objective</span>
           <p>{sala.mision.objetivo}</p>
           <span className="mini muted">
-            {comandante ? `Lo establece ${comandante.nombre}, comandante.` : 'Aún no hay comandante: por ahora puede fijarlo cualquiera que ya tenga rol.'}
+            {comandante ? `Set by ${comandante.nombre}, Mission Commander.` : 'There is no Mission Commander yet. For now, anyone with a role can set it.'}
           </span>
         </div>
         <label className="stack" style={{ gap: 4 }}>
-          <span className="mini muted">Nombre de la misión {mando ? '· aparecerá en la nave, en los trajes y en el certificado final' : '· lo pone el comandante'}</span>
+          <span className="mini muted">Mission name {mando ? '· it will appear on the ship, the suits and the final certificate' : '· the Mission Commander names it'}</span>
           <NombreMision sala={sala} editable={mando} />
         </label>
         {esc.sitio && (
           <Asistente>
-            Esta misión aterrizará en {SITE_BY_ID[esc.sitio].nombre}: {SITE_BY_ID[esc.sitio].descripcion}
+            This mission will land at {SITE_BY_ID[esc.sitio].nombre}. {SITE_BY_ID[esc.sitio].descripcion}
           </Asistente>
         )}
         <Asistente>
-          Con este plan pasarán {Math.round(a.total)} días fuera de la Tierra: {a.viaje} de viaje y {Math.round(a.estancia)} en la superficie.
+          With this plan you will spend {Math.round(a.total)} days away from Earth: {a.viaje} traveling and {Math.round(a.estancia)} on the surface.
         </Asistente>
         <ul className="analisis">
           <Linea bien={a.dosis < 480} regular={a.dosis < C.LIMITE_CARRERA_MSV}>
-            Radiación de fondo: unos {Math.round(a.dosis)} mSv por persona, de un límite de {C.LIMITE_CARRERA_MSV}. Un viaje más corto la reduce.
+            Background radiation: about {Math.round(a.dosis)} mSv per person, out of a limit of {C.LIMITE_CARRERA_MSV}. A shorter trip lowers it.
           </Linea>
           <Linea bien>
-            La nave admite {sala.capacidad.toFixed(1)} toneladas de carga con esta trayectoria. La más rápida gasta más propelente y deja menos sitio.
+            The ship can carry {sala.capacidad.toFixed(1)} tons of cargo on this trajectory. The fastest one burns more propellant and leaves less room.
           </Linea>
           <Linea bien>
-            Más soles en Marte piden más comida, más agua y más repuestos. Lo verán en el siguiente paso.
+            More sols on Mars need more food, more water and more spare parts. You will see this in the next step.
           </Linea>
         </ul>
         <div className="row">
           <div className="grow" />
-          <button className="primary" onClick={alSeguir}>Continuar: suministros</button>
+          <button className="primary" onClick={alSeguir}>Continue: supplies</button>
         </div>
       </div>
     </div>
@@ -313,19 +313,19 @@ function Suministros({ sala, yo }: P) {
   const faltan = sala.jugadores.filter((j) => j.conectado && j.rol && j.id !== yo.id && !j.listo)
   const item = ultimo ? SUPPLIES.find((s) => s.id === ultimo)! : null
   const impide = exceso
-    ? 'La carga supera lo que admite la nave: hay que dejar algo.'
+    ? 'The cargo is more than the ship can carry. You have to leave something behind.'
     : !hayComandante
-      ? 'Falta que alguien asuma el rol de comandante.'
+      ? 'Someone still has to take the Mission Commander role.'
       : sinRol.length
-        ? `Faltan por elegir rol: ${sinRol.map((j) => j.nombre).join(', ')}.`
+        ? `Still choosing a role: ${sinRol.map((j) => j.nombre).join(', ')}.`
         : faltan.length
-          ? `Faltan por confirmar: ${faltan.map((j) => j.nombre).join(', ')}.`
+          ? `Still need to confirm: ${faltan.map((j) => j.nombre).join(', ')}.`
           : null
 
   return (
     <div className="contexto-rejilla">
       <div className="stack">
-        <h3>Tres alternativas</h3>
+        <h3>Three options</h3>
         <div className="opciones">
           {ALTERNATIVAS.map((alt) => {
             const carga = cargaRecomendada(sala, alt.margen)
@@ -334,7 +334,7 @@ function Suministros({ sala, yo }: P) {
             return (
               <button key={alt.id} className={`opcion ${elegida ? 'activa' : ''}`} onClick={() => { setUltimo(null); void api.preset(alt.id) }}>
                 <strong>
-                  {alt.nombre} · {masa.toFixed(1)} t {masa > sala.capacidad ? <i className="bad">no cabe</i> : null}
+                  {alt.nombre} · {masa.toFixed(1)} t {masa > sala.capacidad ? <i className="bad">does not fit</i> : null}
                 </strong>
                 <small>{alt.descripcion}</small>
               </button>
@@ -343,7 +343,7 @@ function Suministros({ sala, yo }: P) {
         </div>
 
         <details className="ajuste">
-          <summary>Ajustar las cantidades a mano</summary>
+          <summary>Adjust quantities by hand</summary>
           <div className="suministros">
             {SUPPLIES.map((s) => (
               <div key={s.id} className="supply">
@@ -379,52 +379,52 @@ function Suministros({ sala, yo }: P) {
       </div>
 
       <div className="stack">
-        <h3>El asistente analiza las consecuencias</h3>
+        <h3>The assistant checks the consequences</h3>
         {escenarioDe(sala.escenario).consejo && <Asistente>{escenarioDe(sala.escenario).consejo}</Asistente>}
         <div className="row" style={{ gap: 6 }}>
-          <span className="mini muted">Carga</span>
+          <span className="mini muted">Cargo</span>
           <div className="grow"><Barra valor={sala.masa} max={sala.capacidad} tono={nivel(exceso, sala.masa > sala.capacidad * 0.93)} /></div>
           <span className={`mono mini ${exceso ? 'bad' : ''}`}>{sala.masa.toFixed(1)} / {sala.capacidad.toFixed(1)} t</span>
         </div>
         <ul className="analisis">
           <Linea bien={a.comida >= a.total} regular={a.comida >= a.total * 0.85}>
-            Comida para {Math.round(a.comida)} días; la misión dura {Math.round(a.total)}. No se puede reciclar.
+            Food for {Math.round(a.comida)} days. The mission lasts {Math.round(a.total)}. Food cannot be recycled.
           </Linea>
           <Linea bien={a.agua >= a.total} regular={a.agua >= a.total * 0.85}>
-            Agua para unos {Math.round(a.agua)} días, reciclando el 98% y fabricando con ella el oxígeno.
+            Water for about {Math.round(a.agua)} days, recycling 98% of it and using it to make oxygen.
           </Linea>
           <Linea bien={a.aireTanques >= 10} regular={a.aireTanques >= 4}>
-            Oxígeno en tanques para {Math.round(a.aireTanques)} días si el generador falla.
+            Oxygen tanks for {Math.round(a.aireTanques)} days if the generator fails.
           </Linea>
           <Linea bien={a.energia >= 7.5} regular={a.energia >= 6}>
-            Energía media en Marte: {a.energia.toFixed(1)} kW; la base consume cerca de 7.
+            Average power on Mars: {a.energia.toFixed(1)} kW. The base uses about 7.
           </Linea>
           <Linea bien={a.noche >= 150} regular={a.noche >= 90 || sala.cargamento.reactor > 0}>
-            Baterías: {a.noche} kWh. Una noche marciana pide unos 85{sala.cargamento.reactor ? '; el reactor también funciona de noche' : ''}.
+            Batteries: {a.noche} kWh. A Martian night needs about 85{sala.cargamento.reactor ? '. The reactor also works at night' : ''}.
           </Linea>
           <Linea bien={sala.cargamento.blindaje >= 1} regular>
-            {sala.cargamento.blindaje} capa(s) de blindaje en el refugio para las tormentas solares.
+            {sala.cargamento.blindaje} shielding layer(s) in the shelter for solar storms.
           </Linea>
           {sala.mision.aguaObjetivo > 0 && (
             <Linea bien={sala.cargamento.isru > 0}>
-              Extractor de hielo {sala.cargamento.isru > 0 ? 'a bordo' : 'sin cargar'}: la meta es sacar {sala.mision.aguaObjetivo} kg de agua. Da hasta 45 kg al día si tiene energía.
+              Ice extractor {sala.cargamento.isru > 0 ? 'on board' : 'not loaded'}. The goal is to extract {sala.mision.aguaObjetivo} kg of water. It makes up to 45 kg a day if it has power.
             </Linea>
           )}
           <Linea bien={sala.cargamento.repuestos >= 14} regular={sala.cargamento.repuestos >= 8}>
-            {sala.cargamento.repuestos} kits de repuestos para {Math.round(a.total)} días de desgaste y averías.
+            {sala.cargamento.repuestos} spare parts kits for {Math.round(a.total)} days of wear and breakdowns.
           </Linea>
         </ul>
 
-        <h3>Listos para despegar</h3>
+        <h3>Ready for liftoff</h3>
         <div className="row" style={{ gap: 6 }}>
-          <button className={yo.listo ? 'ok grow' : 'grow'} onClick={() => api.listo(!yo.listo)}>{yo.listo ? 'Listo ✓ (pulsa para cambiar)' : 'Estoy listo'}</button>
+          <button className={yo.listo ? 'ok grow' : 'grow'} onClick={() => api.listo(!yo.listo)}>{yo.listo ? 'Ready ✓ (click to change)' : "I'm ready"}</button>
           {mando && (
             <button className="primary grow" disabled={Boolean(impide)} onClick={() => api.lanzar()}>
-              Autorizar lanzamiento
+              Authorize launch
             </button>
           )}
         </div>
-        <p className="mini muted">{impide ?? (mando ? 'Todo listo. El comandante autoriza el lanzamiento.' : 'El comandante autoriza el lanzamiento cuando todos estén listos.')}</p>
+        <p className="mini muted">{impide ?? (mando ? 'All set. The Mission Commander authorizes the launch.' : 'The Mission Commander authorizes the launch when everyone is ready.')}</p>
       </div>
     </div>
   )
@@ -454,10 +454,10 @@ export function ContextoScreen() {
       <div className="card wide stack contexto">
         <div className="row">
           <div className="grow">
-            <div className="brand">Contextualización · sala {sala.codigo}</div>
+            <div className="brand">Mission Briefing · room {sala.codigo}</div>
             <h1>{PASOS_CONTEXTO[actual].titulo}</h1>
           </div>
-          <button className="small" onClick={() => api.salir()}>Salir</button>
+          <button className="small" onClick={() => api.salir()}>Leave</button>
         </div>
 
         <ol className="pasos">
@@ -480,7 +480,7 @@ export function ContextoScreen() {
             <span key={j.id} className={`tag ${j.listo ? 'ok' : ''} ${j.conectado ? '' : 'apagado'}`}>
               <RolTag rol={j.rol} /> {j.nombre}
               <MarcaIA bot={j.bot} />
-              {j.id === yo.id ? ' (tú)' : ''} · {j.listo ? 'listo ✓' : j.conectado ? HACIENDO[j.paso ?? 0] : 'ausente'}
+              {j.id === yo.id ? ' (you)' : ''} · {j.listo ? 'ready ✓' : j.conectado ? HACIENDO[j.paso ?? 0] : 'away'}
             </span>
           ))}
         </div>

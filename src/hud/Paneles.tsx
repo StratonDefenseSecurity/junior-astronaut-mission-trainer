@@ -13,14 +13,14 @@ import { useVoz, voz } from '../voz'
 import { Barra, Dato, MarcaIA, RolTag, enMarte, energiaUsada, escalaTexto, mmHg, nivel, pctTraje, relojMision, tiempoEnEspacio } from './comun'
 
 const FASES: Record<RoomState['fase'], string> = {
-  lobby: 'Sala',
-  contexto: 'Contextualización',
-  lanzamiento: 'Lanzamiento',
-  transito: 'Viaje a Marte',
-  llegada: 'Llegada a Marte',
-  ensamblaje: 'Montaje de la base',
-  base: 'Base en operación',
-  fin: 'Misión terminada',
+  lobby: 'Room',
+  contexto: 'Mission Briefing',
+  lanzamiento: 'Launch',
+  transito: 'Cruise to Mars',
+  llegada: 'Mars Arrival',
+  ensamblaje: 'Base Assembly',
+  base: 'Mars Base',
+  fin: 'Mission Over',
 }
 
 export function BarraSuperior({ sala }: { sala: RoomState }) {
@@ -43,7 +43,7 @@ export function BarraSuperior({ sala }: { sala: RoomState }) {
       </div>
 
       <div className="bloque escala">
-        <div className="mini muted">Escala de tiempo{sala.pausa ? ' · EN PAUSA' : ''}</div>
+        <div className="mini muted">Time Scale{sala.pausa ? ' · PAUSED' : ''}</div>
         <div className="row" style={{ gap: 4 }}>
           {fija ? (
             <span className="chip activo">×{sala.escala} · {escalaTexto(sala.escala)}</span>
@@ -53,7 +53,7 @@ export function BarraSuperior({ sala }: { sala: RoomState }) {
                 key={e.valor}
                 className={`chip ${sala.escalaDeseada === e.valor ? 'activo' : ''}`}
                 disabled={!mando}
-                title={mando ? e.detalle : 'La escala la controla el comandante'}
+                title={mando ? e.detalle : 'The Mission Commander controls the time scale'}
                 onClick={() => api.escala(e.valor)}
               >
                 {e.nombre}
@@ -62,55 +62,55 @@ export function BarraSuperior({ sala }: { sala: RoomState }) {
           )}
           {!fija && mando && (
             <button className="chip" onClick={() => api.pausa(!sala.pausa)}>
-              {sala.pausa ? 'Reanudar' : 'Pausa'}
+              {sala.pausa ? 'Resume' : 'Pause'}
             </button>
           )}
         </div>
         <div className="mini" style={{ color: frenada ? 'var(--warn)' : 'var(--muted)' }}>
-          {frenada ? `Corre a ×${sala.escala}: hay una alerta o alguien fuera` : escalaTexto(sala.escala)}
+          {frenada ? `Running at ×${sala.escala}: there is an alert or someone is outside` : escalaTexto(sala.escala)}
         </div>
       </div>
 
       {enMarte(sala) ? (
         <div className="bloque datos">
-          <Dato etiqueta="Fuera" valor={`${a.tempExt} °C`} nota={`Datos del sol ${a.solCuriosity} de Curiosity`} />
-          <Dato etiqueta="Presión" valor={`${a.presion} Pa`} />
-          <Dato etiqueta="Polvo" valor={a.tau.toFixed(1)} tono={nivel(a.tau > 2.5, a.tau > 1.2)} nota="Opacidad del cielo (modelo del juego)" />
-          <Dato etiqueta="Luz" valor={`${a.flujoSolar} W/m²`} />
-          <Dato etiqueta="Sitio" valor={SITE_BY_ID[sala.sitio ?? 'gale'].nombre} />
+          <Dato etiqueta="Outside" valor={`${a.tempExt} °C`} nota={`Curiosity data from sol ${a.solCuriosity}`} />
+          <Dato etiqueta="Pressure" valor={`${a.presion} Pa`} />
+          <Dato etiqueta="Dust" valor={a.tau.toFixed(1)} tono={nivel(a.tau > 2.5, a.tau > 1.2)} nota="Sky opacity (game model)" />
+          <Dato etiqueta="Sunlight" valor={`${a.flujoSolar} W/m²`} />
+          <Dato etiqueta="Site" valor={SITE_BY_ID[sala.sitio ?? 'gale'].nombre} />
         </div>
       ) : sala.fase === 'transito' || sala.fase === 'llegada' ? (
         <div className="bloque datos">
-          <Dato etiqueta="A Marte" valor={`${v.distMarte} M km`} barra={{ valor: v.progreso * 100 }} nota={`Llevan el ${Math.round(v.progreso * 100)}% del viaje`} />
-          <Dato etiqueta="Señal" valor={`${Math.floor(v.retardo / 60)} min ${v.retardo % 60} s`} nota={`Lo que tarda un mensaje en llegar a la Tierra, a ${v.distTierra} millones de km`} />
-          <Dato etiqueta="En el espacio" valor={tiempoEnEspacio(sala)} nota="Días y horas desde que alcanzaron la órbita" />
-          <Dato etiqueta="Combustible" valor={`${Math.round(sala.rec.propelente)}%`} tono={nivel(sala.rec.propelente < 10, sala.rec.propelente < 30)} nota="Propelente que queda para corregir el rumbo y aterrizar" />
-          <Dato etiqueta="Energía usada" valor={energiaUsada(sala)} nota="Electricidad consumida desde el despegue" />
+          <Dato etiqueta="To Mars" valor={`${v.distMarte} M km`} barra={{ valor: v.progreso * 100 }} nota={`${Math.round(v.progreso * 100)}% of the trip done`} />
+          <Dato etiqueta="Signal" valor={`${Math.floor(v.retardo / 60)} min ${v.retardo % 60} s`} nota={`How long a message takes to reach Earth, ${v.distTierra} million km away`} />
+          <Dato etiqueta="In space" valor={tiempoEnEspacio(sala)} nota="Days and hours since you reached orbit" />
+          <Dato etiqueta="Fuel" valor={`${Math.round(sala.rec.propelente)}%`} tono={nivel(sala.rec.propelente < 10, sala.rec.propelente < 30)} nota="Propellant left to correct course and land" />
+          <Dato etiqueta="Energy used" valor={energiaUsada(sala)} nota="Electricity used since liftoff" />
         </div>
       ) : (
         <div className="bloque datos">
-          <Dato etiqueta="Etapa" valor={v.etapa} />
-          <Dato etiqueta="Altitud" valor={`${v.altitud} km`} />
-          <Dato etiqueta="Velocidad" valor={`${v.velocidad} km/s`} />
-          <Dato etiqueta="Aceleración" valor={`${v.g} g`} tono={nivel(v.g > 4, v.g > 2.5)} />
-          <Dato etiqueta="Combustible" valor={`${Math.round(sala.rec.propelente)}%`} nota="Propelente de la etapa que está empujando" />
-          <Dato etiqueta="Energía usada" valor={energiaUsada(sala)} nota="Electricidad consumida desde el despegue" />
+          <Dato etiqueta="Stage" valor={v.etapa} />
+          <Dato etiqueta="Altitude" valor={`${v.altitud} km`} />
+          <Dato etiqueta="Speed" valor={`${v.velocidad} km/s`} />
+          <Dato etiqueta="Acceleration" valor={`${v.g} g`} tono={nivel(v.g > 4, v.g > 2.5)} />
+          <Dato etiqueta="Fuel" valor={`${Math.round(sala.rec.propelente)}%`} nota="Propellant in the stage that is firing" />
+          <Dato etiqueta="Energy used" valor={energiaUsada(sala)} nota="Electricity used since liftoff" />
         </div>
       )}
 
       <div className="bloque datos">
-        {enMarte(sala) && <Dato etiqueta="Muestras" valor={`${sala.mision.muestrasAnalizadas}/${sala.mision.muestrasObjetivo}`} />}
-        <Dato etiqueta="Radiación" valor={`${a.radiacion} mSv/d`} tono={a.tormentaSolar ? 'bad' : undefined} nota="Dosis de fondo por rayos cósmicos" />
+        {enMarte(sala) && <Dato etiqueta="Samples" valor={`${sala.mision.muestrasAnalizadas}/${sala.mision.muestrasObjetivo}`} />}
+        <Dato etiqueta="Radiation" valor={`${a.radiacion} mSv/d`} tono={a.tormentaSolar ? 'bad' : undefined} nota="Background dose from cosmic rays" />
       </div>
 
       <div className="grow" />
       <div className="bloque" style={{ textAlign: 'right', marginLeft: 'auto' }}>
-        <div className="mono mini">Sala {sala.codigo}</div>
+        <div className="mono mini">Room {sala.codigo}</div>
         <div className="row" style={{ gap: 4, justifyContent: 'flex-end' }}>
           <BotonesAudio />
-          <button className="chip" onClick={alternar} title="Tecla H">Paneles</button>
-          <button className="chip" onClick={() => setFuentes(true)}>Fuentes</button>
-          <button className="chip" onClick={() => api.salir()}>Salir</button>
+          <button className="chip" onClick={alternar} title="Key H">Panels</button>
+          <button className="chip" onClick={() => setFuentes(true)}>Sources</button>
+          <button className="chip" onClick={() => api.salir()}>Leave</button>
         </div>
       </div>
     </div>
@@ -124,79 +124,79 @@ export function BotonesAudio() {
   const g = useGraficos()
   return (
     <>
-      <button className="chip" title={g.calidad === 'alta' ? 'Gráficos en alta calidad. Pulsa para la versión ligera, mejor en computadoras sencillas.' : 'Gráficos ligeros. Pulsa para la alta calidad.'} onClick={g.alternar}>
-        {g.calidad === 'alta' ? 'HD' : 'Ligero'}
+      <button className="chip" title={g.calidad === 'alta' ? 'High quality graphics. Click for the lite version, better on simple computers.' : 'Lite graphics. Click for high quality.'} onClick={g.alternar}>
+        {g.calidad === 'alta' ? 'HD' : 'Lite'}
       </button>
-      <button className="chip" title={s.silenciado ? 'Activar el sonido' : 'Silenciar'} onClick={() => (void sonido.activar(), sonido.silenciar(!s.silenciado))}>
-        {s.silenciado ? 'Sonido: no' : 'Sonido'}
+      <button className="chip" title={s.silenciado ? 'Turn sound on' : 'Mute'} onClick={() => (void sonido.activar(), sonido.silenciar(!s.silenciado))}>
+        {s.silenciado ? 'Sound: off' : 'Sound'}
       </button>
       {v.disponible && (
         <button
           className={`chip ${v.activa ? 'activo' : ''}`}
-          title={v.activa ? 'Salir del chat de voz' : 'Hablar con la tripulación'}
+          title={v.activa ? 'Leave voice chat' : 'Talk with the crew'}
           onClick={() => (v.activa ? voz.desactivar() : void voz.activar())}
         >
-          {v.activa ? `Voz · ${v.conectados}` : 'Voz'}
+          {v.activa ? `Voice · ${v.conectados}` : 'Voice'}
         </button>
       )}
       {v.activa && v.microfono === 'si' && (
-        <button className="chip" title="Micrófono" onClick={() => voz.silenciar(!v.silenciado)}>
-          {v.silenciado ? 'Mic: no' : 'Mic'}
+        <button className="chip" title="Microphone" onClick={() => voz.silenciar(!v.silenciado)}>
+          {v.silenciado ? 'Mic: off' : 'Mic'}
         </button>
       )}
     </>
   )
 }
 
-const ACTIVIDAD: Record<Player['actividad'], string> = { sueno: 'Durmiendo', reposo: 'En reposo', trabajo: 'Trabajando', ejercicio: 'Haciendo ejercicio', eva: 'Fuera, con el traje' }
+const ACTIVIDAD: Record<Player['actividad'], string> = { sueno: 'Sleeping', reposo: 'Resting', trabajo: 'Working', ejercicio: 'Exercising', eva: 'Outside in the suit' }
 
 /** El cuerpo y el traje del jugador. */
 export function MiEstado({ sala, yo }: { sala: RoomState; yo: Player }) {
   const v = yo.vit
   const fuera = yo.zona === 'exterior'
   const o2 = pctTraje(yo.trajeO2)
-  const aire = fuera ? `traje: ${C.TRAJE_PRESION_KPA} kPa de oxígeno puro` : `cabina: ${sala.cabina.ppO2.toFixed(1)} kPa de O₂, ${mmHg(sala.cabina.ppCO2).toFixed(1)} mmHg de CO₂`
+  const aire = fuera ? `suit air: ${C.TRAJE_PRESION_KPA} kPa of pure oxygen` : `cabin air: ${sala.cabina.ppO2.toFixed(1)} kPa of O₂, ${mmHg(sala.cabina.ppCO2).toFixed(1)} mmHg of CO₂`
   return (
     <div className="panel estado">
       <div className="row" style={{ gap: 6 }}>
         <RolTag rol={yo.rol} />
         <strong className="grow">{yo.nombre}</strong>
-        <span className="mini muted">{yo.incapacitado > 0 ? 'Fuera de servicio' : yo.enRefugio ? 'En el refugio' : ACTIVIDAD[yo.actividad]}</span>
+        <span className="mini muted">{yo.incapacitado > 0 ? 'Out of action' : yo.enRefugio ? 'In the shelter' : ACTIVIDAD[yo.actividad]}</span>
       </div>
       <div className="vitales">
-        <Dato etiqueta="Pulso" valor={`${Math.round(v.fc)} lpm`} tono={nivel(v.fc > 150, v.fc > 110)} nota="Latidos por minuto" />
-        <Dato etiqueta="Respiración" valor={`${Math.round(v.fr)} rpm`} tono={nivel(v.fr > 34, v.fr > 24)} nota="Respiraciones por minuto" />
-        <Dato etiqueta="O₂ en sangre" valor={`${Math.round(v.spo2)}%`} tono={nivel(v.spo2 < 88, v.spo2 < 94)} nota={`Respiras ${aire}`} />
+        <Dato etiqueta="Pulse" valor={`${Math.round(v.fc)} bpm`} tono={nivel(v.fc > 150, v.fc > 110)} nota="Heartbeats per minute" />
+        <Dato etiqueta="Breathing" valor={`${Math.round(v.fr)} /min`} tono={nivel(v.fr > 34, v.fr > 24)} nota="Breaths per minute" />
+        <Dato etiqueta="Blood O₂" valor={`${Math.round(v.spo2)}%`} tono={nivel(v.spo2 < 88, v.spo2 < 94)} nota={`You breathe ${aire}`} />
       </div>
       <div className="medidores">
-        <Dato etiqueta="Salud" valor={Math.round(v.salud)} tono={nivel(v.salud < 40, v.salud < 70)} barra={{ valor: v.salud }} />
-        <Dato etiqueta="Hidratación" valor={`${Math.round(v.hidratacion)}%`} tono={nivel(v.hidratacion < 60, v.hidratacion < 85)} barra={{ valor: v.hidratacion }} />
-        <Dato etiqueta="Energía" valor={`${Math.round(v.reservas)}%`} tono={nivel(v.reservas < 50, v.reservas < 80)} barra={{ valor: v.reservas }} nota="Reservas del cuerpo según lo que comes y gastas" />
-        <Dato etiqueta="Fatiga" valor={`${Math.round(v.fatiga)}%`} tono={nivel(v.fatiga > 85, v.fatiga > 60)} barra={{ valor: v.fatiga }} />
-        <Dato etiqueta="Músculo y hueso" valor={`${Math.round(v.condicion)}%`} tono={nivel(v.condicion < 70, v.condicion < 88)} barra={{ valor: v.condicion }} nota="Se pierde sin gravedad y sin ejercicio" />
+        <Dato etiqueta="Health" valor={Math.round(v.salud)} tono={nivel(v.salud < 40, v.salud < 70)} barra={{ valor: v.salud }} />
+        <Dato etiqueta="Hydration" valor={`${Math.round(v.hidratacion)}%`} tono={nivel(v.hidratacion < 60, v.hidratacion < 85)} barra={{ valor: v.hidratacion }} />
+        <Dato etiqueta="Energy" valor={`${Math.round(v.reservas)}%`} tono={nivel(v.reservas < 50, v.reservas < 80)} barra={{ valor: v.reservas }} nota="Body reserves, based on what you eat and burn" />
+        <Dato etiqueta="Fatigue" valor={`${Math.round(v.fatiga)}%`} tono={nivel(v.fatiga > 85, v.fatiga > 60)} barra={{ valor: v.fatiga }} />
+        <Dato etiqueta="Muscle and bone" valor={`${Math.round(v.condicion)}%`} tono={nivel(v.condicion < 70, v.condicion < 88)} barra={{ valor: v.condicion }} nota="Lost without gravity and exercise" />
         <Dato
-          etiqueta="Radiación"
+          etiqueta="Radiation"
           valor={`${v.dosis.toFixed(v.dosis < 10 ? 2 : 0)} mSv`}
           tono={nivel(v.dosis > C.LIMITE_CARRERA_MSV, v.dosis > 450)}
           barra={{ valor: v.dosis, max: C.LIMITE_CARRERA_MSV }}
-          nota={`Ahora: ${v.dosisTasa} mSv por día. Límite de carrera de NASA: ${C.LIMITE_CARRERA_MSV} mSv`}
+          nota={`Now: ${v.dosisTasa} mSv per day. NASA career limit: ${C.LIMITE_CARRERA_MSV} mSv`}
         />
       </div>
       <div className="traje">
-        <span className="mini muted">{fuera ? 'Traje en uso' : 'Traje (cargando en la esclusa)'}</span>
+        <span className="mini muted">{fuera ? 'Suit in use' : 'Suit (charging in the airlock)'}</span>
         <div className="row" style={{ gap: 8 }}>
           <div className="grow">
-            <div className="mini">Oxígeno {o2}%</div>
+            <div className="mini">Oxygen {o2}%</div>
             <Barra valor={o2} tono={nivel(o2 < 20, o2 < 40)} />
           </div>
           <div className="grow">
-            <div className="mini">Batería {Math.round(yo.trajeBateria * 100)}%</div>
+            <div className="mini">Battery {Math.round(yo.trajeBateria * 100)}%</div>
             <Barra valor={yo.trajeBateria * 100} tono={nivel(yo.trajeBateria < 0.2, yo.trajeBateria < 0.4)} />
           </div>
         </div>
       </div>
-      {yo.dolencia && <div className="help">Tienes {yo.dolencia}. Ve con el médico.</div>}
-      {yo.muestras > 0 && <div className="help ok">Llevas {yo.muestras} muestra(s). Analízalas en el laboratorio.</div>}
+      {yo.dolencia && <div className="help">You have {yo.dolencia}. See the Flight Surgeon.</div>}
+      {yo.muestras > 0 && <div className="help ok">You are carrying {yo.muestras} sample(s). Analyze them in the lab.</div>}
     </div>
   )
 }
@@ -210,7 +210,7 @@ export function Tripulacion({ sala }: { sala: RoomState }) {
   const crew = sala.jugadores.filter((j) => j.rol)
   return (
     <div className="panel tripulacion">
-      <h3>Integrantes</h3>
+      <h3>Crew</h3>
       {crew.map((j) => {
         const v = j.vit
         const puedoIr = j.ayuda && yo && j.id !== yo.id && (yo.rol === j.ayuda.paraRol || yo.rol === 'comandante')
@@ -222,32 +222,32 @@ export function Tripulacion({ sala }: { sala: RoomState }) {
                 {j.nombre}
                 <MarcaIA bot={j.bot} />
               </strong>
-              <span className="mini muted">{j.incapacitado > 0 ? 'fuera de servicio' : j.enRefugio ? 'refugio' : j.zona === 'exterior' ? 'fuera' : !j.conectado ? 'ausente' : j.manual === 'sueno' ? 'duerme' : ''}</span>
+              <span className="mini muted">{j.incapacitado > 0 ? 'out of action' : j.enRefugio ? 'shelter' : j.zona === 'exterior' ? 'outside' : !j.conectado ? 'away' : j.manual === 'sueno' ? 'asleep' : ''}</span>
             </div>
             <div className="tres">
               <div>
-                <span>Oxígeno</span>
+                <span>Oxygen</span>
                 <b className={nivel(v.spo2 < 88, v.spo2 < 94)}>{Math.round(v.spo2)}%</b>
               </div>
               <div>
-                <span>Salud</span>
+                <span>Health</span>
                 <b className={nivel(v.salud < 40, v.salud < 70)}>{Math.round(v.salud)}</b>
               </div>
               <div>
-                <span>Pulso</span>
+                <span>Pulse</span>
                 <b className={nivel(v.fc > 150, v.fc > 110)}>{Math.round(v.fc)}</b>
               </div>
             </div>
             <Barra valor={v.salud} tono={nivel(v.salud < 40, v.salud < 70)} />
             <div className="mini muted progreso">
-              {ACTIVIDAD[j.actividad]} · {j.aportes ?? 0} {(j.aportes ?? 0) === 1 ? 'tarea hecha' : 'tareas hechas'}
+              {ACTIVIDAD[j.actividad]} · {j.aportes ?? 0} {(j.aportes ?? 0) === 1 ? 'task done' : 'tasks done'}
             </div>
             {j.ayuda && (
               <div className="help">
-                <strong>Pide ayuda a {ROLE_BY_ID[j.ayuda.paraRol].nombre}:</strong> {j.ayuda.motivo}
+                <strong>Asks the {ROLE_BY_ID[j.ayuda.paraRol].nombre} for help:</strong> {j.ayuda.motivo}
                 {puedoIr && (
                   <button className="small ok" style={{ marginTop: 5, display: 'block' }} onClick={() => api.irAyudar(j.id)}>
-                    Ir a ayudar
+                    Go help
                   </button>
                 )}
               </div>
@@ -263,7 +263,7 @@ export function Tripulacion({ sala }: { sala: RoomState }) {
                 <option key={r.id} value={r.id}>{r.nombre}</option>
               ))}
             </select>
-            <input placeholder="¿Qué necesitas?" value={motivo} maxLength={120} onChange={(e) => setMotivo(e.target.value)} />
+            <input placeholder="What do you need?" value={motivo} maxLength={120} onChange={(e) => setMotivo(e.target.value)} />
             <div className="row" style={{ gap: 5 }}>
               <button
                 className="small primary"
@@ -274,16 +274,16 @@ export function Tripulacion({ sala }: { sala: RoomState }) {
                   setPidiendo(false)
                 }}
               >
-                Enviar
+                Send
               </button>
-              <button className="small" onClick={() => setPidiendo(false)}>Cancelar</button>
+              <button className="small" onClick={() => setPidiendo(false)}>Cancel</button>
             </div>
           </div>
         ) : (
-          <button className="small" onClick={() => setPidiendo(true)}>Pedir ayuda a un compañero</button>
+          <button className="small" onClick={() => setPidiendo(true)}>Ask a crewmate for help</button>
         )
       )}
-      {yo?.ayuda && <div className="help">Pediste ayuda a {ROLE_BY_ID[yo.ayuda.paraRol].nombre}. Esperando.</div>}
+      {yo?.ayuda && <div className="help">You asked the {ROLE_BY_ID[yo.ayuda.paraRol].nombre} for help. Waiting.</div>}
     </div>
   )
 }
@@ -291,9 +291,9 @@ export function Tripulacion({ sala }: { sala: RoomState }) {
 export function PuntosCriticos({ sala }: { sala: RoomState }) {
   return (
     <div className="panel criticos">
-      <h3>Puntos críticos</h3>
+      <h3>Critical Points</h3>
       <div className="critical">
-        {sala.puntosCriticos.length === 0 ? <span className="ok">Sin alertas. Todo dentro de lo normal.</span> : sala.puntosCriticos.map((p, i) => <span key={i} className="tag">{p}</span>)}
+        {sala.puntosCriticos.length === 0 ? <span className="ok">No alerts. Everything is normal.</span> : sala.puntosCriticos.map((p, i) => <span key={i} className="tag">{p}</span>)}
       </div>
     </div>
   )
@@ -303,7 +303,7 @@ export function Registro({ sala }: { sala: RoomState }) {
   const ultimos = sala.registro.slice(-7).reverse()
   return (
     <div className="panel registro">
-      <h3>Registro de misión</h3>
+      <h3>Mission Log</h3>
       <div className="log">
         {ultimos.map((l, i) => (
           <div key={`${l.t}-${i}`} className={l.tipo}>
@@ -321,22 +321,22 @@ export function Telemetria({ sala, yo }: { sala: RoomState; yo: Player }) {
   const cuenta = sala.t < 0
   return (
     <div className="telemetria">
-      <div className="etapa">{cuenta ? `Despegue en ${Math.ceil(-sala.t)}` : v.etapa}</div>
+      <div className="etapa">{cuenta ? `Liftoff in ${Math.ceil(-sala.t)}` : v.etapa}</div>
       <div className="fila">
-        <div><span>Altitud</span><b>{v.altitud} km</b></div>
-        <div><span>Velocidad</span><b>{sala.fase === 'lanzamiento' ? `${v.velocidad} km/s` : `${Math.round(v.velocidad * 3600).toLocaleString('es')} km/h`}</b></div>
-        <div><span>Aceleración</span><b className={nivel(v.g > 4, v.g > 2.5)}>{v.g} g</b></div>
-        <div><span>Tu pulso</span><b className={nivel(yo.vit.fc > 150, yo.vit.fc > 110)}>{Math.round(yo.vit.fc)} lpm</b></div>
+        <div><span>Altitude</span><b>{v.altitud} km</b></div>
+        <div><span>Speed</span><b>{sala.fase === 'lanzamiento' ? `${v.velocidad} km/s` : `${Math.round(v.velocidad * 3600).toLocaleString('en-US')} km/h`}</b></div>
+        <div><span>Acceleration</span><b className={nivel(v.g > 4, v.g > 2.5)}>{v.g} g</b></div>
+        <div><span>Your pulse</span><b className={nivel(yo.vit.fc > 150, yo.vit.fc > 110)}>{Math.round(yo.vit.fc)} bpm</b></div>
       </div>
       <div className="fila gasto">
-        <div><span>Combustible</span><b className={nivel(false, sala.rec.propelente < 25)}>{Math.round(sala.rec.propelente)}%</b></div>
-        <div><span>Energía usada</span><b>{energiaUsada(sala)}</b></div>
-        <div><span>{sala.fase === 'lanzamiento' ? 'Tiempo de vuelo' : 'En el espacio'}</span><b>{sala.fase === 'lanzamiento' ? (cuenta ? 'en tierra' : `${Math.floor(sala.t / 60)} min ${Math.floor(sala.t % 60)} s`) : tiempoEnEspacio(sala)}</b></div>
+        <div><span>Fuel</span><b className={nivel(false, sala.rec.propelente < 25)}>{Math.round(sala.rec.propelente)}%</b></div>
+        <div><span>Energy used</span><b>{energiaUsada(sala)}</b></div>
+        <div><span>{sala.fase === 'lanzamiento' ? 'Flight time' : 'In space'}</span><b>{sala.fase === 'lanzamiento' ? (cuenta ? 'on the ground' : `${Math.floor(sala.t / 60)} min ${Math.floor(sala.t % 60)} s`) : tiempoEnEspacio(sala)}</b></div>
       </div>
       <div className="muted mini">
         {sala.fase === 'lanzamiento'
-          ? 'La aceleración te aplasta contra el asiento y el corazón late más rápido para seguir llevando sangre a la cabeza.'
-          : 'Es el descenso real de Perseverance. La cápsula entra a 19 200 km/h y en siete minutos se posa a menos de 3 km/h. La Tierra no puede ayudar: la señal tarda demasiado.'}
+          ? 'The acceleration presses you into your seat, and your heart beats faster to keep blood flowing to your head.'
+          : 'This is the real descent of Perseverance. The capsule enters at 19,200 km/h and in seven minutes touches down at less than 3 km/h. Earth cannot help: the signal takes too long.'}
       </div>
     </div>
   )

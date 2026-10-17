@@ -30,7 +30,7 @@ export default async function ({ pagina, pulsar, botones, captura, ok, esperar, 
     localStorage.setItem('mt_sala', d.codigo)
   }, demo)
   await pagina.reload({ waitUntil: 'networkidle0' })
-  ok(await esperarTexto(/MONTAJE DE LA BASE/, 20000), 'entra a la base en montaje')
+  ok(await esperarTexto(/BASE ASSEMBLY/i, 20000), 'entra a la base en montaje')
   await esperar(2000)
   await captura('base-dentro')
 
@@ -44,8 +44,8 @@ export default async function ({ pagina, pulsar, botones, captura, ok, esperar, 
   /** Camina con el teclado por el pasillo, pegado a cada pared, hasta ver el aviso "E <estación>". */
   const cerca = async (nombre) => (await botones()).some((b) => b.startsWith(`E ${nombre}`))
   async function irA(nombre) {
-    await pulsar('Cerrar (M)', { exacto: true })
-    await pulsar('Cerrar', { exacto: true })
+    await pulsar('Close (M)', { exacto: true })
+    await pulsar('Close', { exacto: true })
     let llego = await cerca(nombre)
     for (const pared of ['KeyD', 'KeyA']) {
       if (llego) break
@@ -102,12 +102,12 @@ export default async function ({ pagina, pulsar, botones, captura, ok, esperar, 
         if (!avanzo) break
       }
     } else if (tipo === 'ajustar') {
-      await pulsar('Confirmar', { exacto: true })
+      await pulsar('Confirm', { exacto: true })
     } else if (tipo === 'comprobar') {
       await esperar(3500)
-      if (!(await pulsar('Pasa', { exacto: true }))) await pulsar('Falla', { exacto: true })
+      if (!(await pulsar('Pass', { exacto: true }))) await pulsar('Fail', { exacto: true })
       await esperar(800)
-      if ((await pagina.$eval('.proc-actual', (e) => e.innerText.split('\n')[0]).catch(() => '')) === titulo) await pulsar('Falla', { exacto: true })
+      if ((await pagina.$eval('.proc-actual', (e) => e.innerText.split('\n')[0]).catch(() => '')) === titulo) await pulsar('Fail', { exacto: true })
     } else {
       const opciones = await pagina.$$('.proc-actual button.opcion:not([disabled])')
       for (const b of opciones) {
@@ -132,31 +132,31 @@ export default async function ({ pagina, pulsar, botones, captura, ok, esperar, 
   }
 
   // Desde el puesto del comandante: a la derecha hasta la pared y hacia atrás hasta Energía.
-  if (await irA('Energía')) {
+  if (await irA('Power')) {
     await captura('estacion-energia')
     console.log('  botones:', (await botones()).join(' | '))
     await procedimiento('energia')
-    await pulsar('Cerrar', { exacto: true })
+    await pulsar('Close', { exacto: true })
   }
-  if (await irA('Soporte vital')) await procedimiento('soporte')
-  await pulsar('Cerrar', { exacto: true })
-  ok(await esperarTexto(/paso 3 de 3|Comprobar las instalaciones/, 15000), 'el montaje pasa a comprobar las instalaciones')
-  if (await irA('Esclusa')) await procedimiento('esclusa')
-  await pulsar('Cerrar', { exacto: true })
+  if (await irA('Life Support')) await procedimiento('soporte')
+  await pulsar('Close', { exacto: true })
+  ok(await esperarTexto(/step 3 of 3|Check the facilities/i, 15000), 'el montaje pasa a comprobar las instalaciones')
+  if (await irA('Airlock')) await procedimiento('esclusa')
+  await pulsar('Close', { exacto: true })
 
   console.log('Exterior')
-  if (await irA('Esclusa')) {
-    ok(await pulsar('Ponerme el traje y salir'), 'se pone el traje y sale')
-    ok(await esperarTexto(/Fuera, con el traje|con el traje/, 10000), 'aparece fuera, con el traje')
+  if (await irA('Airlock')) {
+    ok(await pulsar('Suit up and go outside'), 'se pone el traje y sale')
+    ok(await esperarTexto(/Outside in the suit|in the suit/i, 10000), 'aparece fuera, con el traje')
     await esperar(4000)
     await captura('exterior')
     console.log('  botones:', (await botones()).join(' | '))
-    for (let i = 0; i < 10 && !(await cerca('Esclusa')); i++) await mover(i % 2 ? 'KeyW' : 'KeyS', 250)
-    if (await cerca('Esclusa')) {
+    for (let i = 0; i < 10 && !(await cerca('Airlock')); i++) await mover(i % 2 ? 'KeyW' : 'KeyS', 250)
+    if (await cerca('Airlock')) {
       await pagina.keyboard.press('KeyE')
       await esperar(1200)
       console.log('  botones esclusa fuera:', (await botones()).join(' | '))
-      ok(await pulsar('Entrar'), 'vuelve a entrar al hábitat')
+      ok(await pulsar('Go inside'), 'vuelve a entrar al hábitat')
       await esperar(2500)
       await captura('de-vuelta')
     } else ok(false, 'encuentra la esclusa desde fuera')

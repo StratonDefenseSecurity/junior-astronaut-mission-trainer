@@ -26,12 +26,12 @@ function Habla({ id }: { id: string }) {
     const t = window.setInterval(() => setSi(voz.hablando(id)), 150)
     return () => window.clearInterval(t)
   }, [id])
-  return si ? <span className="habla" aria-label="hablando"> 🔊</span> : null
+  return si ? <span className="habla" aria-label="talking"> 🔊</span> : null
 }
 
 function Etiqueta({ j, propio }: { j: Player; propio: boolean }) {
   const rol = j.rol ? ROLE_BY_ID[j.rol] : null
-  const estado = j.incapacitado > 0 ? 'fuera de servicio' : j.enRefugio ? 'en el refugio' : j.manual === 'sueno' ? 'durmiendo' : j.manual === 'ejercicio' ? 'ejercicio' : null
+  const estado = j.incapacitado > 0 ? 'out of action' : j.enRefugio ? 'in the shelter' : j.manual === 'sueno' ? 'sleeping' : j.manual === 'ejercicio' ? 'exercising' : null
   return (
     <div className={`nombre ${propio ? 'propio' : ''} ${j.ayuda ? 'ayuda' : ''}`} style={{ borderColor: rol?.color }}>
       {j.ayuda && <b>! </b>}
@@ -46,13 +46,13 @@ function Etiqueta({ j, propio }: { j: Player; propio: boolean }) {
 
 /** Banderas de tres franjas para el hombro, según el país de la ciudad de origen. */
 const BANDERAS: Record<string, { colores: string[]; vertical: boolean }> = {
-  Perú: { colores: ['#d91023', '#ffffff', '#d91023'], vertical: true },
-  México: { colores: ['#006847', '#ffffff', '#ce1126'], vertical: true },
+  Peru: { colores: ['#d91023', '#ffffff', '#d91023'], vertical: true },
+  Mexico: { colores: ['#006847', '#ffffff', '#ce1126'], vertical: true },
   Ecuador: { colores: ['#fcd116', '#fcd116', '#003893', '#ce1126'], vertical: false },
   Colombia: { colores: ['#fcd116', '#fcd116', '#003893', '#ce1126'], vertical: false },
   Bolivia: { colores: ['#d52b1e', '#f9e300', '#007934'], vertical: false },
   Argentina: { colores: ['#74acdf', '#ffffff', '#74acdf'], vertical: false },
-  España: { colores: ['#aa151b', '#f1bf00', '#f1bf00', '#aa151b'], vertical: false },
+  Spain: { colores: ['#aa151b', '#f1bf00', '#f1bf00', '#aa151b'], vertical: false },
   Chile: { colores: ['#ffffff', '#d52b1e'], vertical: false },
 }
 const banderaDe = (j: Player) => {

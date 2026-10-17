@@ -89,7 +89,7 @@ export function fijarSecreto(s: string) {
 }
 function secreto(): string {
   const s = secretoFijado || (typeof process !== 'undefined' ? process.env.AUTH_SECRET : '')
-  if (!s) throw new Error('Falta el secreto de sesiones AUTH_SECRET')
+  if (!s) throw new Error('Missing session secret AUTH_SECRET')
   return s
 }
 const hmac = (texto: string) => crypto.createHmac('sha256', secreto()).update(texto).digest('base64url')
@@ -119,23 +119,23 @@ const claveDerivada = (clave: string, salt: string) => crypto.scryptSync(clave, 
 const rutaCuenta = (usuario: string) => `usuarios/${Buffer.from(usuario.toLowerCase()).toString('hex')}.json`
 
 async function registro(usuario: string, clave: string): Promise<Respuesta> {
-  if (!/^[\wáéíóúñÁÉÍÓÚÑ.-]{3,20}$/.test(usuario)) return fallo(400, 'Usuario de 3 a 20 caracteres, sin espacios.')
-  if (clave.length < 4) return fallo(400, 'La clave necesita al menos 4 caracteres.')
+  if (!/^[\wáéíóúñÁÉÍÓÚÑ.-]{3,20}$/.test(usuario)) return fallo(400, 'Username must be 3 to 20 characters, with no spaces.')
+  if (clave.length < 4) return fallo(400, 'Your password needs at least 4 characters.')
   const salt = crypto.randomBytes(8).toString('hex')
   const cuenta: CuentaGuardada = { id: crypto.randomUUID(), usuario, salt, hash: claveDerivada(clave, salt), creado: Date.now() }
   const r = await almacen().escribir(rutaCuenta(usuario), JSON.stringify(cuenta), null)
-  if (r === 'conflicto') return fallo(409, 'Ese usuario ya existe.')
+  if (r === 'conflicto') return fallo(409, 'That username is already taken.')
   const u = { id: cuenta.id, nombre: cuenta.usuario }
   return ok({ token: firmar(u), usuario: u })
 }
 
 async function ingresar(usuario: string, clave: string): Promise<Respuesta> {
   const doc = usuario ? await almacen().leer(rutaCuenta(usuario)) : null
-  if (!doc || doc === 'igual') return fallo(401, 'Usuario o clave incorrectos.')
+  if (!doc || doc === 'igual') return fallo(401, 'Wrong username or password.')
   const cuenta = JSON.parse(doc.texto) as CuentaGuardada
   const a = Buffer.from(claveDerivada(clave, cuenta.salt))
   const b = Buffer.from(cuenta.hash)
-  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return fallo(401, 'Usuario o clave incorrectos.')
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return fallo(401, 'Wrong username or password.')
   const u = { id: cuenta.id, nombre: cuenta.usuario }
   return ok({ token: firmar(u), usuario: u })
 }
@@ -145,7 +145,7 @@ async function ingresar(usuario: string, clave: string): Promise<Respuesta> {
  * La sesión es la misma que la de una cuenta, pero no se puede recuperar con una clave.
  */
 function invitado(nombre: string): Respuesta {
-  if (!/^[\wáéíóúñÁÉÍÓÚÑ .-]{3,20}$/.test(nombre)) return fallo(400, 'Escribe un nombre de 3 a 20 letras.')
+  if (!/^[\wáéíóúñÁÉÍÓÚÑ .-]{3,20}$/.test(nombre)) return fallo(400, 'Type a name with 3 to 20 letters.')
   const u = { id: `inv-${crypto.randomUUID()}`, nombre: nombre.replace(/\s+/g, ' ').trim() }
   return ok({ token: firmar(u), usuario: u })
 }
@@ -297,30 +297,30 @@ function mutar(
   return enCola(codigo, async () => {
     for (let intento = 0; intento < 4; intento++) {
       const e = await obtener(codigo, versionCliente)
-      if (!e) return fallo(404, opciones.noExiste ?? 'Esa sala ya no existe.', SIN_SALA)
+      if (!e) return fallo(404, opciones.noExiste ?? 'That room no longer exists.', SIN_SALA)
       const room = e.room
       const t = Date.now()
       actualizarPresencia(codigo, room, usuario.id, t)
       if (room.fase === 'lobby') podarLobby(codigo, room, t)
       avanzar(room, t, e.visto)
       e.visto = t
-      if (soloMiembros && !jugador(room, usuario.id)) return fallo(403, 'No formas parte de esa sala.', SIN_SALA)
+      if (soloMiembros && !jugador(room, usuario.id)) return fallo(403, 'You are not part of that room.', SIN_SALA)
       const error = fn(room, t - room.desfase)
       if (error) return fallo(400, error)
       room.version += 1
       const texto = JSON.stringify(room)
       if (await guardar(codigo, e, texto, t)) return respuestaSala(e, texto, codigo, usuario.id, t)
     }
-    return fallo(409, 'La sala está muy ocupada. Intenta de nuevo.')
+    return fallo(409, 'The room is very busy. Try again.')
   })
 }
 
 function consultar(codigo: string, usuario: Usuario, versionCliente: number, huellaCliente: string, pos: unknown): Promise<Respuesta> {
   return enCola(codigo, async () => {
     const e = await obtener(codigo, versionCliente)
-    if (!e) return fallo(404, 'Esa sala ya no existe.', SIN_SALA)
+    if (!e) return fallo(404, 'That room no longer exists.', SIN_SALA)
     const room = e.room
-    if (!jugador(room, usuario.id)) return fallo(403, 'No formas parte de esa sala.', SIN_SALA)
+    if (!jugador(room, usuario.id)) return fallo(403, 'You are not part of that room.', SIN_SALA)
     const t = Date.now()
     actualizarPresencia(codigo, room, usuario.id, t, pos)
     avanzar(room, t, e.visto)
@@ -356,12 +356,12 @@ async function crear(usuario: Usuario, modo: DecisionMode, juego: 'solo' | 'mult
     room.jugadores.push(nuevoJugador(usuario.id, usuario.nombre))
     // Un jugador: el resto de la tripulación la ponen los bots desde el principio.
     if (juego === 'solo') agregarBots(room)
-    log(room, juego === 'solo' ? `${usuario.nombre} creó la sala con una tripulación de bots.` : `${usuario.nombre} creó la sala.`)
+    log(room, juego === 'solo' ? `${usuario.nombre} created the room with a bot crew.` : `${usuario.nombre} created the room.`)
     room.version = 1
     const texto = JSON.stringify(room)
     const r = await almacen().escribir(rutaSala(codigo), documento(t, texto), null)
     if (r === 'conflicto') {
-      if (codigoFijo) return fallo(409, 'Ese código de sala ya está en uso.', { codigoEnUso: true })
+      if (codigoFijo) return fallo(409, 'That room code is already in use.', { codigoEnUso: true })
       continue
     }
     const e: Entrada = { room, etiqueta: r, verificado: t, visto: t, guardado: t }
@@ -369,7 +369,7 @@ async function crear(usuario: Usuario, modo: DecisionMode, juego: 'solo' | 'mult
     presenciaDe(codigo).ultimo.set(usuario.id, t)
     return respuestaSala(e, texto, codigo, usuario.id, t)
   }
-  return fallo(503, 'No se pudo crear la sala. Intenta de nuevo.')
+  return fallo(503, 'Could not create the room. Try again.')
 }
 
 function unirse(codigo: string, usuario: Usuario): Promise<Respuesta> {
@@ -383,15 +383,15 @@ function unirse(codigo: string, usuario: Usuario): Promise<Respuesta> {
         j.nombre = usuario.nombre
         return null
       }
-      if (room.modoJuego === 'solo') return 'Esa sala es de un solo jugador con bots.'
-      if (room.fase !== 'lobby' && room.fase !== 'contexto') return 'Esa misión ya despegó y no formas parte de ella.'
-      if (room.jugadores.length >= MAX_JUGADORES) return `La sala está llena (${MAX_JUGADORES} tripulantes).`
+      if (room.modoJuego === 'solo') return 'That room is single player with bots.'
+      if (room.fase !== 'lobby' && room.fase !== 'contexto') return 'That mission has already launched and you are not part of it.'
+      if (room.jugadores.length >= MAX_JUGADORES) return `The room is full (${MAX_JUGADORES} crew members).`
       room.jugadores.push(nuevoJugador(usuario.id, usuario.nombre))
       ajustarPlan(room)
-      log(room, `${usuario.nombre} se unió a la sala.`)
+      log(room, `${usuario.nombre} joined the room.`)
       return null
     },
-    { soloMiembros: false, noExiste: 'No existe una sala con ese código.' },
+    { soloMiembros: false, noExiste: 'There is no room with that code.' },
   )
 }
 
@@ -423,9 +423,9 @@ function salir(codigo: string, usuario: Usuario): Promise<Respuesta> {
 function preguntarBot(codigo: string, usuario: Usuario, versionCliente: number, texto: string): Promise<Respuesta> {
   return enCola(codigo, async () => {
     const e = await obtener(codigo, versionCliente)
-    if (!e) return fallo(404, 'Esa sala ya no existe.', SIN_SALA)
+    if (!e) return fallo(404, 'That room no longer exists.', SIN_SALA)
     const j = jugador(e.room, usuario.id)
-    if (!j) return fallo(403, 'No formas parte de esa sala.', SIN_SALA)
+    if (!j) return fallo(403, 'You are not part of that room.', SIN_SALA)
     const t = Date.now()
     actualizarPresencia(codigo, e.room, usuario.id, t)
     avanzar(e.room, t, e.visto)
@@ -451,12 +451,12 @@ async function despachar(c: Record<string, unknown>, autorizacion: string | unde
   if (op === 'invitado') return invitado(texto(c.usuario, 40))
 
   const usuario = verificar(autorizacion)
-  if (!usuario) return fallo(401, 'Sesión inválida. Vuelve a ingresar.', { sinSesion: true })
+  if (!usuario) return fallo(401, 'Invalid session. Please log in again.', { sinSesion: true })
   if (op === 'yo') return ok({ usuario })
   if (op === 'crear') return crear(usuario, c.modo === 'votacion' ? 'votacion' : 'comandante', c.juego === 'solo' ? 'solo' : 'multi', opciones.codigoNuevo)
 
   const codigo = texto(c.codigo, 10).toUpperCase()
-  if (!/^[A-Z0-9]{6}$/.test(codigo)) return fallo(400, 'El código de sala tiene 6 letras o números.')
+  if (!/^[A-Z0-9]{6}$/.test(codigo)) return fallo(400, 'The room code has 6 letters or numbers.')
   const v = Number.isFinite(Number(c.v)) ? Number(c.v) : 0
   const yo = usuario.id
   const m = (fn: Mutacion) => mutar(codigo, usuario, v, fn)
@@ -470,7 +470,7 @@ async function despachar(c: Record<string, unknown>, autorizacion: string | unde
       return consultar(codigo, usuario, v, texto(c.h, 40), c.p)
     case 'bot': {
       const pregunta = texto(c.texto)
-      return pregunta ? preguntarBot(codigo, usuario, v, pregunta) : fallo(400, 'Escribe una pregunta.')
+      return pregunta ? preguntarBot(codigo, usuario, v, pregunta) : fallo(400, 'Type a question.')
     }
     // Lobby y contextualización
     case 'rol':
@@ -527,7 +527,7 @@ async function despachar(c: Record<string, unknown>, autorizacion: string | unde
       return m((room) => irAyudar(room, yo, texto(c.jugadorId, 60)))
     case 'chat': {
       const mensaje = texto(c.texto)
-      if (!mensaje) return fallo(400, 'Escribe un mensaje.')
+      if (!mensaje) return fallo(400, 'Type a message.')
       return m((room, t) => {
         room.chat.push({ id: crypto.randomUUID(), de: usuario.nombre, texto: mensaje, t, bot: false })
         if (room.chat.length > 40) room.chat.splice(0, room.chat.length - 40)
@@ -535,7 +535,7 @@ async function despachar(c: Record<string, unknown>, autorizacion: string | unde
       })
     }
   }
-  return fallo(400, 'Operación desconocida.')
+  return fallo(400, 'Unknown operation.')
 }
 
 export async function manejar(cuerpo: unknown, autorizacion?: string, opciones: OpcionesManejo = {}): Promise<Respuesta> {
@@ -543,6 +543,6 @@ export async function manejar(cuerpo: unknown, autorizacion?: string, opciones: 
     return await despachar(objeto(cuerpo), autorizacion, opciones)
   } catch (e) {
     console.error('[api]', e)
-    return fallo(500, 'Error interno del servidor.')
+    return fallo(500, 'Internal server error.')
   }
 }

@@ -46,21 +46,21 @@ export function descargarCertificado(sala: RoomState) {
   }
   const victoria = sala.resultado?.victoria ?? false
   texto('NASA SPACE APPS 2026 · JUNIOR ASTRONAUT MISSION TRAINER', W / 2, 110, 22, '#4fc3f7', '600', 'center')
-  texto('CERTIFICADO DE MISIÓN', W / 2, 175, 54, '#ffffff', '700', 'center')
-  texto(sala.nombreMision || `Misión ${sala.codigo}`, W / 2, 250, 64, '#f5b942', '700', 'center')
+  texto('MISSION CERTIFICATE', W / 2, 175, 54, '#ffffff', '700', 'center')
+  texto(sala.nombreMision || `Mission ${sala.codigo}`, W / 2, 250, 64, '#f5b942', '700', 'center')
   texto(`${esc.nombre} · ${sala.resultado?.titulo ?? ''}`, W / 2, 305, 30, victoria ? '#5fd08a' : '#ff8a80', '600', 'center')
 
   const despegue = fechaDeMision(esc, 0)
   const llegada = sala.tAterrizaje > 0 ? fechaDeMision(esc, sala.tAterrizaje) : null
   const lineas = [
-    `Despegue: ${fechaLarga(despegue)}`,
-    llegada ? `Aterrizaje: ${fechaLarga(llegada)} en ${SITE_BY_ID[sala.sitio ?? 'gale'].nombre}` : 'No llegaron a la superficie',
-    `${Math.round(Math.max(0, (sala.tAterrizaje || sala.t) - TRANSITO_INICIO_S) / 86400)} días en el espacio · ${Math.max(0, sala.ambiente.sol - 1)} soles en Marte`,
-    `${sala.mision.muestrasAnalizadas} de ${sala.mision.muestrasObjetivo} muestras analizadas${sala.mision.aguaObjetivo ? ` · ${Math.round(sala.mision.aguaExtraida)} kg de agua sacada del hielo` : ''}`,
+    `Liftoff: ${fechaLarga(despegue)}`,
+    llegada ? `Landing: ${fechaLarga(llegada)} at ${SITE_BY_ID[sala.sitio ?? 'gale'].nombre}` : 'The crew did not reach the surface',
+    `${Math.round(Math.max(0, (sala.tAterrizaje || sala.t) - TRANSITO_INICIO_S) / 86400)} days in space · ${Math.max(0, sala.ambiente.sol - 1)} sols on Mars`,
+    `${sala.mision.muestrasAnalizadas} of ${sala.mision.muestrasObjetivo} samples analyzed${sala.mision.aguaObjetivo ? ` · ${Math.round(sala.mision.aguaExtraida)} kg of water taken from the ice` : ''}`,
   ]
   lineas.forEach((l, i) => texto(l, 120, 400 + i * 44, 28))
 
-  texto('TRIPULACIÓN', 120, 610, 22, '#4fc3f7', '600')
+  texto('CREW', 120, 610, 22, '#4fc3f7', '600')
   sala.jugadores
     .filter((j) => j.rol)
     .forEach((j, i) => {
@@ -72,10 +72,10 @@ export function descargarCertificado(sala: RoomState) {
       texto(j.nombre, x + 24, y, 32, '#ffffff', '700')
       texto(`${rol.nombre} · ${Math.round(j.vit.dosis)} mSv`, x + 24, y + 36, 22, '#a8b4cc')
     })
-  texto(`Límite de radiación de carrera de la NASA: ${C.LIMITE_CARRERA_MSV} mSv. Datos reales de NASA; el resto es simulación educativa.`, W / 2, H - 70, 18, '#8d9ab5', '400', 'center')
+  texto(`NASA career radiation limit: ${C.LIMITE_CARRERA_MSV} mSv. Real NASA data. Everything else is an educational simulation.`, W / 2, H - 70, 18, '#8d9ab5', '400', 'center')
 
   const enlace = document.createElement('a')
-  enlace.download = `certificado-${(sala.nombreMision || sala.codigo).replace(/[^\w-]+/g, '-')}.png`
+  enlace.download = `mission-certificate-${(sala.nombreMision || sala.codigo).replace(/[^\w-]+/g, '-')}.png`
   enlace.href = lienzo.toDataURL('image/png')
   enlace.click()
 }

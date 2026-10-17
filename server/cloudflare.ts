@@ -91,7 +91,7 @@ export class Nodo extends DurableObject<Env> {
 
   /** Apertura del WebSocket por el que un jugador consulta el estado de esta sala. */
   async fetch(request: Request): Promise<Response> {
-    if (request.headers.get('Upgrade')?.toLowerCase() !== 'websocket') return new Response('Se esperaba un WebSocket.', { status: 426 })
+    if (request.headers.get('Upgrade')?.toLowerCase() !== 'websocket') return new Response('Expected a WebSocket.', { status: 426 })
     const codigo = (new URL(request.url).searchParams.get('codigo') ?? '').toUpperCase()
     const par = new WebSocketPair()
     this.ctx.acceptWebSocket(par[1])
@@ -168,14 +168,14 @@ export default {
 
     if (url.pathname === '/api/ws') {
       const codigo = (url.searchParams.get('codigo') ?? '').toUpperCase()
-      if (request.headers.get('Upgrade')?.toLowerCase() !== 'websocket' || !CODIGO.test(codigo)) return error(400, 'Conexión inválida.')
+      if (request.headers.get('Upgrade')?.toLowerCase() !== 'websocket' || !CODIGO.test(codigo)) return error(400, 'Invalid connection.')
       return nodo(env, `sala:${codigo}`).fetch(request)
     }
 
     if (url.pathname === '/api/juego') {
-      if (request.method !== 'POST') return error(405, 'Usa POST.')
+      if (request.method !== 'POST') return error(405, 'Use POST.')
       const texto = await request.text()
-      if (texto.length > 64_000) return error(413, 'Petición demasiado grande.')
+      if (texto.length > 64_000) return error(413, 'Request too large.')
       let cuerpo: Record<string, unknown> = {}
       try {
         const d: unknown = texto ? JSON.parse(texto) : {}
@@ -193,18 +193,18 @@ export default {
             const r = await nodo(env, `sala:${codigo}`).operar(cuerpo, autorizacion, codigo)
             if (!(r.status === 409 && r.json.includes('"codigoEnUso"'))) return responder(r)
           }
-          return error(503, 'No se pudo crear la sala. Intenta de nuevo.')
+          return error(503, 'Could not create the room. Try again.')
         }
         const codigo = String(cuerpo.codigo ?? '').trim().toUpperCase()
         const destino = !DE_CUENTAS.has(op) && CODIGO.test(codigo) ? `sala:${codigo}` : 'cuentas'
         return responder(await nodo(env, destino).operar(cuerpo, autorizacion))
       } catch (e) {
         console.error('[worker]', e)
-        return error(500, 'Error interno del servidor.')
+        return error(500, 'Internal server error.')
       }
     }
 
-    if (url.pathname.startsWith('/api/')) return error(404, 'No existe.')
+    if (url.pathname.startsWith('/api/')) return error(404, 'Not found.')
     return env.ASSETS.fetch(request)
   },
 } satisfies ExportedHandler<Env>

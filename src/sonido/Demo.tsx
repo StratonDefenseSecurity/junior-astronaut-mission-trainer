@@ -7,21 +7,21 @@ import { sonido, useSonido, type NombreEvento, type OpcionesEvento, type Paramet
 const AMBIENTES: TipoAmbiente[] = ['ninguno', 'nave', 'orbita', 'base', 'eva', 'lanzamiento', 'descenso']
 
 const EVENTOS: { etiqueta: string; nombre: NombreEvento; opciones?: OpcionesEvento }[] = [
-  { etiqueta: 'Alarma (bucle)', nombre: 'alarma' },
-  { etiqueta: 'Aviso', nombre: 'aviso' },
-  { etiqueta: 'Clic', nombre: 'clic' },
-  { etiqueta: 'Quindar inicio', nombre: 'quindarInicio' },
-  { etiqueta: 'Quindar fin', nombre: 'quindarFin' },
+  { etiqueta: 'Alarm (loop)', nombre: 'alarma' },
+  { etiqueta: 'Notice', nombre: 'aviso' },
+  { etiqueta: 'Click', nombre: 'clic' },
+  { etiqueta: 'Quindar start', nombre: 'quindarInicio' },
+  { etiqueta: 'Quindar end', nombre: 'quindarFin' },
   { etiqueta: 'Radio', nombre: 'radio' },
-  { etiqueta: 'Esclusa: despresurizar', nombre: 'esclusa', opciones: { direccion: 'despresurizar' } },
-  { etiqueta: 'Esclusa: presurizar', nombre: 'esclusa', opciones: { direccion: 'presurizar' } },
-  { etiqueta: 'Paso (interior)', nombre: 'paso', opciones: { superficie: 'interior' } },
-  { etiqueta: 'Paso (Marte)', nombre: 'paso', opciones: { superficie: 'marte' } },
-  { etiqueta: 'Separación', nombre: 'separacion' },
-  { etiqueta: 'Teclado', nombre: 'teclado' },
-  { etiqueta: 'Éxito', nombre: 'exito' },
-  { etiqueta: 'Latido', nombre: 'latido' },
-  { etiqueta: 'Ejercicio (bucle)', nombre: 'ejercicio' },
+  { etiqueta: 'Airlock: depressurize', nombre: 'esclusa', opciones: { direccion: 'despresurizar' } },
+  { etiqueta: 'Airlock: pressurize', nombre: 'esclusa', opciones: { direccion: 'presurizar' } },
+  { etiqueta: 'Step (inside)', nombre: 'paso', opciones: { superficie: 'interior' } },
+  { etiqueta: 'Step (Mars)', nombre: 'paso', opciones: { superficie: 'marte' } },
+  { etiqueta: 'Separation', nombre: 'separacion' },
+  { etiqueta: 'Keyboard', nombre: 'teclado' },
+  { etiqueta: 'Success', nombre: 'exito' },
+  { etiqueta: 'Heartbeat', nombre: 'latido' },
+  { etiqueta: 'Exercise (loop)', nombre: 'ejercicio' },
 ]
 
 type Deslizador = { clave: keyof ParametrosAmbiente; min: number; max: number; paso: number }
@@ -131,31 +131,31 @@ export function DemoSonido() {
 
   return (
     <div style={{ padding: 16, maxWidth: 820 }}>
-      <h2>Banco de sonido</h2>
+      <h2>Sound test bench</h2>
       <p className="mini muted">
-        Estado: {estado.activo ? 'activo' : 'inactivo (pulsa Activar)'} · ambiente: {tipo}
+        Status: {estado.activo ? 'on' : 'off (click Turn on)'} · ambience: {tipo}
       </p>
       <div style={caja}>
-        <button onClick={() => void sonido.activar()}>Activar</button>
-        <button onClick={() => sonido.silenciar(!estado.silenciado)}>{estado.silenciado ? 'Quitar silencio' : 'Silenciar'}</button>
+        <button onClick={() => void sonido.activar()}>Turn on</button>
+        <button onClick={() => sonido.silenciar(!estado.silenciado)}>{estado.silenciado ? 'Unmute' : 'Mute'}</button>
         <label>
-          Volumen {Math.round(estado.volumen * 100)}%{' '}
+          Volume {Math.round(estado.volumen * 100)}%{' '}
           <input type="range" min={0} max={1} step={0.01} value={estado.volumen} onChange={(e) => sonido.volumen(Number(e.target.value))} />
         </label>
       </div>
 
-      <h3>Ambientes</h3>
+      <h3>Ambiences</h3>
       <div style={caja}>
         {AMBIENTES.map((a) => (
           <button key={a} onClick={() => elegir(a)} disabled={a === tipo}>
             {a}
           </button>
         ))}
-        <button onClick={ascenso}>Simular ascenso (40 s)</button>
-        <button onClick={descenso}>Simular descenso (30 s)</button>
+        <button onClick={ascenso}>Simulate ascent (40 s)</button>
+        <button onClick={descenso}>Simulate descent (30 s)</button>
       </div>
 
-      <h3>Parámetros</h3>
+      <h3>Parameters</h3>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 8, marginBottom: 12 }}>
         {DESLIZADORES.map((d) => (
           <label key={d.clave}>
@@ -172,11 +172,11 @@ export function DemoSonido() {
           </label>
         ))}
         <label>
-          <input type="checkbox" checked={p.marte >= 0.5} onChange={(e) => cambiar({ marte: e.target.checked ? 1 : 0 })} /> Descenso en Marte
+          <input type="checkbox" checked={p.marte >= 0.5} onChange={(e) => cambiar({ marte: e.target.checked ? 1 : 0 })} /> Descent on Mars
         </label>
       </div>
 
-      <h3>Eventos</h3>
+      <h3>Events</h3>
       <div style={caja}>
         {EVENTOS.map((e) => (
           <button
@@ -189,8 +189,8 @@ export function DemoSonido() {
             {e.etiqueta}
           </button>
         ))}
-        <button onClick={() => sonido.detener('alarma')}>Detener alarma</button>
-        <button onClick={() => sonido.detener('ejercicio')}>Detener ejercicio</button>
+        <button onClick={() => sonido.detener('alarma')}>Stop alarm</button>
+        <button onClick={() => sonido.detener('ejercicio')}>Stop exercise</button>
       </div>
     </div>
   )

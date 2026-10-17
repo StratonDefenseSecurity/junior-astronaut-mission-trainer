@@ -90,7 +90,7 @@ export function crearSala(codigo: string, hostId: string, modoDecision: Decision
     masa: 0,
     capacidad: 0,
     sitio: null,
-    vuelo: { altitud: 0, velocidad: 0, g: 1, etapa: 'En tierra', progreso: 0, distTierra: 0, distMarte: 220, distSol: 1, retardo: 0 },
+    vuelo: { altitud: 0, velocidad: 0, g: 1, etapa: 'On the ground', progreso: 0, distTierra: 0, distMarte: 220, distSol: 1, retardo: 0 },
     ambiente: { sol: 0, hora: 8, tempExt: 20, presion: 0, tau: 0, uv: 1, flujoSolar: 1361, tormentaPolvo: false, polvoSoles: 0, solCuriosity: 0, radiacion: 0, tormentaSolar: null },
     cabina: { ppO2: C.PPO2_NOMINAL_KPA, ppCO2: 0.3, temp: C.TEMP_CABINA_C, fuga: 0 },
     rec: { agua: 0, aguaResidual: 0, o2: 0, comida: 0, repuestos: 0, botiquines: 0, lioh: 0, liohActivo: 0, propelente: 100 },
@@ -159,9 +159,9 @@ function aplicarPerfil(room: RoomState) {
   room.mision.muestrasObjetivo = Math.max(1, p.muestras + (esc.objetivo?.muestrasExtra ?? 0) - bono)
   room.mision.aguaObjetivo = (esc.objetivo?.aguaPorSol ?? 0) * p.soles
   room.mision.diasTransito = TRAYECTORIA_BY_ID[room.trayectoria].dias
-  const donde = esc.sitio ? `aterrizar en ${SITE_BY_ID[esc.sitio].nombre}, ` : ''
-  const agua = room.mision.aguaObjetivo ? ` y sacando ${room.mision.aguaObjetivo} kg de agua del hielo` : ''
-  room.mision.objetivo = `Llegar a Marte, ${donde}montar la base y mantener viva a la tripulación durante ${p.soles} soles, analizando ${room.mision.muestrasObjetivo} muestras del terreno${agua}.`
+  const donde = esc.sitio ? `land at ${SITE_BY_ID[esc.sitio].nombre}, ` : ''
+  const agua = room.mision.aguaObjetivo ? ` and extracting ${room.mision.aguaObjetivo} kg of water from the ice` : ''
+  room.mision.objetivo = `Reach Mars, ${donde}build the base and keep the crew alive for ${p.soles} sols, analyzing ${room.mision.muestrasObjetivo} soil samples${agua}.`
   room.capacidad = capacidadCarga(tripulantesPlan(room), room.trayectoria)
 }
 
@@ -172,13 +172,13 @@ function aplicarPerfil(room: RoomState) {
  * da la situación que tiene que afrontar. En la sala de espera todavía no hay roles.
  */
 export function elegirRol(room: RoomState, id: string, rol: Role | null): string | null {
-  if (room.fase === 'lobby') return 'Los roles se asignan en la contextualización, después de conocer la situación.'
-  if (room.fase !== 'contexto') return 'El rol ya no se puede cambiar: la misión despegó.'
+  if (room.fase === 'lobby') return 'Roles are assigned in the Mission Briefing, after you learn the situation.'
+  if (room.fase !== 'contexto') return 'You can no longer change your role. The mission has launched.'
   const j = jugador(room, id)
-  if (!j) return 'Jugador no encontrado.'
-  if (rol && !ROLE_BY_ID[rol]) return 'Rol inválido.'
+  if (!j) return 'Player not found.'
+  if (rol && !ROLE_BY_ID[rol]) return 'Invalid role.'
   const ocupante = rol ? room.jugadores.find((o) => o.id !== id && o.rol === rol) : undefined
-  if (ocupante && (!ocupante.bot || j.bot)) return 'Ese rol ya fue tomado.'
+  if (ocupante && (!ocupante.bot || j.bot)) return 'That role is already taken.'
   if (j.rol === rol) return null
   if (ocupante) {
     // Modo de un jugador: la persona elige primero, así que el bot le cede el rol y toma el suyo.
@@ -194,8 +194,8 @@ export function elegirRol(room: RoomState, id: string, rol: Role | null): string
 
 export function elegirTraje(room: RoomState, id: string, traje: Partial<Traje>): string | null {
   const j = jugador(room, id)
-  if (!j) return 'Jugador no encontrado.'
-  if (room.fase !== 'lobby' && room.fase !== 'contexto') return 'El traje se elige antes del lanzamiento.'
+  if (!j) return 'Player not found.'
+  if (room.fase !== 'lobby' && room.fase !== 'contexto') return 'You choose your suit before launch.'
   const color = (v: unknown, lista: readonly string[], actual: string) => (typeof v === 'string' && lista.includes(v) ? v : actual)
   const previo = { ...trajePorDefecto(), ...j.traje }
   j.traje = {
@@ -211,9 +211,9 @@ export function elegirTraje(room: RoomState, id: string, traje: Partial<Traje>):
 
 /** Quien creó la sala elige la situación, o la deja al azar. */
 export function elegirEscenario(room: RoomState, id: string, valor: string): string | null {
-  if (room.fase !== 'lobby') return 'La situación se decide antes de empezar.'
-  if (id !== room.hostId) return 'La situación la elige quien creó la sala.'
-  if (valor !== 'azar' && !ESCENARIO_BY_ID[valor as EscenarioId]) return 'Situación desconocida.'
+  if (room.fase !== 'lobby') return 'The situation is chosen before the mission starts.'
+  if (id !== room.hostId) return 'Only the host chooses the situation.'
+  if (valor !== 'azar' && !ESCENARIO_BY_ID[valor as EscenarioId]) return 'Unknown situation.'
   room.escenarioElegido = valor
   return null
 }
@@ -221,27 +221,27 @@ export function elegirEscenario(room: RoomState, id: string, valor: string): str
 /** Ciudad de origen de cada tripulante: se marca en la Tierra y recibe mensajes de casa. */
 export function elegirHogar(room: RoomState, id: string, ciudad: string | null): string | null {
   const j = jugador(room, id)
-  if (!j) return 'Jugador no encontrado.'
-  if (room.fase !== 'lobby' && room.fase !== 'contexto') return 'El hogar se elige antes del lanzamiento.'
-  if (ciudad !== null && !CIUDAD_BY_ID[ciudad as keyof typeof CIUDAD_BY_ID]) return 'Ciudad desconocida.'
+  if (!j) return 'Player not found.'
+  if (room.fase !== 'lobby' && room.fase !== 'contexto') return 'You choose your hometown before launch.'
+  if (ciudad !== null && !CIUDAD_BY_ID[ciudad as keyof typeof CIUDAD_BY_ID]) return 'Unknown city.'
   j.hogar = ciudad
   return null
 }
 
 /** El comandante bautiza la misión. */
 export function nombrarMision(room: RoomState, id: string, nombre: string): string | null {
-  if (room.fase !== 'contexto') return 'La misión se bautiza antes del lanzamiento.'
+  if (room.fase !== 'contexto') return 'The mission is named before launch.'
   const j = jugador(room, id)
-  if (!j || !puedeActuar(room, j, ['comandante'])) return 'El nombre de la misión lo pone el comandante.'
+  if (!j || !puedeActuar(room, j, ['comandante'])) return 'Only the Mission Commander names the mission.'
   room.nombreMision = nombre.replace(/[\u0000-\u001f<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 28)
   return null
 }
 
 export function iniciarMision(room: RoomState, id: string): string | null {
-  if (room.fase !== 'lobby') return 'La misión ya empezó.'
-  if (id !== room.hostId) return 'Solo quien creó la sala puede iniciar.'
+  if (room.fase !== 'lobby') return 'The mission has already started.'
+  if (id !== room.hostId) return 'Only the host can start.'
   const solo = room.modoJuego === 'solo'
-  if (!solo && presentes(room).length < 2) return 'Se necesitan al menos 2 tripulantes en la sala.'
+  if (!solo && presentes(room).length < 2) return 'You need at least 2 crew members in the room.'
   room.jugadores = presentes(room)
   for (const j of room.jugadores) {
     j.rol = null
@@ -261,13 +261,13 @@ export function iniciarMision(room: RoomState, id: string): string | null {
   aplicarPerfil(room)
   room.cargamento = cargaRecomendada(room, 1.15)
   room.masa = masaTotal(room.cargamento)
-  log(room, 'Contextualización: se presenta la situación; después cada integrante recibe su rol, se fija el objetivo y se eligen los suministros.')
+  log(room, 'Mission Briefing: first the situation is presented. Then each crew member gets a role, the objective is set and the supplies are chosen.')
   return null
 }
 
 // ---------- Contextualización ----------
 
-const enContexto = (room: RoomState) => (room.fase === 'contexto' ? null : 'Esto se decide antes del lanzamiento.')
+const enContexto = (room: RoomState) => (room.fase === 'contexto' ? null : 'This is decided before launch.')
 
 /** Antes del lanzamiento la capacidad sigue a quienes están en la sala. */
 export function ajustarPlan(room: RoomState) {
@@ -279,9 +279,9 @@ export function fijarPaso(room: RoomState, id: string, paso: number): string | n
   const error = enContexto(room)
   if (error) return error
   const j = jugador(room, id)
-  if (!j) return 'Jugador no encontrado.'
-  if (!Number.isInteger(paso) || paso < 0 || paso >= PASOS_CONTEXTO.length) return 'Paso inválido.'
-  if (paso >= 2 && !j.rol) return 'Primero elige tu rol.'
+  if (!j) return 'Player not found.'
+  if (!Number.isInteger(paso) || paso < 0 || paso >= PASOS_CONTEXTO.length) return 'Invalid step.'
+  if (paso >= 2 && !j.rol) return 'Choose your role first.'
   j.paso = paso
   return null
 }
@@ -301,7 +301,7 @@ export function aplicarPreset(room: RoomState, preset: string): string | null {
   const error = enContexto(room)
   if (error) return error
   const alternativa = ALTERNATIVAS.find((x) => x.id === preset)
-  if (!alternativa) return 'Alternativa inválida.'
+  if (!alternativa) return 'Invalid option.'
   room.cargamento = cargaRecomendada(room, alternativa.margen)
   room.masa = masaTotal(room.cargamento)
   return null
@@ -311,8 +311,8 @@ export function elegirPerfil(room: RoomState, id: string, perfil: PerfilId): str
   const error = enContexto(room)
   if (error) return error
   const j = jugador(room, id)
-  if (!j || !puedeActuar(room, j, ['comandante'])) return 'El objetivo de la misión lo fija el comandante.'
-  if (!PERFIL_BY_ID[perfil]) return 'Perfil inválido.'
+  if (!j || !puedeActuar(room, j, ['comandante'])) return 'Only the Mission Commander sets the mission objective.'
+  if (!PERFIL_BY_ID[perfil]) return 'Invalid profile.'
   room.perfil = perfil
   aplicarPerfil(room)
   return null
@@ -322,8 +322,8 @@ export function elegirTrayectoria(room: RoomState, id: string, trayectoria: Tray
   const error = enContexto(room)
   if (error) return error
   const j = jugador(room, id)
-  if (!j || !puedeActuar(room, j, ['piloto', 'comandante'])) return 'La trayectoria la eligen el piloto o el comandante.'
-  if (!TRAYECTORIA_BY_ID[trayectoria]) return 'Trayectoria inválida.'
+  if (!j || !puedeActuar(room, j, ['piloto', 'comandante'])) return 'Only the Pilot & Navigator or the Mission Commander chooses the trajectory.'
+  if (!TRAYECTORIA_BY_ID[trayectoria]) return 'Invalid trajectory.'
   room.trayectoria = trayectoria
   aplicarPerfil(room)
   return null
@@ -333,8 +333,8 @@ export function marcarListo(room: RoomState, id: string, listo: boolean): string
   const error = enContexto(room)
   if (error) return error
   const j = jugador(room, id)
-  if (!j) return 'Jugador no encontrado.'
-  if (listo && !j.rol) return 'Primero elige tu rol.'
+  if (!j) return 'Player not found.'
+  if (listo && !j.rol) return 'Choose your role first.'
   j.listo = listo
   if (listo) j.paso = PASOS_CONTEXTO.length - 1
   return null
@@ -344,20 +344,20 @@ export function lanzar(room: RoomState, id: string): string | null {
   const error = enContexto(room)
   if (error) return error
   const j = jugador(room, id)
-  if (!j || !puedeActuar(room, j, ['comandante'])) return 'Solo el comandante autoriza el lanzamiento.'
-  if (!room.jugadores.some((o) => o.rol === 'comandante')) return 'Falta un comandante: alguien tiene que asumir ese rol.'
+  if (!j || !puedeActuar(room, j, ['comandante'])) return 'Only the Mission Commander can authorize launch.'
+  if (!room.jugadores.some((o) => o.rol === 'comandante')) return 'There is no Mission Commander. Someone has to take that role.'
   const sinRol = presentes(room).filter((o) => !o.rol)
-  if (sinRol.length) return `Faltan por elegir rol: ${sinRol.map((o) => o.nombre).join(', ')}.`
+  if (sinRol.length) return `Still need to choose a role: ${sinRol.map((o) => o.nombre).join(', ')}.`
   const viajan = room.jugadores.filter((o) => o.rol)
-  if (viajan.length < 2) return 'Se necesitan al menos 2 tripulantes con rol.'
+  if (viajan.length < 2) return 'You need at least 2 crew members with a role.'
   const capacidad = capacidadCarga(viajan.length, room.trayectoria)
-  if (room.masa > capacidad) return `La carga pesa ${room.masa.toFixed(1)} t y la nave admite ${capacidad.toFixed(1)} t.`
+  if (room.masa > capacidad) return `The cargo weighs ${room.masa.toFixed(1)} t and the ship can carry ${capacidad.toFixed(1)} t.`
   const faltan = conectados(room).filter((o) => o.id !== id && !o.listo)
-  if (faltan.length) return `Faltan por confirmar: ${faltan.map((o) => o.nombre).join(', ')}.`
+  if (faltan.length) return `Still need to confirm: ${faltan.map((o) => o.nombre).join(', ')}.`
   const esc = escenarioDe(room.escenario)
   for (const [k, v] of Object.entries(esc.cargaMinima ?? {})) {
     const sup = SUPPLIES.find((x) => x.id === k)
-    if (sup && room.cargamento[sup.id] < (v ?? 0)) return `Esta misión necesita llevar: ${sup.nombre.toLowerCase()}.`
+    if (sup && room.cargamento[sup.id] < (v ?? 0)) return `This mission must carry: ${sup.nombre}.`
   }
   // Quien se fue sin elegir rol no viaja.
   room.jugadores = viajan
@@ -385,7 +385,7 @@ export function lanzar(room: RoomState, id: string): string | null {
   if (esc.diaClimaEspacial) room.diaLanzamiento = esc.diaClimaEspacial
   room.guion = prepararGuion(room)
   iniciarClimaEspacial(room)
-  log(room, `Lanzamiento autorizado por ${j.nombre}. Carga de ${room.masa.toFixed(1)} t, viaje de ${room.mision.diasTransito} días.`, 'ok')
+  log(room, `Launch authorized by ${j.nombre}. Cargo of ${room.masa.toFixed(1)} t, a ${room.mision.diasTransito}-day cruise.`, 'ok')
   refrescar(room)
   return null
 }
@@ -406,11 +406,11 @@ function prepararGuion(room: RoomState): RoomState['guion'] {
 
 export function fijarEscala(room: RoomState, id: string, valor: number): string | null {
   const j = jugador(room, id)
-  if (!j || !puedeActuar(room, j, ['comandante'])) return 'La escala de tiempo la controla el comandante.'
-  if (!ESCALAS.some((e) => e.valor === valor)) return 'Escala inválida.'
-  if (['lobby', 'contexto', 'lanzamiento', 'fin'].includes(room.fase)) return 'Ahora no se puede cambiar la escala.'
+  if (!j || !puedeActuar(room, j, ['comandante'])) return 'Only the Mission Commander controls the time scale.'
+  if (!ESCALAS.some((e) => e.valor === valor)) return 'Invalid time scale.'
+  if (['lobby', 'contexto', 'lanzamiento', 'fin'].includes(room.fase)) return 'You cannot change the time scale right now.'
   const maxima = ESCALA_MAXIMA[room.fase]
-  if (valor > maxima) return `En esta fase la escala máxima es ×${maxima}.`
+  if (valor > maxima) return `In this phase the maximum time scale is ×${maxima}.`
   room.escalaDeseada = valor
   refrescar(room)
   return null
@@ -418,10 +418,10 @@ export function fijarEscala(room: RoomState, id: string, valor: number): string 
 
 export function pausar(room: RoomState, id: string, pausa: boolean): string | null {
   const j = jugador(room, id)
-  if (!j || !(puedeActuar(room, j, ['comandante']) || id === room.hostId)) return 'Solo el comandante puede pausar la misión.'
+  if (!j || !(puedeActuar(room, j, ['comandante']) || id === room.hostId)) return 'Only the Mission Commander can pause the mission.'
   if (room.pausa === pausa) return null
   room.pausa = pausa
-  log(room, pausa ? `${j.nombre} pausó la misión.` : `${j.nombre} reanudó la misión.`)
+  log(room, pausa ? `${j.nombre} paused the mission.` : `${j.nombre} resumed the mission.`)
   return null
 }
 
@@ -434,18 +434,18 @@ function crearPropuesta(
   const prop: Proposal = { id: rid(room), ...p, votos: { [p.proponente]: true }, estado: 'pendiente', creada: ahora(), vence: ahora() + 90_000 }
   room.propuestas.unshift(prop)
   if (room.propuestas.length > 10) room.propuestas.length = 10
-  const quien = jugador(room, p.proponente)?.nombre ?? 'Alguien'
-  log(room, `${quien} propone: ${p.titulo}.`)
+  const quien = jugador(room, p.proponente)?.nombre ?? 'Someone'
+  log(room, `${quien} proposes: ${p.titulo}.`)
   resolverPropuesta(room, prop)
 }
 
 export function votar(room: RoomState, id: string, propId: string, aprueba: boolean): string | null {
   const prop = room.propuestas.find((p) => p.id === propId)
-  if (!prop || prop.estado !== 'pendiente') return 'Propuesta no disponible.'
+  if (!prop || prop.estado !== 'pendiente') return 'That proposal is no longer open.'
   const j = jugador(room, id)
-  if (!j || !j.rol) return 'Necesitas un rol para votar.'
+  if (!j || !j.rol) return 'You need a role to vote.'
   if (room.modoDecision === 'comandante' && rolPresente(room, 'comandante') && j.rol !== 'comandante' && id !== prop.proponente) {
-    return 'En este modo solo decide el comandante.'
+    return 'In this mode only the Mission Commander decides.'
   }
   prop.votos[id] = aprueba
   resolverPropuesta(room, prop)
@@ -468,7 +468,7 @@ function resolverPropuesta(room: RoomState, prop: Proposal) {
   }
   if (decision === null) return
   prop.estado = decision ? 'aprobada' : 'rechazada'
-  log(room, `Propuesta "${prop.titulo}" ${decision ? 'aprobada' : 'rechazada'}.`, decision ? 'ok' : 'alerta')
+  log(room, `Proposal "${prop.titulo}" ${decision ? 'approved' : 'rejected'}.`, decision ? 'ok' : 'alerta')
   if (decision) aplicarPropuesta(room, prop)
 }
 
@@ -522,21 +522,21 @@ function aplicarPropuesta(room: RoomState, prop: Proposal) {
 // ---------- Llegada y ensamblaje ----------
 
 export function proponerUbicacion(room: RoomState, id: string, sitioId: string): string | null {
-  if (room.fase !== 'llegada' || room.subfase !== 'orbita') return 'El sitio se elige desde la órbita de Marte.'
+  if (room.fase !== 'llegada' || room.subfase !== 'orbita') return 'The landing site is chosen from Mars orbit.'
   const j = jugador(room, id)
-  if (!j || !puedeActuar(room, j, ['piloto', 'comandante'])) return 'El sitio lo proponen el piloto o el comandante.'
+  if (!j || !puedeActuar(room, j, ['piloto', 'comandante'])) return 'Only the Pilot & Navigator or the Mission Commander proposes the site.'
   const sitio = SITE_BY_ID[sitioId]
-  if (!sitio) return 'Sitio inválido.'
+  if (!sitio) return 'Invalid site.'
   const obligado = escenarioDe(room.escenario).sitio
-  if (obligado && obligado !== sitioId) return `Esta misión tiene que aterrizar en ${SITE_BY_ID[obligado].nombre}.`
-  if (room.propuestas.some((p) => p.estado === 'pendiente' && p.tipo === 'ubicacion')) return 'Ya hay un sitio propuesto. Revisa las propuestas.'
-  crearPropuesta(room, { tipo: 'ubicacion', titulo: `Aterrizar en ${sitio.nombre}`, descripcion: sitio.descripcion, payload: { sitioId }, proponente: id, rolesResponsables: ['piloto', 'comandante'] })
+  if (obligado && obligado !== sitioId) return `This mission has to land at ${SITE_BY_ID[obligado].nombre}.`
+  if (room.propuestas.some((p) => p.estado === 'pendiente' && p.tipo === 'ubicacion')) return 'A site has already been proposed. Check the Proposals.'
+  crearPropuesta(room, { tipo: 'ubicacion', titulo: `Land at ${sitio.nombre}`, descripcion: sitio.descripcion, payload: { sitioId }, proponente: id, rolesResponsables: ['piloto', 'comandante'] })
   return null
 }
 
 function impedimento(j: Player): string | null {
-  if (j.incapacitado > 0) return 'Estás fuera de servicio. Necesitas descanso o al médico.'
-  if (j.enRefugio) return 'Estás en el refugio. No puedes trabajar hasta salir.'
+  if (j.incapacitado > 0) return 'You are out of action. You need rest or the Flight Surgeon.'
+  if (j.enRefugio) return 'You are in the Storm Shelter. You cannot work until you leave.'
   return null
 }
 
@@ -545,7 +545,7 @@ export function hacerTarea(room: RoomState, id: string, tareaId: string): string
   void room
   void id
   void tareaId
-  return 'Las tareas de la base se hacen paso a paso con su procedimiento, en su estación.'
+  return 'Base tasks are done step by step with their procedure, at their station.'
 }
 
 /**
@@ -556,11 +556,11 @@ export function completarTarea(room: RoomState, j: Player, tareaId: string) {
   const tarea = TAREAS_ENSAMBLAJE.find((t) => t.id === tareaId)
   if (!tarea || room.ensamblaje.hechas[tareaId]) return
   room.ensamblaje.hechas[tareaId] = j.id
-  log(room, `${j.nombre} completó: ${tarea.titulo.toLowerCase()}.`, 'ok')
+  log(room, `${j.nombre} completed: ${tarea.titulo.charAt(0).toLowerCase() + tarea.titulo.slice(1)}.`, 'ok')
   if (tareaId === 'soporte') {
     const hielo = SITE_BY_ID[room.sitio ?? 'gale'].hielo
     sis(room, 'isru').instalado = hielo && room.cargamento.isru > 0
-    if (room.cargamento.isru > 0 && !hielo) log(room, 'El extractor de hielo no sirve aquí: en este sitio no hay hielo accesible.', 'alerta')
+    if (room.cargamento.isru > 0 && !hielo) log(room, 'The Ice Extractor is no use here. This site has no ice within reach.', 'alerta')
   }
   const pendientes = TAREAS_ENSAMBLAJE.filter((t) => t.paso === room.ensamblaje.paso && !room.ensamblaje.hechas[t.id])
   if (pendientes.length === 0) {
@@ -569,7 +569,7 @@ export function completarTarea(room: RoomState, j: Player, tareaId: string) {
       room.fase = 'base'
       room.tFase = room.t
       room.escalaDeseada = 600
-      log(room, 'Instalaciones comprobadas. Empiezan las operaciones de la base.', 'ok')
+      log(room, 'Facilities checked. Base operations begin.', 'ok')
     }
   }
 }
@@ -578,34 +578,34 @@ export function completarTarea(room: RoomState, j: Player, tareaId: string) {
 
 export function cambiarZona(room: RoomState, id: string, zona: Zona): string | null {
   const j = jugador(room, id)
-  if (!j || !j.rol) return 'Jugador no encontrado.'
-  if (zona !== 'nave' && zona !== 'exterior') return 'Zona inválida.'
+  if (!j || !j.rol) return 'Player not found.'
+  if (zona !== 'nave' && zona !== 'exterior') return 'Invalid zone.'
   if (j.zona === zona) return null
   if (zona === 'nave') {
     j.zona = 'nave'
-    log(room, `${j.nombre} volvió al hábitat.`)
+    log(room, `${j.nombre} went back into the habitat.`)
     refrescar(room)
     return null
   }
-  if (!enSuperficie(room) || (room.fase !== 'ensamblaje' && room.fase !== 'base')) return 'Solo se puede salir cuando la nave está en Marte.'
+  if (!enSuperficie(room) || (room.fase !== 'ensamblaje' && room.fase !== 'base')) return 'You can only go outside once the ship is on Mars.'
   const impedido = impedimento(j)
   if (impedido) return impedido
   const esclusa = sis(room, 'esclusa')
-  if (esclusa.integridad <= UMBRAL_AVERIA) return 'La esclusa está averiada. Sistemas debe repararla.'
-  if (j.trajeO2 < C.TRAJE_O2_KG * 0.3 || j.trajeBateria < 0.3) return 'El traje no está cargado. Espera a que la esclusa lo recargue.'
+  if (esclusa.integridad <= UMBRAL_AVERIA) return 'The Airlock is broken. The Systems Engineer must repair it.'
+  if (j.trajeO2 < C.TRAJE_O2_KG * 0.3 || j.trajeBateria < 0.3) return 'Your suit is not charged. Wait for the Airlock to recharge it.'
   j.zona = 'exterior'
   j.manual = null
   esclusa.integridad = Math.max(0, esclusa.integridad - 0.4)
-  log(room, `${j.nombre} salió al exterior. Fuera hay ${room.ambiente.tempExt} °C.`)
+  log(room, `${j.nombre} went outside. It is ${room.ambiente.tempExt} °C out there.`)
   refrescar(room)
   return null
 }
 
 export function fijarActividad(room: RoomState, id: string, actividad: Actividad | null): string | null {
   const j = jugador(room, id)
-  if (!j) return 'Jugador no encontrado.'
-  if (actividad !== null && actividad !== 'ejercicio' && actividad !== 'sueno') return 'Actividad inválida.'
-  if (actividad && j.zona !== 'nave') return 'Eso se hace dentro del hábitat.'
+  if (!j) return 'Player not found.'
+  if (actividad !== null && actividad !== 'ejercicio' && actividad !== 'sueno') return 'Invalid activity.'
+  if (actividad && j.zona !== 'nave') return 'That is done inside the habitat.'
   if (actividad === 'ejercicio') {
     const impedido = impedimento(j)
     if (impedido) return impedido
@@ -618,8 +618,8 @@ export function fijarActividad(room: RoomState, id: string, actividad: Actividad
 
 export function usarRefugio(room: RoomState, id: string, entrar: boolean): string | null {
   const j = jugador(room, id)
-  if (!j) return 'Jugador no encontrado.'
-  if (j.zona !== 'nave') return 'El refugio está dentro del hábitat.'
+  if (!j) return 'Player not found.'
+  if (j.zona !== 'nave') return 'The Storm Shelter is inside the habitat.'
   j.enRefugio = entrar
   if (entrar) j.manual = null
   return null
@@ -628,20 +628,22 @@ export function usarRefugio(room: RoomState, id: string, entrar: boolean): strin
 // ---------- Acciones de los roles ----------
 
 const NIVELES_COMIDA: Record<RacionComida, string> = {
-  normal: 'Ración completa. La tripulación mantiene sus reservas.',
-  ahorro: 'Ración al 80%. La comida dura un 25% más y las reservas del cuerpo bajan poco a poco.',
-  estricto: 'Ración al 60%. La comida dura un 67% más; en unas semanas la salud se resiente.',
+  normal: 'Full ration. The crew keeps its body reserves.',
+  ahorro: 'Ration at 80%. Food lasts 25% longer and body reserves drop little by little.',
+  estricto: 'Ration at 60%. Food lasts 67% longer. Within a few weeks health suffers.',
 }
+const NOMBRE_RACION: Record<RacionComida, string> = { normal: 'full', ahorro: 'saver (80%)', estricto: 'strict (60%)' }
 const PRIORIDADES: Record<string, string> = {
-  vida: 'Si falta energía, lo último en apagarse es el aire: primero se sacrifica el calor.',
-  calor: 'Si falta energía, se protege la calefacción y el oxígeno sale de los tanques.',
-  ciencia: 'Si falta energía, se protege el huerto antes que la calefacción.',
+  vida: 'If power runs short, the air is the last thing to shut down. Heat is sacrificed first.',
+  calor: 'If power runs short, heating is protected and oxygen comes from the tanks.',
+  ciencia: 'If power runs short, the garden is protected before heating.',
 }
+const NOMBRE_PRIORIDAD: Record<string, string> = { vida: 'air', calor: 'heat', ciencia: 'garden' }
 
 export function accion(room: RoomState, id: string, tipo: string, d: Record<string, unknown>): string | null {
-  if (!['transito', 'llegada', 'ensamblaje', 'base'].includes(room.fase)) return 'Ahora no se pueden hacer acciones.'
+  if (!['transito', 'llegada', 'ensamblaje', 'base'].includes(room.fase)) return 'You cannot take actions right now.'
   const j = jugador(room, id)
-  if (!j || !j.rol) return 'Jugador no encontrado.'
+  if (!j || !j.rol) return 'Player not found.'
   // Desde el refugio se puede decidir, pero no hacer trabajo físico.
   const esDecision = ['racionComida', 'racionAgua', 'prioridad', 'equipo', 'ejercicio', 'refugio'].includes(tipo)
   if (!esDecision || j.incapacitado > 0) {
@@ -652,7 +654,7 @@ export function accion(room: RoomState, id: string, tipo: string, d: Record<stri
   const pendiente = (t: ProposalType, filtro?: (p: Proposal) => boolean) =>
     room.propuestas.some((p) => p.estado === 'pendiente' && p.tipo === t && (!filtro || filtro(p)))
   const proponer = (t: ProposalType, roles: Role[], titulo: string, descripcion: string, payload: Record<string, unknown>) => {
-    if (!puedeActuar(room, j, roles)) return `Eso lo proponen: ${roles.map((r) => ROLE_BY_ID[r].nombre).join(', ')}.`
+    if (!puedeActuar(room, j, roles)) return `Only these roles can propose that: ${roles.map((r) => ROLE_BY_ID[r].nombre).join(', ')}.`
     crearPropuesta(room, { tipo: t, titulo, descripcion, payload, proponente: id, rolesResponsables: roles })
     return null
   }
@@ -661,157 +663,157 @@ export function accion(room: RoomState, id: string, tipo: string, d: Record<stri
     // --- Decisiones que pasan por el comandante o por votación ---
     case 'racionComida': {
       const nivel = String(d.nivel) as RacionComida
-      if (!NIVELES_COMIDA[nivel]) return 'Nivel inválido.'
-      if (nivel === room.ajustes.racionComida) return 'Esa ya es la ración actual.'
-      if (pendiente('racionComida')) return 'Ya hay una propuesta de ración pendiente.'
-      return proponer('racionComida', ['logistica', 'comandante'], `Ración de comida: ${nivel}`, NIVELES_COMIDA[nivel], { nivel })
+      if (!NIVELES_COMIDA[nivel]) return 'Invalid level.'
+      if (nivel === room.ajustes.racionComida) return 'That is already the current ration.'
+      if (pendiente('racionComida')) return 'There is already a pending ration proposal.'
+      return proponer('racionComida', ['logistica', 'comandante'], `Food ration: ${NOMBRE_RACION[nivel]}`, NIVELES_COMIDA[nivel], { nivel })
     }
     case 'racionAgua': {
       const nivel = d.nivel === 'ahorro' ? 'ahorro' : 'normal'
-      if (nivel === room.ajustes.racionAgua) return 'Ese ya es el uso de agua actual.'
-      if (pendiente('racionAgua')) return 'Ya hay una propuesta de agua pendiente.'
+      if (nivel === room.ajustes.racionAgua) return 'That is already the current water use.'
+      if (pendiente('racionAgua')) return 'There is already a pending water proposal.'
       return proponer(
         'racionAgua',
         ['logistica', 'comandante'],
-        nivel === 'ahorro' ? 'Ahorro de agua' : 'Uso normal de agua',
-        nivel === 'ahorro' ? 'La higiene se recorta al mínimo. Lo que se bebe no cambia.' : 'Se recupera la higiene normal.',
+        nivel === 'ahorro' ? 'Save water' : 'Normal water use',
+        nivel === 'ahorro' ? 'Hygiene is cut to the minimum. Drinking water does not change.' : 'Normal hygiene comes back.',
         { nivel },
       )
     }
     case 'prioridad': {
       const valor = String(d.valor)
-      if (!PRIORIDADES[valor]) return 'Prioridad inválida.'
-      if (valor === room.ajustes.prioridad) return 'Esa ya es la prioridad actual.'
-      if (pendiente('prioridad')) return 'Ya hay una propuesta de prioridad pendiente.'
-      return proponer('prioridad', ['logistica', 'comandante'], `Prioridad de energía: ${valor}`, PRIORIDADES[valor], { valor })
+      if (!PRIORIDADES[valor]) return 'Invalid priority.'
+      if (valor === room.ajustes.prioridad) return 'That is already the current priority.'
+      if (pendiente('prioridad')) return 'There is already a pending priority proposal.'
+      return proponer('prioridad', ['logistica', 'comandante'], `Power priority: ${NOMBRE_PRIORIDAD[valor]}`, PRIORIDADES[valor], { valor })
     }
     case 'equipo': {
       const s = room.sistemas.find((x) => x.id === d.sistema)
-      if (!s || !s.instalado || s.id === 'energia' || s.id === 'esclusa') return 'Ese equipo no se puede apagar ni encender.'
+      if (!s || !s.instalado || s.id === 'energia' || s.id === 'esclusa') return 'That equipment cannot be turned off or on.'
       const activo = !s.activo
-      if (pendiente('equipo', (p) => p.payload.sistema === s.id)) return 'Ya hay una propuesta para ese equipo.'
+      if (pendiente('equipo', (p) => p.payload.sistema === s.id)) return 'There is already a proposal for that equipment.'
       const nombre = SISTEMA_BY_ID[s.id].nombre
       return proponer(
         'equipo',
         ['logistica', 'comandante', 'medico'],
-        `${activo ? 'Encender' : 'Apagar'} ${nombreSistema(s.id)}`,
-        activo ? `${nombre} vuelve a funcionar y a consumir energía.` : `${nombre} deja de funcionar y de consumir energía.`,
+        `${activo ? 'Start up' : 'Shut down'} ${nombreSistema(s.id)}`,
+        activo ? `The ${nombre} works again and uses power again.` : `The ${nombre} stops working and stops using power.`,
         { sistema: s.id, activo },
       )
     }
     case 'ejercicio': {
       const horas = Number(d.horas)
-      if (![0, 1, 2.5].includes(horas)) return 'Plan inválido.'
-      if (horas === room.ajustes.ejercicio) return 'Ese ya es el plan actual.'
-      if (pendiente('ejercicio')) return 'Ya hay una propuesta de ejercicio pendiente.'
+      if (![0, 1, 2.5].includes(horas)) return 'Invalid plan.'
+      if (horas === room.ajustes.ejercicio) return 'That is already the current plan.'
+      if (pendiente('ejercicio')) return 'There is already a pending exercise proposal.'
       return proponer(
         'ejercicio',
         ['medico', 'comandante'],
-        `Ejercicio: ${horas} h al día`,
+        `Exercise: ${horas} h per day`,
         horas === 0
-          ? 'Se ahorra oxígeno, agua y comida, pero se pierde músculo y hueso cada día.'
+          ? 'It saves oxygen, water and food, but muscle and bone are lost every day.'
           : horas === 1
-            ? 'Frena a medias la pérdida de músculo y hueso.'
-            : 'Lo que hace la tripulación de la Estación Espacial. Mantiene el cuerpo casi como al salir.',
+            ? 'It slows muscle and bone loss by about half.'
+            : 'What the Space Station crew does. It keeps the body almost as it was at launch.',
         { horas },
       )
     }
     case 'refugio': {
-      if (pendiente('refugio')) return 'Ya hay una orden de refugio pendiente.'
-      if (d.salir) return proponer('refugio', ['medico', 'comandante'], 'Salir del refugio', 'La tripulación vuelve a sus puestos.', { salir: true })
+      if (pendiente('refugio')) return 'There is already a pending shelter order.'
+      if (d.salir) return proponer('refugio', ['medico', 'comandante'], 'Leave the Storm Shelter', 'The crew goes back to their stations.', { salir: true })
       const horas = limitar(Number(d.horas) || 12, 1, 72)
-      return proponer('refugio', ['medico', 'comandante'], `Ir al refugio ${horas} horas`, 'Toda la tripulación se protege. Nadie trabaja, repara ni sale mientras dure.', { horas })
+      return proponer('refugio', ['medico', 'comandante'], `Go to the Storm Shelter for ${horas} hours`, 'The whole crew takes cover. Nobody works, repairs or goes outside while it lasts.', { horas })
     }
 
     // --- Acciones directas ---
     case 'reparar': {
-      if (!puedeActuar(room, j, ['sistemas'])) return 'Las reparaciones las hace el responsable de sistemas.'
+      if (!puedeActuar(room, j, ['sistemas'])) return 'Repairs are done by the Systems Engineer.'
       const s = room.sistemas.find((x) => x.id === d.sistema)
-      if (!s || !s.instalado) return 'Equipo inválido.'
+      if (!s || !s.instalado) return 'Invalid equipment.'
       if (superficie && SISTEMA_BY_ID[s.id].exterior !== (j.zona === 'exterior')) {
-        return SISTEMA_BY_ID[s.id].exterior ? 'Ese equipo está fuera: hay que salir con el traje.' : 'Ese equipo está dentro del hábitat.'
+        return SISTEMA_BY_ID[s.id].exterior ? 'That equipment is outside. You have to suit up and go out.' : 'That equipment is inside the habitat.'
       }
-      if (s.integridad >= 95) return 'Ese equipo está en buen estado.'
+      if (s.integridad >= 95) return 'That equipment is in good shape.'
       const kits = s.integridad <= 30 ? 2 : 1
-      if (room.rec.repuestos < kits) return `Hacen falta ${kits} kits de repuestos y quedan ${room.rec.repuestos}.`
+      if (room.rec.repuestos < kits) return `You need ${kits} spare part kits and ${room.rec.repuestos} are left.`
       room.rec.repuestos -= kits
       s.integridad = Math.min(100, s.integridad + 45)
       s.activo = true
       j.vit.fatiga = limitar(j.vit.fatiga + 3, 0, 100)
-      log(room, `${j.nombre} reparó ${nombreSistema(s.id)} (${Math.round(s.integridad)}%).`, 'ok')
+      log(room, `${j.nombre} repaired the ${nombreSistema(s.id)} (${Math.round(s.integridad)}%).`, 'ok')
       break
     }
     case 'sellar': {
-      if (!puedeActuar(room, j, ['sistemas'])) return 'La fuga la sella el responsable de sistemas.'
-      if (room.cabina.fuga <= 0) return 'No hay ninguna fuga.'
-      if (room.rec.repuestos < 1) return 'No quedan repuestos.'
+      if (!puedeActuar(room, j, ['sistemas'])) return 'The Systems Engineer seals the leak.'
+      if (room.cabina.fuga <= 0) return 'There is no leak.'
+      if (room.rec.repuestos < 1) return 'No spare parts left.'
       room.rec.repuestos -= 1
       room.cabina.fuga = 0
-      log(room, `${j.nombre} selló la fuga de presión.`, 'ok')
+      log(room, `${j.nombre} sealed the pressure leak.`, 'ok')
       break
     }
     case 'lioh': {
-      if (!puedeActuar(room, j, ['logistica', 'sistemas'])) return 'Los cartuchos los instalan logística o sistemas.'
-      if (room.rec.lioh < 1) return 'No quedan cartuchos.'
+      if (!puedeActuar(room, j, ['logistica', 'sistemas'])) return 'Cartridges are installed by Resources & Logistics or the Systems Engineer.'
+      if (room.rec.lioh < 1) return 'No cartridges left.'
       room.rec.lioh -= 1
       room.rec.liohActivo += C.LIOH_KG_CO2
-      log(room, `${j.nombre} instaló un cartucho de hidróxido de litio.`, 'ok')
+      log(room, `${j.nombre} installed a lithium hydroxide cartridge.`, 'ok')
       break
     }
     case 'limpiar': {
-      if (!superficie) return 'Los paneles de superficie aún no existen.'
-      if (j.zona !== 'exterior') return 'Hay que salir con el traje para limpiar los paneles.'
-      if (!room.ensamblaje.hechas.paneles) return 'Los paneles aún no están desplegados.'
-      if (room.energia.polvo < 0.03) return 'Los paneles están limpios.'
+      if (!superficie) return 'The surface panels do not exist yet.'
+      if (j.zona !== 'exterior') return 'You have to suit up and go outside to clean the panels.'
+      if (!room.ensamblaje.hechas.paneles) return 'The panels are not deployed yet.'
+      if (room.energia.polvo < 0.03) return 'The panels are clean.'
       const antes = Math.round(room.energia.polvo * 100)
       room.energia.polvo = 0.01
       j.vit.fatiga = limitar(j.vit.fatiga + 5, 0, 100)
-      log(room, `${j.nombre} limpió los paneles solares (recuperan un ${antes}% de potencia).`, 'ok')
+      log(room, `${j.nombre} cleaned the solar panels (they get back ${antes}% of their power).`, 'ok')
       break
     }
     case 'huerto':
-      return 'El huerto se monta paso a paso en el laboratorio.'
+      return 'The garden is set up step by step in the lab.'
     case 'muestra': {
-      if (!puedeActuar(room, j, ['cientifico'])) return 'Las muestras las recoge el especialista científico.'
-      if (room.fase !== 'base') return 'Las muestras se recogen cuando la base está operativa.'
-      if (j.zona !== 'exterior') return 'Hay que salir con el traje.'
+      if (!puedeActuar(room, j, ['cientifico'])) return 'Samples are collected by the Science Specialist.'
+      if (room.fase !== 'base') return 'Samples are collected once the base is up and running.'
+      if (j.zona !== 'exterior') return 'You have to suit up and go outside.'
       const sitio = String(d.sitio ?? '')
-      if (!/^muestra\d$/.test(sitio)) return 'Punto de muestreo inválido.'
-      if (room.muestreos.includes(sitio)) return 'Ese punto ya fue muestreado.'
-      if (j.muestras >= 3) return 'Ya llevas 3 muestras. Analízalas en el laboratorio.'
+      if (!/^muestra\d$/.test(sitio)) return 'Invalid sample site.'
+      if (room.muestreos.includes(sitio)) return 'That site has already been sampled.'
+      if (j.muestras >= 3) return 'You are already carrying 3 samples. Analyze them in the lab.'
       room.muestreos.push(sitio)
       j.muestras += 1
       j.vit.fatiga = limitar(j.vit.fatiga + 3, 0, 100)
-      log(room, `${j.nombre} recogió una muestra del terreno.`, 'ok')
+      log(room, `${j.nombre} collected a soil sample.`, 'ok')
       break
     }
     case 'analizar': {
-      if (j.muestras < 1) return 'No llevas muestras sin analizar.'
-      if (j.zona !== 'nave') return 'El laboratorio está dentro del hábitat.'
+      if (j.muestras < 1) return 'You are not carrying any samples to analyze.'
+      if (j.zona !== 'nave') return 'The lab is inside the habitat.'
       const energia = 1.5 * j.muestras
-      if (room.energia.bateria < energia + 2 && room.energia.generacion <= room.energia.consumo) return 'No hay energía suficiente para el laboratorio.'
+      if (room.energia.bateria < energia + 2 && room.energia.generacion <= room.energia.consumo) return 'There is not enough power for the lab.'
       room.energia.bateria = Math.max(0, room.energia.bateria - energia)
       room.mision.muestrasAnalizadas += j.muestras
-      log(room, `${j.nombre} analizó ${j.muestras} muestra(s). Van ${room.mision.muestrasAnalizadas} de ${room.mision.muestrasObjetivo}.`, 'ok')
+      log(room, `${j.nombre} analyzed ${j.muestras} sample${j.muestras === 1 ? '' : 's'}. ${room.mision.muestrasAnalizadas} of ${room.mision.muestrasObjetivo} done.`, 'ok')
       j.muestras = 0
       break
     }
     case 'tratar': {
-      if (!puedeActuar(room, j, ['medico'])) return 'Los tratamientos los hace el médico.'
+      if (!puedeActuar(room, j, ['medico'])) return 'Treatments are given by the Flight Surgeon.'
       const paciente = jugador(room, String(d.jugadorId))
-      if (!paciente) return 'Paciente inválido.'
-      if (room.rec.botiquines < 1) return 'No quedan botiquines.'
-      if (!paciente.dolencia && paciente.incapacitado <= 0 && paciente.vit.salud > 90) return `${paciente.nombre} no necesita tratamiento.`
+      if (!paciente) return 'Invalid patient.'
+      if (room.rec.botiquines < 1) return 'No medical kits left.'
+      if (!paciente.dolencia && paciente.incapacitado <= 0 && paciente.vit.salud > 90) return `${paciente.nombre} does not need treatment.`
       room.rec.botiquines -= 1
       paciente.dolencia = null
       paciente.incapacitado = 0
       paciente.vit.salud = limitar(paciente.vit.salud + 20, 0, 100)
       if (paciente.ayuda?.paraRol === 'medico') paciente.ayuda = null
-      log(room, `${j.nombre} atendió a ${paciente.nombre}.`, 'ok')
+      log(room, `${j.nombre} treated ${paciente.nombre}.`, 'ok')
       break
     }
     default:
-      return 'Acción desconocida.'
+      return 'Unknown action.'
   }
   j.aportes = (j.aportes ?? 0) + 1
   refrescar(room)
@@ -822,21 +824,21 @@ export function accion(room: RoomState, id: string, tipo: string, d: Record<stri
 
 export function pedirAyuda(room: RoomState, id: string, paraRol: Role, motivo: string): string | null {
   const j = jugador(room, id)
-  if (!j) return 'Jugador no encontrado.'
-  if (!ROLE_BY_ID[paraRol]) return 'Rol inválido.'
+  if (!j) return 'Player not found.'
+  if (!ROLE_BY_ID[paraRol]) return 'Invalid role.'
   j.ayuda = { paraRol, motivo: motivo.slice(0, 120), desde: ahora() }
-  log(room, `${j.nombre} pide ayuda a ${ROLE_BY_ID[paraRol].nombre}: ${j.ayuda.motivo}`, 'alerta')
+  log(room, `${j.nombre} asks the ${ROLE_BY_ID[paraRol].nombre} for help: ${j.ayuda.motivo}`, 'alerta')
   return null
 }
 
 export function irAyudar(room: RoomState, id: string, objetivoId: string): string | null {
   const yo = jugador(room, id)
   const obj = jugador(room, objetivoId)
-  if (!yo || !obj || !obj.ayuda) return 'Esa solicitud ya no existe.'
-  if (yo.rol !== obj.ayuda.paraRol && yo.rol !== 'comandante') return 'Esa solicitud era para otro rol.'
+  if (!yo || !obj || !obj.ayuda) return 'That request no longer exists.'
+  if (yo.rol !== obj.ayuda.paraRol && yo.rol !== 'comandante') return 'That request was for another role.'
   obj.ayuda = null
   yo.aportes = (yo.aportes ?? 0) + 1
-  log(room, `${yo.nombre} acude a ayudar a ${obj.nombre}.`, 'ok')
+  log(room, `${yo.nombre} is on the way to help ${obj.nombre}.`, 'ok')
   return null
 }
 
@@ -844,16 +846,16 @@ export function irAyudar(room: RoomState, id: string, objetivoId: string): strin
 
 export function elegirAlternativa(room: RoomState, id: string, emId: string, altId: string): string | null {
   const em = room.emergencias.find((e) => e.id === emId)
-  if (!em || em.estado !== 'activa') return 'Esa emergencia ya no está activa.'
+  if (!em || em.estado !== 'activa') return 'That emergency is no longer active.'
   const j = jugador(room, id)
-  if (!j || !j.rol) return 'Necesitas un rol.'
+  if (!j || !j.rol) return 'You need a role.'
   const alt = em.alternativas.find((a) => a.id === altId)
-  if (!alt) return 'Alternativa inválida.'
-  if (!puedeActuar(room, j, em.rolesResponsables)) return 'Tu rol no decide esta emergencia.'
+  if (!alt) return 'Invalid option.'
+  if (!puedeActuar(room, j, em.rolesResponsables)) return 'Your role does not decide this emergency.'
   const presentes = em.rolesResponsables.filter((r) => rolPresente(room, r))
   if (presentes.length > 1) {
     if (room.propuestas.some((p) => p.estado === 'pendiente' && p.tipo === 'emergencia' && p.payload.emergenciaId === emId)) {
-      return 'Ya hay una alternativa propuesta para esta emergencia.'
+      return 'An option has already been proposed for this emergency.'
     }
     crearPropuesta(room, {
       tipo: 'emergencia',
@@ -877,7 +879,7 @@ function resolverEmergencia(room: RoomState, em: Emergency, altId: string) {
   em.estado = 'resuelta'
   em.elegida = altId
   em.resultado = aplicarAlternativa(room, em, altId)
-  log(room, `${em.titulo}: ${alt.etiqueta.toLowerCase()}. ${em.resultado}`)
+  log(room, `${em.titulo}: ${alt.etiqueta.charAt(0).toLowerCase() + alt.etiqueta.slice(1)}. ${em.resultado}`)
 }
 
 // ---------- Paso del tiempo ----------
@@ -886,7 +888,7 @@ function vencer(room: RoomState, t: number) {
   for (const p of room.propuestas) {
     if (p.estado === 'pendiente' && p.vence <= t) {
       p.estado = 'rechazada'
-      log(room, `La propuesta "${p.titulo}" venció sin decisión.`, 'alerta')
+      log(room, `The proposal "${p.titulo}" expired without a decision.`, 'alerta')
     }
   }
   for (const e of room.emergencias) {
@@ -896,7 +898,7 @@ function vencer(room: RoomState, t: number) {
       const peor = e.alternativas[e.alternativas.length - 1]
       e.elegida = peor.id
       e.resultado = aplicarAlternativa(room, e, peor.id)
-      log(room, `Nadie decidió a tiempo. ${e.titulo}: ${e.resultado}`, 'alerta')
+      log(room, `Nobody decided in time. ${e.titulo}: ${e.resultado}`, 'alerta')
     }
   }
 }

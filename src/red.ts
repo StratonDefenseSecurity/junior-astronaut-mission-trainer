@@ -94,7 +94,7 @@ async function llamar(op: string, datos: Record<string, unknown> = {}, silencios
       body: JSON.stringify({ op, codigo: s.codigo ?? undefined, v: s.sala?.version ?? 0, ...datos }),
     })
     if (r.headers.get('x-mt-ws') === '1') socketDisponible = true
-    d = (await r.json().catch(() => ({ error: 'Respuesta inválida del servidor.' }))) as Resultado
+    d = (await r.json().catch(() => ({ error: 'Invalid response from the server.' }))) as Resultado
   } catch {
     useStore.getState().setConectado(false)
     return null
@@ -271,7 +271,7 @@ export const api = {
   // Si otro ya la decidió o venció justo antes del clic, no hace falta avisar con un error.
   votar: async (id: string, aprueba: boolean) => {
     const d = await llamar('votar', { id, aprueba }, true)
-    if (d?.error && d.error !== 'Propuesta no disponible.') useStore.getState().toast(d.error)
+    if (d?.error && d.error !== 'That proposal is no longer open.') useStore.getState().toast(d.error)
     return d
   },
   elegirAlternativa: (id: string, altId: string) => llamar('emergencia', { id, altId }),
@@ -282,9 +282,9 @@ export const api = {
   bot: async (texto: string) => {
     const s = useStore.getState()
     const t = Date.now() + s.desfase
-    s.agregarBot({ id: `p${t}`, de: s.usuario?.nombre ?? 'Tú', texto, t, bot: false })
+    s.agregarBot({ id: `p${t}`, de: s.usuario?.nombre ?? 'You', texto, t, bot: false })
     const d = await llamar('bot', { texto })
-    if (d?.respuesta) useStore.getState().agregarBot({ id: `r${t}`, de: 'Asistente', texto: d.respuesta, t: t + 1, bot: true })
+    if (d?.respuesta) useStore.getState().agregarBot({ id: `r${t}`, de: 'Assistant', texto: d.respuesta, t: t + 1, bot: true })
   },
 }
 
@@ -294,7 +294,7 @@ export async function httpAuth(ruta: 'registro' | 'ingresar' | 'invitado', usuar
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ op: ruta, usuario, clave }),
   })
-  const d = (await r.json().catch(() => ({ error: 'Respuesta inválida del servidor.' }))) as Resultado
-  if (!r.ok || !d.token || !d.usuario) throw new Error(d.error ?? 'No se pudo completar.')
+  const d = (await r.json().catch(() => ({ error: 'Invalid response from the server.' }))) as Resultado
+  if (!r.ok || !d.token || !d.usuario) throw new Error(d.error ?? 'Could not complete the request.')
   return { token: d.token, usuario: d.usuario }
 }

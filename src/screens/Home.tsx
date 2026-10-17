@@ -16,48 +16,48 @@ export function HomeScreen() {
       <div className="card stack">
         <div className="row">
           <div className="brand grow">Mission Trainer</div>
-          {!conectado && <span className="tag warn">sin conexión</span>}
+          {!conectado && <span className="tag warn">offline</span>}
         </div>
-        <h1>Hola, {usuario?.nombre}</h1>
-        <p className="muted">Juega con tu tripulación de 2 a 6 personas, cada una con su rol, o solo con compañeros que maneja la IA.</p>
+        <h1>Hi, {usuario?.nombre}</h1>
+        <p className="muted">Play with a crew of 2 to 6 people, each with a role, or alone with crewmates run by AI.</p>
 
-        <h3>Crear sala</h3>
+        <h3>Create a room</h3>
         <div className="opciones">
           <button className={`opcion ${juego === 'solo' ? 'activa' : ''}`} onClick={() => setJuego('solo')}>
-            <strong>Un jugador con bots</strong>
-            <small>Eliges tu rol y cinco tripulantes con IA cubren los demás. Empiezas cuando quieras.</small>
+            <strong>Single player with bots</strong>
+            <small>You pick your role and five AI crew members cover the rest. Start whenever you want.</small>
           </button>
           <button className={`opcion ${juego === 'multi' ? 'activa' : ''}`} onClick={() => setJuego('multi')}>
-            <strong>Multijugador</strong>
-            <small>Compartes el código con tu tripulación. Hacen falta al menos 2 personas.</small>
+            <strong>Multiplayer</strong>
+            <small>Share the room code with your crew. You need at least 2 people.</small>
           </button>
         </div>
         <label className="stack" style={{ gap: 4 }}>
-          <span className="muted">¿Cómo se resuelven las decisiones en disputa?</span>
+          <span className="muted">How are disputed decisions settled?</span>
           <select value={modo} onChange={(e) => setModo(e.target.value as 'comandante' | 'votacion')}>
-            <option value="comandante">El comandante aprueba o rechaza</option>
-            <option value="votacion">Se vota por mayoría</option>
+            <option value="comandante">The Mission Commander approves or rejects</option>
+            <option value="votacion">Majority vote</option>
           </select>
         </label>
-        <button className="primary" onClick={() => api.crearSala(modo, juego)}>{juego === 'solo' ? 'Crear sala con bots' : 'Crear sala'}</button>
+        <button className="primary" onClick={() => api.crearSala(modo, juego)}>{juego === 'solo' ? 'Create room with bots' : 'Create room'}</button>
 
-        <h3 style={{ marginTop: 10 }}>Unirse a una sala</h3>
+        <h3 style={{ marginTop: 10 }}>Join a room</h3>
         <div className="row">
           <input
             className="grow mono"
-            placeholder="CÓDIGO"
+            placeholder="CODE"
             value={codigo}
             maxLength={6}
             onChange={(e) => setCodigo(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
             onKeyDown={(e) => e.key === 'Enter' && codigo.length === 6 && api.unirse(codigo)}
           />
-          <button disabled={codigo.length !== 6} onClick={() => api.unirse(codigo)}>Unirse</button>
+          <button disabled={codigo.length !== 6} onClick={() => api.unirse(codigo)}>Join</button>
         </div>
 
         <div className="row" style={{ marginTop: 12 }}>
-          <button className="small plano" onClick={() => setFuentes(true)}>De dónde salen los datos</button>
+          <button className="small plano" onClick={() => setFuentes(true)}>Where the data comes from</button>
           <div className="grow" />
-          <button className="small plano" onClick={() => setAuth(null, null)}>Cerrar sesión</button>
+          <button className="small plano" onClick={() => setAuth(null, null)}>Log out</button>
         </div>
       </div>
     </div>

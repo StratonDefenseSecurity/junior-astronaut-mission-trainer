@@ -16,9 +16,9 @@ export default async function ({ pagina, ok, esperar, esperarTexto, captura, bot
     return x.status
   }, { base, d: demo })
   ok(r === 200, 'sale con el traje')
-  ok(await esperarTexto(/Fuera, con el traje/, 10000), 'aparece fuera')
+  ok(await esperarTexto(/Outside in the suit/i, 10000), 'aparece fuera')
   await esperar(3000)
-  await pulsar('Cerrar (M)', { exacto: true })
+  await pulsar('Close (M)', { exacto: true })
   await pagina.keyboard.press('KeyH')
   await esperar(4000)
   await captura('fuera-al-salir')

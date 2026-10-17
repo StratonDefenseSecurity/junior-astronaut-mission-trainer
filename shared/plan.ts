@@ -8,9 +8,9 @@ type Plan = Pick<RoomState, 'fase' | 'jugadores' | 'mision' | 'cargamento' | 'ca
 
 /** Las tres alternativas sobre la cantidad de suministros. `margen` 1 = lo justo. */
 export const ALTERNATIVAS = [
-  { id: 'minimo', nombre: 'Lo mínimo', margen: 1, descripcion: 'Lo justo para la misión, sin margen. Pesa menos, pero cualquier avería o retraso deja a la tripulación sin reservas.' },
-  { id: 'equilibrado', nombre: 'Equilibrada', margen: 1.15, descripcion: 'Un 15% de más en agua, comida y repuestos, algo de blindaje y el huerto. Aguanta un imprevisto.' },
-  { id: 'seguro', nombre: 'Máxima seguridad', margen: 1.3, descripcion: 'Un 30% de más, más oxígeno, más paneles y doble blindaje. Es la más pesada: puede que no quepa en la nave.' },
+  { id: 'minimo', nombre: 'Bare Minimum', margen: 1, descripcion: 'Just enough for the mission, with no margin. It weighs less, but any breakdown or delay leaves the crew with no reserves.' },
+  { id: 'equilibrado', nombre: 'Balanced', margen: 1.15, descripcion: '15% extra water, food and spare parts, some shielding and the garden. It can handle one surprise.' },
+  { id: 'seguro', nombre: 'Maximum Safety', margen: 1.3, descripcion: '30% extra, more oxygen, more panels and double shielding. It is the heaviest: it might not fit in the ship.' },
 ] as const
 export type AlternativaId = (typeof ALTERNATIVAS)[number]['id']
 

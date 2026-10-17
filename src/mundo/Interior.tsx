@@ -588,7 +588,7 @@ function Esclusa({ sala, cerca, destacadas }: { sala: RoomState; cerca: string |
       <group position={[-0.9, 0, 0]}>
         <Marca activo={cerca === 'esclusa'} destacado={destacadas.includes('esclusa')} radio={0.7} />
       </group>
-      <Rotulo texto={enMarte ? 'Esclusa · salida al exterior' : 'Esclusa'} activo={cerca === 'esclusa'} destacado={destacadas.includes('esclusa')} />
+      <Rotulo texto={enMarte ? 'Airlock · exit to the outside' : 'Airlock'} activo={cerca === 'esclusa'} destacado={destacadas.includes('esclusa')} />
     </group>
   )
 }

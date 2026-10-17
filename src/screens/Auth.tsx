@@ -32,19 +32,19 @@ export function AuthScreen() {
     <div className="center-screen">
       <form className="card stack" onSubmit={enviar}>
         <div className="brand">NASA Space Apps 2026 · Junior Astronaut Mission Trainer</div>
-        <h1>Base Marte</h1>
-        <p className="muted">Entrena como tripulante de una misión a Marte: fechas, clima, radiación y procedimientos reales de la NASA. Juega solo con una tripulación de bots o con tus compañeros.</p>
+        <h1>Mars Base</h1>
+        <p className="muted">Train as a crew member on a mission to Mars, with real NASA dates, weather, radiation and procedures. Play alone with a bot crew or with your classmates.</p>
         <div className="tabs">
-          <button type="button" className={modo === 'invitado' ? 'active' : ''} onClick={() => setModo('invitado')}>Jugar ya</button>
-          <button type="button" className={modo === 'ingresar' ? 'active' : ''} onClick={() => setModo('ingresar')}>Ingresar</button>
-          <button type="button" className={modo === 'registro' ? 'active' : ''} onClick={() => setModo('registro')}>Crear cuenta</button>
+          <button type="button" className={modo === 'invitado' ? 'active' : ''} onClick={() => setModo('invitado')}>Play now</button>
+          <button type="button" className={modo === 'ingresar' ? 'active' : ''} onClick={() => setModo('ingresar')}>Log in</button>
+          <button type="button" className={modo === 'registro' ? 'active' : ''} onClick={() => setModo('registro')}>Sign up</button>
         </div>
-        <input placeholder="Nombre de astronauta" value={usuario} onChange={(e) => setUsuario(e.target.value)} autoFocus maxLength={20} />
-        {conClave && <input placeholder="Clave" type="password" value={clave} onChange={(e) => setClave(e.target.value)} />}
-        {modo === 'invitado' && <p className="mini muted">Sin cuenta ni clave. Si sales de la sesión, no podrás volver a ella.</p>}
+        <input placeholder="Astronaut name" value={usuario} onChange={(e) => setUsuario(e.target.value)} autoFocus maxLength={20} />
+        {conClave && <input placeholder="Password" type="password" value={clave} onChange={(e) => setClave(e.target.value)} />}
+        {modo === 'invitado' && <p className="mini muted">No account or password needed. If you log out, you cannot come back to this session.</p>}
         {error && <p style={{ color: 'var(--bad)' }}>{error}</p>}
         <button className="primary" disabled={cargando || usuario.trim().length < 3 || (conClave && !clave)}>
-          {modo === 'invitado' ? 'Empezar' : modo === 'ingresar' ? 'Ingresar' : 'Crear cuenta y entrar'}
+          {modo === 'invitado' ? 'Start' : modo === 'ingresar' ? 'Log in' : 'Sign up and play'}
         </button>
       </form>
     </div>

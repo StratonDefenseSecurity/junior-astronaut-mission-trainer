@@ -34,9 +34,9 @@ export function Transmision({ sala }: { sala: RoomState }) {
   return (
     <div className="transmision" role="status">
       <div className="cabeza">
-        <i /> Transmisión recibida
+        <i /> Transmission received
         <span className="grow" />
-        <button className="small plano" onClick={() => setActual(null)}>Cerrar</button>
+        <button className="small plano" onClick={() => setActual(null)}>Close</button>
       </div>
       <p>{actual}</p>
     </div>
@@ -57,34 +57,34 @@ export function Emergencia({ sala, yo }: { sala: RoomState; yo: Player }) {
   if (minimizada) {
     return (
       <button className="emergencia-mini" onClick={() => setMinimizada(false)}>
-        ALERTA · {em.titulo} · {restante} s
+        ALERT · {em.titulo} · {restante} s
       </button>
     )
   }
   return (
     <div className="emergencia">
       <div className="row">
-        <span className="tag bad">1 · Alerta</span>
-        <span className="countdown grow">Quedan {restante} s. Si nadie decide, se aplica la última opción.</span>
-        <button className="small" onClick={() => setMinimizada(true)}>Minimizar</button>
+        <span className="tag bad">1 · Alert</span>
+        <span className="countdown grow">{restante} s left. If nobody decides, the last option is applied.</span>
+        <button className="small" onClick={() => setMinimizada(true)}>Minimize</button>
       </div>
       <h2>{em.titulo}</h2>
-      <span className="tag warn">2 · El problema</span>
+      <span className="tag warn">2 · The problem</span>
       <p>{em.descripcion}</p>
-      {em.fuente && <p className="mini muted">Dato real: {em.fuente}.</p>}
+      {em.fuente && <p className="mini muted">Real data: {em.fuente}.</p>}
       <p className="mini muted">
-        Deciden: {em.rolesResponsables.map((r) => ROLE_BY_ID[r].nombre).join(' y ')}.
-        {variosRoles ? ' Como son varios roles, lo que se elija pasa a ser una propuesta.' : ''}
+        Who decides: {em.rolesResponsables.map((r) => ROLE_BY_ID[r].nombre).join(' and ')}.
+        {variosRoles ? ' Since several roles decide, the choice becomes a proposal.' : ''}
       </p>
-      <span className="tag azul">3 · Alternativas</span>
-      {propuesta && <div className="help">Se propuso: {propuesta.titulo.split(': ').slice(1).join(': ')}. Falta aprobarla.</div>}
+      <span className="tag azul">3 · Options</span>
+      {propuesta && <div className="help">Proposed: {propuesta.titulo.split(': ').slice(1).join(': ')}. It still needs approval.</div>}
       {em.alternativas.map((a) => (
         <button key={a.id} className="opcion" disabled={!responsable || Boolean(propuesta)} onClick={() => api.elegirAlternativa(em.id, a.id)}>
           <strong>{a.etiqueta}</strong>
           <small>{a.consecuencia}</small>
         </button>
       ))}
-      {!responsable && <p className="mini muted">Tu rol no decide esta emergencia. Puedes preguntar al asistente o avisar al equipo.</p>}
+      {!responsable && <p className="mini muted">Your role does not decide this emergency. You can ask the assistant or warn the crew.</p>}
     </div>
   )
 }
@@ -100,15 +100,15 @@ export function VotoRapido({ sala, yo }: { sala: RoomState; yo: Player }) {
   return (
     <div className="voto">
       <div className="row" style={{ gap: 6 }}>
-        <span className="tag warn">Propuesta</span>
+        <span className="tag warn">Proposal</span>
         <RolTag rol={quien?.rol ?? null} />
         <span className="mini muted grow">{quien?.nombre} · {Math.max(0, Math.round((p.vence - ahora) / 1000))} s</span>
       </div>
       <strong>{p.titulo}</strong>
       <p className="mini muted">{p.descripcion}</p>
       <div className="row" style={{ gap: 6 }}>
-        <button className="small ok" onClick={() => api.votar(p.id, true)}>{decideCmd ? 'Aprobar' : 'Votar sí'}</button>
-        <button className="small danger" onClick={() => api.votar(p.id, false)}>{decideCmd ? 'Rechazar' : 'Votar no'}</button>
+        <button className="small ok" onClick={() => api.votar(p.id, true)}>{decideCmd ? 'Approve' : 'Vote yes'}</button>
+        <button className="small danger" onClick={() => api.votar(p.id, false)}>{decideCmd ? 'Reject' : 'Vote no'}</button>
       </div>
     </div>
   )
@@ -123,11 +123,11 @@ export function Resultado({ sala }: { sala: RoomState }) {
     <div className="velo">
       <div className={`modal ${sala.resultado.victoria ? 'ok' : 'bad'}`}>
         <div className="brand">{sala.resultado.titulo}</div>
-        <h1>{sala.nombreMision ? `${sala.nombreMision}: ` : ''}{sala.resultado.victoria ? 'base establecida en Marte' : 'la misión terminó'}</h1>
+        <h1>{sala.nombreMision ? `${sala.nombreMision}: ` : ''}{sala.resultado.victoria ? 'base established on Mars' : 'the mission is over'}</h1>
         <p>{sala.resultado.motivo}</p>
         <table className="tabla compacta">
           <thead>
-            <tr><th>Tripulante</th><th>Salud</th><th>Radiación</th><th>Músculo y hueso</th></tr>
+            <tr><th>Crew member</th><th>Health</th><th>Radiation</th><th>Muscle and bone</th></tr>
           </thead>
           <tbody>
             {crew.map((j) => (
@@ -141,23 +141,23 @@ export function Resultado({ sala }: { sala: RoomState }) {
           </tbody>
         </table>
         <p className="mini muted">
-          {dias} días de misión · {sala.tAterrizaje > 0 ? `${Math.max(0, sala.ambiente.sol - 1)} soles en Marte` : 'sin llegar a la superficie'} · {sala.mision.muestrasAnalizadas} de {sala.mision.muestrasObjetivo} muestras · huerto {sala.huerto.establecido ? 'establecido' : 'sin establecer'}. Límite de radiación de carrera: {C.LIMITE_CARRERA_MSV} mSv.
+          {dias} mission days · {sala.tAterrizaje > 0 ? `${Math.max(0, sala.ambiente.sol - 1)} sols on Mars` : 'did not reach the surface'} · {sala.mision.muestrasAnalizadas} of {sala.mision.muestrasObjetivo} samples · garden {sala.huerto.establecido ? 'established' : 'not established'}. Career radiation limit: {C.LIMITE_CARRERA_MSV} mSv.
         </p>
         {resueltas.length > 0 && (
           <>
-            <h3>Últimas decisiones</h3>
+            <h3>Latest decisions</h3>
             <div className="log">
               {resueltas.slice(0, 5).map((e) => (
                 <div key={e.id} className={e.estado === 'vencida' ? 'alerta' : 'info'}>
-                  {e.titulo}: {e.alternativas.find((a) => a.id === e.elegida)?.etiqueta ?? 'sin decisión'}. {e.resultado}
+                  {e.titulo}: {e.alternativas.find((a) => a.id === e.elegida)?.etiqueta ?? 'no decision'}. {e.resultado}
                 </div>
               ))}
             </div>
           </>
         )}
         <div className="row" style={{ marginTop: 12, gap: 8 }}>
-          <button className="ok" onClick={() => descargarCertificado(sala)}>Descargar el certificado de la misión</button>
-          <button className="primary" onClick={() => api.salir()}>Volver al inicio</button>
+          <button className="ok" onClick={() => descargarCertificado(sala)}>Download the certificate</button>
+          <button className="primary" onClick={() => api.salir()}>Back to start</button>
         </div>
       </div>
     </div>
@@ -172,10 +172,10 @@ export function Fuentes() {
     <div className="velo" onClick={() => cerrar(false)}>
       <div className="modal ancho" onClick={(e) => e.stopPropagation()}>
         <div className="row">
-          <h2 className="grow">De dónde salen los datos</h2>
-          <button className="small" onClick={() => cerrar(false)}>Cerrar</button>
+          <h2 className="grow">Where the data comes from</h2>
+          <button className="small" onClick={() => cerrar(false)}>Close</button>
         </div>
-        <p className="mini muted">Los números del juego parten de mediciones y documentos reales. Las ecuaciones que los combinan son simplificaciones para aprender.</p>
+        <p className="mini muted">The numbers in the game come from real measurements and documents. The equations that combine them are simplified for learning.</p>
         <div className="fuentes">
           {FUENTES.map((f) => (
             <div key={f.tema} className="fuente">
@@ -185,7 +185,7 @@ export function Fuentes() {
             </div>
           ))}
         </div>
-        <h3 style={{ marginTop: 14 }}>Lo que el juego simplifica o supone</h3>
+        <h3 style={{ marginTop: 14 }}>What the game simplifies or assumes</h3>
         <ul className="lista">
           {SUPUESTOS.map((s) => (
             <li key={s}>{s}</li>

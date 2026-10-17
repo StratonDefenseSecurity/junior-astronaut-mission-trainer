@@ -28,7 +28,7 @@ export function Dato({ etiqueta, valor, tono, barra, nota }: { etiqueta: string;
 }
 
 export function RolTag({ rol }: { rol: Role | null }) {
-  if (!rol) return <span className="muted">sin rol</span>
+  if (!rol) return <span className="muted">no role</span>
   const r = ROLE_BY_ID[rol]
   return (
     <span className="tag" style={{ color: r.color }} title={r.nombre}>
@@ -39,7 +39,7 @@ export function RolTag({ rol }: { rol: Role | null }) {
 
 /** Marca discreta de los tripulantes que lleva el servidor en el modo de un jugador. */
 export function MarcaIA({ bot }: { bot?: boolean }) {
-  return bot ? <span className="ia" title="Tripulante con IA">IA</span> : null
+  return bot ? <span className="ia" title="AI crew member">AI</span> : null
 }
 
 export const roles = (lista: Role[]) => lista.map((r) => ROLE_BY_ID[r].corto).join(' + ')
@@ -63,13 +63,13 @@ export const fechaActual = (sala: RoomState) => fechaDeMision(escenarioDe(sala.e
 export function relojMision(sala: RoomState): { principal: string; secundario: string } {
   const fecha = fechaCorta(fechaActual(sala))
   if (enMarte(sala)) {
-    return { principal: `Sol ${sala.ambiente.sol} · ${formatoHora(sala.ambiente.hora)}`, secundario: `de ${sala.mision.solesObjetivo} soles · ${fecha}` }
+    return { principal: `Sol ${sala.ambiente.sol} · ${formatoHora(sala.ambiente.hora)}`, secundario: `of ${sala.mision.solesObjetivo} sols · ${fecha}` }
   }
   if (sala.fase === 'transito' || sala.fase === 'llegada') {
     const dia = Math.floor(Math.max(0, sala.t) / 86400) + 1
-    return { principal: `Día ${dia} · ${formatoHora(sala.ambiente.hora)}`, secundario: `de ${sala.mision.diasTransito} de viaje · ${fecha}` }
+    return { principal: `Day ${dia} · ${formatoHora(sala.ambiente.hora)}`, secundario: `of ${sala.mision.diasTransito} travel days · ${fecha}` }
   }
-  return { principal: formatoMET(sala.t), secundario: `tiempo de misión · ${fecha}` }
+  return { principal: formatoMET(sala.t), secundario: `mission time · ${fecha}` }
 }
 
 /** Días y horas que la tripulación lleva en el espacio, desde que alcanzó la órbita hasta aterrizar. */
@@ -89,9 +89,9 @@ export const energiaUsada = (sala: RoomState): string => {
 }
 
 export const escalaTexto = (e: number) =>
-  e >= 86400 ? '1 s = 1 día' : e >= 3600 ? `1 s = ${e / 3600} h` : e >= 60 ? `1 s = ${e / 60} min` : e > 1 ? `1 s = ${e} s` : 'tiempo real'
+  e >= 86400 ? '1 s = 1 day' : e >= 3600 ? `1 s = ${e / 3600} h` : e >= 60 ? `1 s = ${e / 60} min` : e > 1 ? `1 s = ${e} s` : 'real time'
 
-export const diasTexto = (d: number) => (d >= 999 ? 'de sobra' : `${Math.round(d)} d`)
+export const diasTexto = (d: number) => (d >= 999 ? 'plenty' : `${Math.round(d)} d`)
 export const mmHg = (kPa: number) => kPa * 7.50062
 export const pctTraje = (kg: number) => Math.round((kg / C.TRAJE_O2_KG) * 100)
 

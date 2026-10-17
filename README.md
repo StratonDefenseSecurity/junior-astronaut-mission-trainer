@@ -1,139 +1,139 @@
-# Mission Trainer · Base Marte
+# Junior Astronaut Mission Trainer · Mars Base
 
-Juego 3D multijugador para el reto **"Build a Junior Astronaut Mission Trainer"** del NASA Space Apps Challenge 2026.
+A 3D multiplayer game for the **"Build a Junior Astronaut Mission Trainer"** challenge of the NASA Space Apps Challenge 2026.
 
-Se juega solo, con cinco tripulantes bot que ocupan los otros roles, o en grupo, con una tripulación de 2 a 6 estudiantes en una misma sala. Para empezar basta con escribir un nombre; la cuenta con clave es opcional. La misión sigue el esquema que diseñó el equipo: primero se les da la situación que tienen que afrontar, después cada uno recibe su rol, se establece el objetivo y eligen los suministros. Cada jugador controla a su astronauta en tercera persona: vive el despegue, cruza el espacio dentro de la nave, aterriza y monta una base en Marte. El cuerpo de cada astronauta, el aire, el agua, la energía, el clima y la radiación se calculan con valores publicados por NASA.
+You can play alone, with five bot crew members filling the other roles, or as a group, with a crew of 2 to 6 students in the same room. To start, you only need to type a name; an account with a password is optional. The mission follows the plan the team designed: first the crew gets the situation they have to face, then each person gets a role, the objective is set and they choose the supplies. Each player controls their astronaut in third person: they live through the launch, cross space inside the ship, land and build a base on Mars. Each astronaut's body, the air, the water, the power, the weather and the radiation are calculated with values published by NASA.
 
-**En línea:** https://mision-marte-trainer.nunesjaramilloluis.workers.dev
+**Online:** https://mision-marte-trainer.nunesjaramilloluis.workers.dev
 
-## Demostración para el jurado (unos 10 minutos)
+## Demonstration for the judges (about 10 minutes)
 
-1. Abrir el enlace, escribir un nombre y pulsar **Empezar**.
-2. Elegir **Un jugador con bots** y una situación, por ejemplo *Agua bajo el hielo*. Cinco bots completan la tripulación.
-3. En la contextualización, leer la situación real, tomar el rol de **comandante**, bautizar la misión y elegir los suministros. El asistente analiza para cuántos días alcanza cada cosa.
-4. Lanzar: cuenta regresiva, ascenso sobre Cabo Cañaveral con la Tierra de imágenes reales de la NASA debajo.
-5. En el viaje, acelerar el tiempo. Mirar por el ventanal: la Tierra y la Luna se alejan y Marte crece, en sus posiciones reales para la fecha. Los bots trabajan, avisan por el chat y proponen; el comandante aprueba en **Propuestas**. Si salta una emergencia, el tiempo frena solo.
-6. En la órbita de Marte, aprobar el sitio de aterrizaje y ver la entrada, el descenso y el aterrizaje con la cronología real de Perseverance.
-7. En la base, abrir la página principal con `M` y ver el montaje paso a paso: paneles orientados según la latitud, interruptores en orden, prueba de fugas de la esclusa. En el laboratorio, el huerto como el Veggie de la ISS.
-8. El botón **Fuentes** muestra de dónde sale cada dato real y qué es simplificación del juego.
+1. Open the link, type a name and press **Start**.
+2. Choose **Single player with bots** and a situation, for example *Water Under the Ice*. Five bots complete the crew.
+3. In the Mission Briefing, read the real situation, take the **Mission Commander** role, name the mission and choose the supplies. The Assistant works out how many days each supply will last.
+4. Launch: countdown, then the climb over Cape Canaveral with Earth below, made from real NASA images.
+5. During the cruise, speed up time. Look out the big window: Earth and the Moon move away and Mars grows, in their real positions for the date. The bots work, report in the chat and make proposals; the commander approves them in **Proposals**. If an emergency comes up, time slows down on its own.
+6. In Mars orbit, approve the landing site and watch the entry, descent and landing with the real Perseverance timeline.
+7. At the base, open the Base Dashboard with `M` and watch the step-by-step assembly: panels tilted for the latitude, breakers closed in order, the airlock leak check. In the lab, the garden works like the Veggie system on the ISS.
+8. The **Sources** button shows where each real fact comes from and what the game simplifies.
 
-Para mostrarlo en una computadora sencilla, el botón **HD** de la barra superior pasa a los gráficos ligeros.
+To show it on a basic computer, the **HD** button in the top bar switches to the Lite graphics.
 
-## Cómo se juega
+## How to play
 
-1. **Sala.** Se elige jugar solo con bots o en grupo. En grupo se comparte el código de sala de 6 caracteres, aspecto del personaje (piel, pelo, peinado, traje y visor) y ciudad de origen, que se marca en la Tierra y desde la que llegan mensajes de casa. Aquí todavía no hay roles. Quien crea la sala elige la situación o la deja al azar. En grupo hacen falta al menos 2 jugadores; solo, los bots completan la tripulación.
-2. **Contextualización.** Es una interfaz sencilla, de un paso por pantalla, y cada integrante avanza a su ritmo:
-   1. *La situación.* Se le da a la tripulación una de seis situaciones, cada una con una fecha de lanzamiento real, su contexto verídico, su reto y sucesos propios: Primera base en Marte, El Sol en su máximo, Temporada de tormentas, Agua bajo el hielo, Rastros de un antiguo lago y Problema a bordo. Después vienen los datos comunes a cualquier viaje a Marte.
-   2. *Asignación de roles.* Cada uno elige su rol entre los seis. El asistente dice qué consecuencias tiene. Hace falta un comandante.
-   3. *Objetivo de la misión.* El comandante establece cuántos soles se quedan y bautiza la misión. El piloto o el comandante eligen la trayectoria.
-   4. *Suministros.* Se presentan tres alternativas sobre la cantidad de suministros, que también se pueden ajustar a mano con un límite de carga. El asistente analiza para cuántos días alcanza cada cosa.
-3. **Lanzamiento.** Cuenta regresiva y ascenso con telemetría: altitud, velocidad, aceleración, combustible y energía usada. El pulso de cada tripulante sube con las g.
-4. **Viaje a Marte.** Se camina por el interior de la nave. Dura 150, 210 o 259 días de misión según la trayectoria. En pantalla y en la bitácora quedan registrados los días y horas que llevan en el espacio, el combustible y la energía usada. El comandante controla la escala de tiempo.
-5. **Llegada.** Desde la órbita se elige el sitio de aterrizaje y se vive el descenso.
-6. **Llegar a la base.** Al aterrizar se presenta la página principal, con la misión de ensamblaje: elegir ubicación, desplegar hábitat y equipos, activar soporte vital y energía, comprobar instalaciones. Cada tarea la hace el rol responsable yendo al lugar, dentro o fuera, y paso a paso como en la vida real: mantener pulsado mientras se desenrolla un panel, apretar los anclajes en cruz, ajustar la inclinación según la latitud, energizar de la fuente hacia las cargas, leer la caída de presión de la esclusa antes de darla por estanca. Cómo se haga tiene consecuencias: un panel mal orientado rinde menos y una fuga que se deja pasar sigue perdiendo aire.
-7. **Administrar recursos.** La página principal reúne las opciones del esquema, cada una con su sub-interfaz: controlar agua, oxígeno, alimentos y energía; decidir cómo distribuir recursos limitados; administrar producción y reciclaje; mantener los equipos; proteger a la tripulación de la radiación; y el huerto artificial, que sigue al Veggie de la ISS: se elige el cultivo, se despliega la cámara, se encienden las luces, se colocan las almohadillas y se riegan con jeringa. Después hay que regar cuando se secan, ralear, revisar las hojas por si hay moho o se caen, y cosechar. El comandante aprueba o rechaza las decisiones de los demás.
-8. **Emergencias.** Alerta, identificación del problema y alternativas con consecuencias distintas. Las de varios roles pasan por el comandante o se votan.
+1. **Room.** Choose to play alone with bots or as a group. In a group you share the 6-character room code. Each player picks a look for their character (skin, hair color, hairstyle, suit and visor) and a home city, which is marked on Earth and sends messages from home. There are no roles yet. The person who creates the room chooses the situation or leaves it to chance. A group needs at least 2 players; when playing alone, the bots complete the crew.
+2. **Mission Briefing.** A simple screen with one step per page, and each crew member moves at their own pace:
+   1. *The Situation.* The crew gets one of six situations, each with a real launch date, its true background, its challenge and its own events: First Base on Mars, Solar Maximum, Dust Storm Season, Water Under the Ice, Traces of an Ancient Lake and Trouble On Board. Then come the facts that apply to any trip to Mars.
+   2. *Role Assignment.* Each person chooses one of the six roles. The Assistant explains the consequences. A commander is required.
+   3. *Mission Objective.* The commander sets how many sols the crew stays and names the mission. The pilot or the commander chooses the trajectory.
+   4. *Supplies.* There are three options for the amount of supplies, which can also be adjusted by hand up to a cargo limit. The Assistant works out how many days each supply will last.
+3. **Launch.** Countdown and climb with telemetry: altitude, speed, acceleration, fuel and energy used. Each crew member's pulse rises with the g-forces.
+4. **Cruise to Mars.** You walk around inside the ship. The trip lasts 150, 210 or 259 mission days depending on the trajectory. The screen and the log record the days and hours in space, the fuel and the energy used. The commander controls the time scale.
+5. **Mars Arrival.** From orbit, the crew chooses the landing site and lives through the descent.
+6. **Reach the Base.** After landing, the Base Dashboard opens with the Base Assembly mission: choose the location, deploy the habitat and equipment, turn on life support and power, and check the facilities. The responsible role does each task by going to the right place, inside or outside, step by step as in real life: press and hold while a panel unrolls, tighten the anchors in a cross pattern, set the tilt for the latitude, power up from the source toward the loads, and read the airlock pressure drop before calling it airtight. How you do it matters: a badly aimed panel produces less, and a leak you let slide keeps losing air.
+7. **Manage Resources.** The Base Dashboard gathers the options from the plan, each with its own screen: track water, oxygen, food and power; decide how to share limited resources; manage production and recycling; maintain the equipment; protect the crew from radiation; and the plant garden, which follows the ISS Veggie system: choose the crop, deploy the chamber, turn on the lights, place the pillows and water them with a syringe. After that you water them when they dry out, thin the seedlings, check the leaves for mold or drooping, and harvest. The commander approves or rejects the others' decisions.
+8. **Emergencies.** An alert, finding the problem and options with different consequences. The ones that involve several roles go to the commander or to a vote.
 
-Durante el viaje no hay gravedad: los personajes flotan, se impulsan con inercia y hay objetos sueltos que flotan por el módulo. Cada espacio tiene su animación: correr en la cinta o pedalear en el gimnasio, dormir en el saco sujeto a la pared (en Marte, en la litera), teclear en las consolas y encogerse en el refugio. Por el ventanal se ve el cielo real de la fecha desde la posición real de la nave: la Tierra alejándose con la Luna, Marte creciendo, los planetas y las estrellas. De noche en Marte se ve la Tierra como un lucero.
+During the cruise there is no gravity: the characters float, push off with inertia, and loose objects float around the module. Each space has its own animation: running on the treadmill or pedaling in the gym, sleeping in a sleeping bag strapped to the wall (on Mars, in a bunk), typing at the consoles and curling up in the Storm Shelter. Through the big window you see the real sky for the date from the ship's real position: Earth moving away with the Moon, Mars growing, the planets and the stars. At night on Mars, Earth shines like a bright star.
 
-Hay sonido en todas las escenas y chat de voz por proximidad: dentro se oye más fuerte a quien está cerca, y por radio a quien está fuera con el traje. La mesa común del módulo es el lugar para reunirse a hablar. El centro de control y las familias envían mensajes durante el viaje, con el retraso real de la señal, y al terminar se descarga un certificado de la misión.
+There is sound in every scene and proximity voice chat: inside, you hear people nearby more loudly, and you hear people outside in their suits over the radio. The Galley Table in the module is the place to meet and talk. Mission Control and the families send messages during the trip, with the real signal delay, and at the end you can download a Mission Certificate.
 
-En el modo de un jugador, los bots hacen el trabajo de su rol con las mismas reglas que una persona: caminan hasta cada estación, salen con el traje, siguen los procedimientos, proponen y votan, y avisan por el chat. Nunca hacen lo que le toca al rol de la persona; se lo recuerdan, y solo deciden por ella si una emergencia está por vencer.
+In single player mode, the bots do their role's work under the same rules as a person: they walk to each station, suit up and go outside, follow the procedures, make proposals and vote, and report in the chat. They never do what belongs to the person's role; they remind them, and they only decide for them if an emergency is about to run out of time.
 
-Al lado se ve siempre a los integrantes, con su oxígeno, su salud, su pulso y su progreso, y abajo los puntos críticos.
+The side panel always shows the crew, with their oxygen, health, pulse and progress, and the Critical Points are shown below.
 
-Controles: `W A S D` para moverse (sin gravedad, para impulsarse), `Mayús` para correr, arrastrar para girar la cámara, rueda para acercarla, `E` para usar la estación cercana, `M` para abrir la página principal, `H` para ocultar los paneles. En pantallas táctiles aparece una palanca.
+Controls: `W A S D` to move (with no gravity, to push off), `Shift` to run, drag to turn the camera, mouse wheel to zoom, `E` to use the nearby station, `M` to open the Base Dashboard, `H` to hide the panels. On touch screens a joystick appears.
 
-## Roles y responsabilidades
+## Roles and responsibilities
 
-| Tarea | Roles |
+| Task | Roles |
 |---|---|
-| Elegir ubicación de la base | Piloto + comandante |
-| Desplegar hábitat y equipos | Logística + piloto |
-| Activar soporte vital y energía | Sistemas + comandante |
-| Comprobar instalaciones | Sistemas |
-| Distribuir recursos (raciones, prioridad de energía) | Logística + comandante |
-| Producción y reciclaje (encender o apagar equipos) | Logística + comandante + médico |
-| Proteger de la radiación (refugio, ejercicio) | Médico + comandante |
-| Mantener equipos | Sistemas |
-| Huerto y muestras | Científico |
-| Tratamientos | Médico |
-| Escala de tiempo, lanzamiento | Comandante |
+| Choose the base location | Pilot + commander |
+| Deploy the habitat and equipment | Logistics + pilot |
+| Turn on life support and power | Systems + commander |
+| Check the facilities | Systems |
+| Share resources (rations, power priority) | Logistics + commander |
+| Production and recycling (turn equipment on or off) | Logistics + commander + flight surgeon |
+| Protect from radiation (shelter, exercise) | Flight surgeon + commander |
+| Maintain the equipment | Systems |
+| Garden and samples | Science specialist |
+| Treatments | Flight surgeon |
+| Time scale, launch | Commander |
 
-Si el rol responsable no está conectado, cualquier tripulante puede hacer su tarea, para que se pueda jugar con pocos.
+If the responsible role is not connected, any crew member can do the task, so the game can be played with a small group.
 
-## Qué es real y qué es del juego
+## What is real and what is game design
 
-La lista completa, con enlaces, está en el juego (botón **Fuentes**) y en [shared/ciencia.ts](shared/ciencia.ts).
+The full list, with links, is in the game (**Sources** button) and in [shared/ciencia.ts](shared/ciencia.ts).
 
-- **Datos reales integrados:** el clima de un año marciano medido por el rover Curiosity (669 soles) y los eventos de clima espacial de 2024 de la base DONKI de NASA (54 fulguraciones de clase X y 29 tormentas de partículas). Se regeneran con `python scripts/datos-nasa.py`.
-- **El cielo y las fechas:** 5 044 estrellas reales del catálogo Hipparcos (XHIP), las 88 constelaciones de la IAU y la Vía Láctea; el Sol, la Luna y los planetas en su posición real para la fecha de la misión con astronomy-engine, validada contra JPL Horizons. La nave sigue una órbita de transferencia calculada con el problema de Lambert, y las ventanas de lanzamiento son las reales.
-- **La estación en Marte:** la fecha de llegada fija la estación marciana (Ls) y con ella el registro de Curiosity que se usa como clima.
-- **Constantes verificadas contra su fuente:** consumo de oxígeno y producción de CO2, agua y comida por persona, reciclaje de agua de la ISS, límite de CO2, capacidad del depurador y del generador de oxígeno de la ISS, radiación en crucero y en superficie, límite de dosis de carrera, datos de Marte, traje EMU, reactor Kilopower.
-- **Imágenes reales:** la Tierra con Blue Marble, las luces nocturnas de Black Marble 2016 y las nubes de NASA Earth Observatory; la Luna con los mapas LROC y LOLA del Scientific Visualization Studio de la NASA; Marte con el mosaico a color de las sondas Viking y el relieve del altímetro MOLA, del USGS. Los créditos están en [public/texturas/CREDITOS.md](public/texturas/CREDITOS.md) y se regeneran con `node scripts/texturas-reales.mjs`.
-- **Descenso:** entrada, paracaídas, escudo térmico, navegación por el terreno y grúa aérea siguen la cronología reconstruida del aterrizaje de Perseverance del 18 de febrero de 2021.
-- **Procedimientos:** el montaje y el huerto siguen la práctica real de la NASA: paneles enrollables ROSA, buses de energía de la ISS, pruebas de fugas por caída de presión, la grúa LSMS, el reactor Kilopower y los experimentos Veggie y APH de la ISS.
-- **Del juego:** las ecuaciones que combinan esos números, el tamaño del hábitat y de los equipos, las masas de los suministros, la dosis de cada tormenta solar, el modelo de polvo y los umbrales de daño. Se muestran al jugador como supuestos.
+- **Real data built in:** the weather of one Martian year measured by the Curiosity rover (669 sols) and the 2024 space weather events from NASA's DONKI database (54 X-class flares and 29 particle storms). They are regenerated with `python scripts/datos-nasa.py`.
+- **The sky and the dates:** 5,044 real stars from the Hipparcos catalog (XHIP), the 88 IAU constellations and the Milky Way; the Sun, the Moon and the planets in their real positions for the mission date with astronomy-engine, validated against JPL Horizons. The ship follows a transfer orbit calculated with Lambert's problem, and the launch windows are the real ones.
+- **The season on Mars:** the arrival date sets the Martian season (Ls), and with it the Curiosity record used as the weather.
+- **Constants checked against their source:** oxygen use and CO2, water and food production per person, ISS water recycling, the CO2 limit, the capacity of the ISS scrubber and oxygen generator, radiation during the cruise and on the surface, the career dose limit, Mars data, the EMU suit, the Kilopower reactor.
+- **Real images:** Earth with Blue Marble, the 2016 Black Marble night lights and NASA Earth Observatory clouds; the Moon with the LROC and LOLA maps from NASA's Scientific Visualization Studio; Mars with the Viking color mosaic and the MOLA altimeter relief, from USGS. The credits are in [public/texturas/CREDITOS.md](public/texturas/CREDITOS.md) and are regenerated with `node scripts/texturas-reales.mjs`.
+- **Descent:** entry, parachute, heat shield, terrain navigation and sky crane follow the reconstructed timeline of the Perseverance landing on February 18, 2021.
+- **Procedures:** the assembly and the garden follow real NASA practice: ROSA roll-out panels, the ISS power buses, leak checks by pressure drop, the LSMS crane, the Kilopower reactor and the ISS Veggie and APH experiments.
+- **Game design:** the equations that combine those numbers, the size of the habitat and equipment, the masses of the supplies, the dose of each solar storm, the dust model and the damage thresholds. They are shown to the player as assumptions.
 
-## Desarrollo
+## Development
 
 ```bash
 npm install
 npm run dev
 ```
 
-Abre `http://localhost:5173`. El cliente (Vite) corre en el 5173 y el servidor en el 3001. Para probar dos jugadores en una computadora usa `http://localhost:5173` en una pestaña y `http://127.0.0.1:5173` en otra.
+Open `http://localhost:5173`. The client (Vite) runs on port 5173 and the server on 3001. To test two players on one computer, use `http://localhost:5173` in one tab and `http://127.0.0.1:5173` in another.
 
-| Comando | Qué hace |
+| Command | What it does |
 |---|---|
-| `npm run typecheck` | Revisa tipos del cliente, del servidor y del Worker |
-| `npm run simular` | Juega una misión completa sin navegador. Acepta tripulantes, alternativa, política, trayectoria y perfil: `npx tsx scripts/simular.ts 4 minimo buena rapida corta` |
-| `npm run e2e` | Prueba de punta a punta por la API contra un servidor en marcha. Añade la URL y `--corto` para la versión de 90 segundos |
-| `npm run ui -- <url> <carpeta>` | Prueba de la interfaz con Chrome o Edge sin ventana: juega como una persona, pulsa los botones, camina con el teclado y guarda capturas. `UI_PASOS=ui-multi` prueba dos jugadores; `UI_PASOS=ui-base` los procedimientos de la base (necesita una sala de `scripts/sala-demo.mjs`) |
-| `node scripts/texturas-reales.mjs` | Descarga las imágenes de NASA de la Tierra y la Luna y genera las texturas de `public/texturas/`. Con `--marte` también Marte, que baja unos 330 MB |
-| `npm run cf:dev` | Compila el sitio y lo sirve con el emulador de Cloudflare en `http://127.0.0.1:8787`, con Durable Objects y WebSocket como en producción |
-| `npm run desplegar` | Compila el sitio y lo publica en Cloudflare |
+| `npm run typecheck` | Checks the types of the client, the server and the Worker |
+| `npm run simular` | Plays a full mission without a browser. Accepts crew size, supply option, policy, trajectory and profile: `npx tsx scripts/simular.ts 4 minimo buena rapida corta` |
+| `npm run e2e` | End-to-end test through the API against a running server. Add the URL and `--corto` for the 90-second version |
+| `npm run ui -- <url> <folder>` | Interface test with headless Chrome or Edge: it plays like a person, presses the buttons, walks with the keyboard and saves screenshots. `UI_PASOS=ui-multi` tests two players; `UI_PASOS=ui-base` tests the base procedures (needs a room from `scripts/sala-demo.mjs`) |
+| `node scripts/texturas-reales.mjs` | Downloads the NASA images of Earth and the Moon and generates the textures in `public/texturas/`. With `--marte` it also does Mars, which downloads about 330 MB |
+| `npm run cf:dev` | Builds the site and serves it with the Cloudflare emulator at `http://127.0.0.1:8787`, with Durable Objects and WebSocket as in production |
+| `npm run desplegar` | Builds the site and publishes it on Cloudflare |
 
-## Arquitectura
+## Architecture
 
-Todo corre en Cloudflare, en el plan gratuito, sin un servidor siempre encendido.
+Everything runs on Cloudflare, on the free plan, with no always-on server.
 
-- **Cliente:** React, React Three Fiber y Zustand. Cada acción es una petición HTTP. Además consulta el estado de la sala dos veces por segundo, y en esa consulta envía la posición de su personaje y recibe la de los demás. La consulta va por WebSocket; si el WebSocket falla, sigue por HTTP.
-- **Worker:** sirve el sitio y reparte las peticiones de `/api/*`. No calcula nada: en el plan gratuito solo dispone de 10 ms de CPU por petición.
-- **Durable Objects:** cada sala tiene el suyo, una única instancia en todo el mundo con la sala en memoria y su propio almacenamiento SQLite. Ahí corren las reglas y la simulación. Las cuentas viven en otro. Como cada sala tiene un solo proceso, nunca hay dos escribiendo a la vez.
-- **Guardado:** la sala se guarda con cada acción y cada 45 segundos mientras alguien juega. Entre guardados el tiempo se recalcula de forma determinista, así que si Cloudflare descarga el objeto de memoria, al volver llega al mismo estado.
-- **Tiempo:** la misión solo avanza mientras alguien consulta. Si todos se van más de 90 segundos, se detiene sola.
+- **Client:** React, React Three Fiber and Zustand. Each action is an HTTP request. The client also checks the room state twice per second, and in that request it sends its character's position and receives everyone else's. The check goes over WebSocket; if the WebSocket fails, it falls back to HTTP.
+- **Worker:** serves the site and routes the `/api/*` requests. It does no calculations: on the free plan it only has 10 ms of CPU per request.
+- **Durable Objects:** each room has its own, a single instance in the whole world with the room in memory and its own SQLite storage. The rules and the simulation run there. Accounts live in a separate one. Since each room has a single process, there are never two writers at the same time.
+- **Saving:** the room is saved with every action and every 45 seconds while someone is playing. Between saves, time is recalculated deterministically, so if Cloudflare unloads the object from memory, it comes back to the same state.
+- **Time:** the mission only moves forward while someone is checking in. If everyone leaves for more than 90 seconds, it stops on its own.
 
 ```
-shared/types.ts       tipos, roles, suministros, sitios, tareas, escalas
-shared/ciencia.ts     constantes reales, fuentes y supuestos
-shared/plan.ts        alternativas de suministros y cuentas del asistente sobre la carga
-shared/procedimientos.ts  procedimientos por pasos del montaje y del huerto, con su explicación real
-server/cloudflare.ts  Worker y Durable Objects: reparto de peticiones, WebSocket, almacenamiento
-server/api.ts         operaciones del juego: cuentas, salas, posiciones, guardado
-shared/escenarios.ts  situaciones de misión, fechas reales y ciudades de origen
-shared/astronomia.ts  estación de Marte (Ls) a partir de la fecha
-server/game.ts        reglas: roles, suministros, propuestas, acciones, emergencias
-server/emergencies.ts catálogo de emergencias
-server/bot.ts         asistente por reglas
-server/procedimientos.ts  valida cada paso y aplica sus consecuencias
-server/sim/           simulación: paso, fisiología, ambiente, vuelo, huerto
-server/datos/         datos de NASA generados
-server/almacen*.ts    dónde se guardan los documentos: Durable Object, archivos locales o Vercel Blob
-server/index.ts       servidor local de desarrollo (Express)
-src/mundo/            escenas 3D, personaje animado, controles, mapa de estaciones
-src/mundo/cielo/      cielo real: estrellas, constelaciones, planetas, trayectoria
-src/sonido/           sonido generado en el navegador
-src/voz.ts            chat de voz por proximidad (WebRTC)
-src/hud/              paneles, estaciones, propuestas, emergencias, asistente, fuentes
-src/screens/          acceso, inicio, sala, contextualización por pasos, juego
-scripts/              simulación, prueba e2e, datos de NASA
-wrangler.jsonc        configuración del despliegue en Cloudflare
+shared/types.ts       types, roles, supplies, sites, tasks, time scales
+shared/ciencia.ts     real constants, sources and assumptions
+shared/plan.ts        supply options and the Assistant's calculations on the cargo
+shared/procedimientos.ts  step-by-step assembly and garden procedures, with their real explanation
+server/cloudflare.ts  Worker and Durable Objects: request routing, WebSocket, storage
+server/api.ts         game operations: accounts, rooms, positions, saving
+shared/escenarios.ts  mission situations, real dates and home cities
+shared/astronomia.ts  Mars season (Ls) from the date
+server/game.ts        rules: roles, supplies, proposals, actions, emergencies
+server/emergencies.ts emergency catalog
+server/bot.ts         rule-based Assistant
+server/procedimientos.ts  validates each step and applies its consequences
+server/sim/           simulation: step, physiology, environment, flight, garden
+server/datos/         generated NASA data
+server/almacen*.ts    where documents are stored: Durable Object, local files or Vercel Blob
+server/index.ts       local development server (Express)
+src/mundo/            3D scenes, animated character, controls, station map
+src/mundo/cielo/      real sky: stars, constellations, planets, trajectory
+src/sonido/           sound generated in the browser
+src/voz.ts            proximity voice chat (WebRTC)
+src/hud/              panels, stations, proposals, emergencies, Assistant, sources
+src/screens/          login, home, room, step-by-step Mission Briefing, game
+scripts/              simulation, e2e test, NASA data
+wrangler.jsonc        Cloudflare deployment configuration
 ```
 
-## Despliegue
+## Deployment
 
-El sitio está en Cloudflare Workers, en la cuenta `e205fb741a6d9827ec596ebd9adfa1da`, como el Worker `mision-marte-trainer`. La configuración está en [wrangler.jsonc](wrangler.jsonc).
+The site is on Cloudflare Workers, in the account `e205fb741a6d9827ec596ebd9adfa1da`, as the Worker `mision-marte-trainer`. The configuration is in [wrangler.jsonc](wrangler.jsonc).
 
 ```bash
 npx wrangler login
@@ -143,16 +143,16 @@ npx wrangler login
 npm run desplegar
 ```
 
-El primer comando solo hace falta una vez por computadora. El secreto de sesiones `AUTH_SECRET` ya está guardado en Cloudflare y los despliegues no lo tocan. Para el emulador local se lee de `.dev.vars`, que no se sube a git.
+The first command is only needed once per computer. The session secret `AUTH_SECRET` is already stored in Cloudflare and deployments do not touch it. For the local emulator it is read from `.dev.vars`, which is not uploaded to git.
 
-El despliegue anterior en Vercel sigue en el repositorio como alternativa (`npm run desplegar:vercel`), pero ya no es el que se usa.
+The previous Vercel deployment is still in the repository as an alternative (`npm run desplegar:vercel`), but it is no longer the one in use.
 
-## Límites conocidos
+## Known limits
 
-- El plan gratuito de Cloudflare admite 100 000 peticiones al día, tanto al Worker como a los Durable Objects, y se renueva a las 00:00 UTC. Con las consultas por WebSocket, cada jugador gasta unas 400 por hora de juego. Si un día se agotan, el juego deja de responder hasta el día siguiente.
-- Las cuentas y las salas creadas en el despliegue de Vercel no pasaron a Cloudflare: hay que registrarse de nuevo.
-- Todo el juego está en español.
-- El asistente responde por reglas, no con un modelo de lenguaje.
-- El movimiento de los compañeros se actualiza dos veces por segundo y se suaviza en pantalla.
-- No hay vista en primera persona.
-- El chat de voz conecta de igual a igual sin servidor TURN: en algunas redes muy cerradas no llega a conectar. Solo funciona en el juego publicado, no con `npm run dev`.
+- The Cloudflare free plan allows 100,000 requests per day, both to the Worker and to the Durable Objects, and it resets at 00:00 UTC. With WebSocket checks, each player uses about 400 per hour of play. If they run out on a given day, the game stops responding until the next day.
+- Accounts and rooms created on the Vercel deployment did not move to Cloudflare: you have to sign up again.
+- The whole game is in English.
+- The Assistant answers with rules, not with a language model.
+- Crewmates' movement is updated twice per second and smoothed on screen.
+- There is no first-person view.
+- Voice chat connects peer to peer without a TURN server: on some very locked-down networks it cannot connect. It only works in the published game, not with `npm run dev`.

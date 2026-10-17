@@ -38,6 +38,14 @@ async function captura(nombre) {
   n += 1
   const ruta = path.join(carpeta, `${String(n).padStart(2, '0')}-${nombre}.png`)
   await pagina.screenshot({ path: ruta })
+  // El juego está en inglés: se avisa de cualquier frase que parezca haber quedado en español.
+  const texto = await pagina.evaluate(() => document.body.innerText).catch(() => '')
+  const NOMBRES = /Joaqu[ií]n|Andr[ée]s|Tom[áa]s|Mat[ií]as|Sof[ií]a|Luc[ií]a|Ra[úu]l|Nicol[áa]s|Mart[ií]n|Bogot[áa]|Espa[ñn]ola|Ram[óo]n|Germ[áa]n|Jos[ée]|In[ée]s|Sebasti[áa]n|Ximena|Chaski|Wayra/g
+  const dudosas = texto
+    .split('\n')
+    .map((l) => l.replace(NOMBRES, ''))
+    .filter((l) => /[áéíóúñ¿¡]|\b(de la|del|los|las|para|que|con el|está|también|misión|tripulación)\b/i.test(l))
+  if (dudosas.length) console.log(`  posible español en ${nombre}: ${[...new Set(dudosas)].slice(0, 6).map((l) => l.slice(0, 90)).join(' || ')}`)
   return ruta
 }
 const ok = (cond, texto) => {

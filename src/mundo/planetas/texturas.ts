@@ -221,7 +221,7 @@ function cargarImagen(a: ArchivoReal, uso: UsoImagen): Promise<THREE.Texture> {
         })
       },
       undefined,
-      () => mal(new Error(`No se pudo cargar ${url}`)),
+      () => mal(new Error(`Could not load ${url}`)),
     )
   })
 }
@@ -243,11 +243,11 @@ export interface TexturasRealesRelieve {
   k: number
 }
 
-const sinImagenes = (cuerpo: string) => Promise.reject(new Error(`No hay imágenes reales de ${cuerpo}`))
+const sinImagenes = (cuerpo: string) => Promise.reject(new Error(`No real images of ${cuerpo}`))
 
 export function texturasRealesTierra(): Promise<TexturasRealesTierra> {
   const m = REALES.tierra
-  if (!m) return sinImagenes('la Tierra')
+  if (!m) return sinImagenes('Earth')
   return memo('real-tierra', async () => {
     const [dia, agua, noche, nubes] = await Promise.all([cargarImagen(m.dia, 'color'), cargarImagen(m.agua, 'gris'), cargarImagen(m.noche, 'gris'), cargarImagen(m.nubes, 'gris')])
     liberarProcedural(['tierra-alto', 'tierra-bajo'])
@@ -311,7 +311,7 @@ export function useTexturasGlobo<R, P>(
         (p) => {
           if (vivo && !llegoReal) setEstado((e) => (e.clave === clave ? { ...e, procedural: p } : e))
         },
-        (e) => console.warn('No se pudieron generar las texturas del planeta', e),
+        (e) => console.warn('Could not generate the planet textures', e),
       )
     }
     const reloj = setTimeout(pedirProcedural, espera)
@@ -343,7 +343,7 @@ export function usePromesa<T>(crear: () => Promise<T>, clave: string): T | null 
     let vivo = true
     crear().then(
       (v) => vivo && setValor({ clave, v }),
-      (e) => console.warn('No se pudieron generar las texturas del planeta', e),
+      (e) => console.warn('Could not generate the planet textures', e),
     )
     return () => {
       vivo = false

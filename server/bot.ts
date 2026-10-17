@@ -12,11 +12,11 @@ import { diasRestantes } from './sim/paso.js'
 /** Cómo va el huerto, almohadilla por almohadilla, y cuándo se cosecha. */
 function estadoHuerto(room: RoomState): string {
   const vivas = (room.huerto.almohadillas ?? []).filter((a) => !a.muerta)
-  if (!vivas.length) return 'establecido, pero no queda ninguna planta viva'
+  if (!vivas.length) return 'set up, but no plants are left alive'
   const c = cultivoDe(room)
   const falta = Math.max(0, Math.round((1 - Math.max(...vivas.map((a) => a.crecimiento))) * c.dias))
   const seca = Math.round(Math.min(...vivas.map((a) => a.humedad)))
-  return `${vivas.length} plantas de ${c.nombre.charAt(0).toLowerCase() + c.nombre.slice(1)}, cosecha en unos ${falta} días si se cuidan. La almohadilla más seca está al ${seca}% de humedad. Cosechas: ${room.huerto.cosechas}`
+  return `${vivas.length} ${c.nombre.charAt(0).toLowerCase() + c.nombre.slice(1)} plants, ready to harvest in about ${falta} days if you look after them. The driest pad is at ${seca}% moisture. Harvests: ${room.huerto.cosechas}`
 }
 
 const norm = (s: string) =>
@@ -25,11 +25,13 @@ const norm = (s: string) =>
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
 
-const dias = (d: number) => (d >= 999 ? 'de sobra' : `${Math.round(d)} días`)
+const dias = (d: number) => (d >= 999 ? 'more than enough days' : `${Math.round(d)} days`)
 const n1 = (v: number) => v.toFixed(1)
+const RACION_EN = { normal: 'Full', ahorro: 'Saver (80%)', estricto: 'Strict (60%)' } as const
+const PRIORIDAD_EN = { vida: 'protect the air', calor: 'protect the heat', ciencia: 'protect the garden' } as const
 
 function riesgos(room: RoomState): string {
-  return room.puntosCriticos.length ? `Puntos críticos ahora: ${room.puntosCriticos.join('; ')}.` : 'No detecto riesgos inmediatos.'
+  return room.puntosCriticos.length ? `Critical points right now: ${room.puntosCriticos.join('; ')}.` : 'I see no immediate risks.'
 }
 
 function porRol(room: RoomState, j: Player): string {
@@ -38,33 +40,33 @@ function porRol(room: RoomState, j: Player): string {
     case 'comandante': {
       const p = room.propuestas.filter((x) => x.estado === 'pendiente').length
       return p
-        ? `Tienes ${p} propuesta(s) esperando tu decisión. Lee la consecuencia antes de aprobar.`
-        : 'Controla la escala de tiempo: acelera cuando todo esté estable y baja la velocidad antes de una tarea delicada. Vigila los puntos críticos.'
+        ? `You have ${p} proposal${p === 1 ? '' : 's'} waiting for your decision. Read the consequence before you approve.`
+        : 'Control the time scale. Speed up when everything is stable and slow down before a delicate task. Watch the critical points.'
     }
     case 'piloto':
       return room.fase === 'transito'
-        ? 'Corrige la trayectoria en cuanto se pida: cuanto antes, menos propelente cuesta. Al llegar, propón el sitio de aterrizaje.'
+        ? 'Correct the trajectory as soon as it is requested. The sooner you do it, the less propellant it costs. When you arrive, propose the landing site.'
         : sup
-          ? 'Ayuda fuera: despliega equipos y limpia los paneles cuando acumulen polvo. Vigila el oxígeno del traje.'
-          : 'Prepárate para proponer el sitio de aterrizaje desde la órbita.'
+          ? 'Help outside. Deploy equipment and clean the panels when dust builds up. Watch your suit oxygen.'
+          : 'Get ready to propose the landing site from orbit.'
     case 'medico': {
       const peor = [...tripulacion(room)].sort((a, b) => a.vit.salud - b.vit.salud)[0]
-      return `Revisa los signos de cada integrante. ${peor && peor.vit.salud < 80 ? `${peor.nombre} tiene la salud en ${Math.round(peor.vit.salud)}: trátalo en la enfermería. ` : ''}El plan de ejercicio actual es de ${room.ajustes.ejercicio} h al día; en la ISS hacen ${C.EJERCICIO_ISS_H}.`
+      return `Check the vital signs of each crew member. ${peor && peor.vit.salud < 80 ? `${peor.nombre} has health at ${Math.round(peor.vit.salud)}. Treat them in the Medical Bay. ` : ''}The current exercise plan is ${room.ajustes.ejercicio} h per day. On the ISS they do ${C.EJERCICIO_ISS_H}.`
     }
     case 'logistica':
-      return `Compara cuántos días alcanza cada reserva con los ${Math.round(diasRestantes(room))} que faltan. Agua: ${dias(room.autonomia.agua)}. Aire: ${dias(room.autonomia.aire)}. Comida: ${dias(room.autonomia.comida)}. Si algo no alcanza, propón racionar.`
+      return `Compare how many days each supply lasts with the ${Math.round(diasRestantes(room))} days left. Water: ${dias(room.autonomia.agua)}. Air: ${dias(room.autonomia.aire)}. Food: ${dias(room.autonomia.comida)}. If something will not last, propose rationing.`
     case 'cientifico':
       return room.fase === 'base'
-        ? `Van ${room.mision.muestrasAnalizadas} de ${room.mision.muestrasObjetivo} muestras. Sal con el traje, recoge en los puntos marcados y analiza en el laboratorio.`
+        ? `${room.mision.muestrasAnalizadas} of ${room.mision.muestrasObjetivo} samples done. Suit up, collect at the marked sites and analyze them in the lab.`
         : room.cargamento.huerto > 0 && !room.huerto.establecido
-          ? `Puedes ir montando el huerto en el laboratorio durante el viaje. Va en ${room.huerto.progreso}%.`
-          : 'Prepara el plan de muestreo para cuando la base esté operativa.'
+          ? `You can start setting up the garden in the lab during the cruise. It is ${room.huerto.progreso}% done.`
+          : 'Prepare the sampling plan for when the base is up and running.'
     case 'sistemas': {
       const peor = [...room.sistemas].filter((s) => s.instalado).sort((a, b) => a.integridad - b.integridad)[0]
-      return `El equipo más gastado es ${nombreSistema(peor.id)} (${Math.round(peor.integridad)}%). Por debajo de ${UMBRAL_AVERIA}% deja de funcionar. Quedan ${room.rec.repuestos} kits; hay que ir hasta el equipo para repararlo.`
+      return `The most worn equipment is the ${nombreSistema(peor.id)} (${Math.round(peor.integridad)}%). Below ${UMBRAL_AVERIA}% it stops working. ${room.rec.repuestos} kits left. You have to go to the equipment to repair it.`
     }
     default:
-      return 'Elige un rol para recibir consejos.'
+      return 'Choose a role to get advice.'
   }
 }
 
@@ -78,7 +80,7 @@ export function responderBot(room: RoomState, autor: Player, pregunta: string): 
   const sup = enSuperficie(room)
   const n = Math.max(1, tripulacion(room).length)
 
-  if (room.fase === 'lobby') return 'Estamos en el lobby. Cuando todos elijan rol y traje, quien creó la sala puede iniciar la misión.'
+  if (room.fase === 'lobby') return 'We are in the lobby. When everyone has chosen a role and a suit, the host can start the mission.'
 
   if (room.fase === 'contexto') {
     const viaje = room.mision.diasTransito
@@ -89,85 +91,87 @@ export function responderBot(room: RoomState, autor: Player, pregunta: string): 
     const aguaDia = n * (3.2 * 0.07 + 0.84 * C.OGA_AGUA_POR_O2)
     const agua = (carga.agua * 100) / aguaDia
     const dosis = viaje * C.GCR_CRUCERO_MSV_DIA + estancia * C.GCR_SUPERFICIE_MSV_DIA
-    if (/radiac|dosis|blindaje/.test(t)) {
-      return `Solo por rayos cósmicos, cada tripulante recibirá unos ${Math.round(dosis)} mSv en ${Math.round(total)} días (${C.GCR_CRUCERO_MSV_DIA} mSv/día en el viaje y ${C.GCR_SUPERFICIE_MSV_DIA} en Marte). El límite de carrera de NASA es ${C.LIMITE_CARRERA_MSV} mSv. Las tormentas solares suman más: el refugio blindado es lo que las reduce.`
+    if (/radiac|dosis|blindaje|tormenta solar|radiation|dose|shield|cosmic|sievert|solar storm/.test(t)) {
+      return `From cosmic rays alone, each crew member will get about ${Math.round(dosis)} mSv in ${Math.round(total)} days (${C.GCR_CRUCERO_MSV_DIA} mSv per day during the cruise and ${C.GCR_SUPERFICIE_MSV_DIA} on Mars). The NASA career limit is ${C.LIMITE_CARRERA_MSV} mSv. Solar storms add more. The shielded shelter is what reduces them.`
     }
-    if (/energia|panel|bateria|reactor/.test(t)) {
-      return `De noche en Marte la base necesita unos 8 kW durante más de 12 horas: cerca de 100 kWh. Llevan ${carga.baterias} batería(s) de 100 kWh y ${carga.paneles} campo(s) solar(es) de 7 kW al mediodía. El reactor da 10 kW continuos y no le afecta el polvo.`
+    if (/energia|panel|bateria|reactor|energy|power|batter|solar/.test(t)) {
+      return `At night on Mars the base needs about 8 kW for more than 12 hours. That is close to 100 kWh. You are taking ${carga.baterias} batter${carga.baterias === 1 ? 'y' : 'ies'} of 100 kWh and ${carga.paneles} solar array${carga.paneles === 1 ? '' : 's'} of 7 kW at noon. The reactor gives a steady 10 kW and dust does not affect it.`
     }
-    return `Tripulación de ${n}, viaje de ${viaje} días más ${room.mision.solesObjetivo} soles: ${Math.round(total)} días en total. Con la carga actual la comida alcanza para ${Math.round(comida)} días y el agua para unos ${Math.round(agua)} (reciclando al 98% y fabricando el oxígeno con ella). Masa: ${room.masa.toFixed(1)} de ${room.capacidad.toFixed(1)} t${room.masa > room.capacidad ? ', excede el máximo' : ''}. Pregúntame por radiación o energía.`
+    return `Crew of ${n}, a ${viaje}-day cruise plus ${room.mision.solesObjetivo} sols: ${Math.round(total)} days in total. With the current cargo the food lasts ${Math.round(comida)} days and the water about ${Math.round(agua)} (recycling 98% and making oxygen from it). Mass: ${room.masa.toFixed(1)} of ${room.capacidad.toFixed(1)} t${room.masa > room.capacidad ? ', over the maximum' : ''}. Ask me about radiation or power.`
   }
 
-  if (room.fase === 'fin') return room.resultado?.motivo ?? 'La misión terminó.'
+  if (room.fase === 'fin') return room.resultado?.motivo ?? 'The mission is over.'
 
   // ---- Consultas durante la misión ----
-  if (/pulso|corazon|cardiac|latido/.test(t)) {
+  // Las preguntas pueden llegar en español o en inglés: cada regla reconoce palabras de ambos.
+  if (/pulso|corazon|cardiac|latido|pulse|heart|\bbpm\b/.test(t)) {
     const causas: string[] = []
-    if (autor.actividad === 'eva') causas.push('trabajas con el traje')
-    if (autor.actividad === 'ejercicio') causas.push('estás haciendo ejercicio')
-    if (room.vuelo.g > 1.5) causas.push(`soportas ${room.vuelo.g} g`)
-    if (v.spo2 < 94) causas.push('tu oxígeno en sangre está bajo')
-    if (c.ppCO2 > C.PPCO2_LIMITE_KPA) causas.push('hay CO2 alto en la cabina')
-    if (autor.deficitAgua > 0.5) causas.push('te falta agua')
-    if (v.fatiga > 70) causas.push('estás muy cansado')
-    return `Tu pulso es de ${Math.round(v.fc)} latidos por minuto y respiras ${Math.round(v.fr)} veces por minuto. Tu máximo teórico es ${Math.round(FC_MAXIMA)} (208 − 0.7 × edad). ${causas.length ? `Sube porque ${causas.join(', ')}.` : 'Está en un rango normal para lo que haces.'}`
+    if (autor.actividad === 'eva') causas.push('you are working in your suit')
+    if (autor.actividad === 'ejercicio') causas.push('you are exercising')
+    if (room.vuelo.g > 1.5) causas.push(`you are pulling ${room.vuelo.g} g`)
+    if (v.spo2 < 94) causas.push('your blood oxygen is low')
+    if (c.ppCO2 > C.PPCO2_LIMITE_KPA) causas.push('CO2 in the cabin is high')
+    if (autor.deficitAgua > 0.5) causas.push('you need water')
+    if (v.fatiga > 70) causas.push('you are very tired')
+    return `Your pulse is ${Math.round(v.fc)} beats per minute and you breathe ${Math.round(v.fr)} times per minute. Your theoretical maximum is ${Math.round(FC_MAXIMA)} (208 − 0.7 × age). ${causas.length ? `It is up because ${causas.join(', ')}.` : 'It is in a normal range for what you are doing.'}`
   }
-  if (/mi estado|como estoy|mis signos|mi salud|me siento|mi cuerpo/.test(t)) {
-    return `Salud ${Math.round(v.salud)}. Pulso ${Math.round(v.fc)}, respiración ${Math.round(v.fr)}, oxígeno en sangre ${Math.round(v.spo2)}%. Hidratación ${Math.round(v.hidratacion)}%, reservas de energía ${Math.round(v.reservas)}%, fatiga ${Math.round(v.fatiga)}%. Músculo y hueso al ${Math.round(v.condicion)}%. Dosis acumulada ${n1(v.dosis)} mSv de ${C.LIMITE_CARRERA_MSV}.${autor.dolencia ? ` Tienes ${autor.dolencia}: ve con el médico.` : ''}`
+  if (/mi estado|como estoy|mis signos|mi salud|me siento|mi cuerpo|how am i|how do i feel|my health|my vitals|my vital signs|my status|my body|my condition/.test(t)) {
+    return `Health ${Math.round(v.salud)}. Pulse ${Math.round(v.fc)}, breathing ${Math.round(v.fr)}, blood oxygen ${Math.round(v.spo2)}%. Hydration ${Math.round(v.hidratacion)}%, energy reserves ${Math.round(v.reservas)}%, fatigue ${Math.round(v.fatiga)}%. Muscle and bone at ${Math.round(v.condicion)}%. Total dose ${n1(v.dosis)} mSv of ${C.LIMITE_CARRERA_MSV}.${autor.dolencia ? ` You have ${autor.dolencia}. See the Flight Surgeon.` : ''}`
   }
-  if (/traje|eva|salir|exterior|esclusa/.test(t)) {
+  if (/traje|\beva\b|salir|exterior|esclusa|\bsuit|spacewalk|airlock|go outside|go out\b/.test(t)) {
     const o2 = Math.round((autor.trajeO2 / C.TRAJE_O2_KG) * 100)
-    return `Tu traje tiene ${o2}% de oxígeno y ${Math.round(autor.trajeBateria * 100)}% de batería. Lleno dura entre 7 y ${C.TRAJE_BATERIA_H} horas de trabajo. Funciona con oxígeno puro a ${C.TRAJE_PRESION_KPA} kPa. ${sup ? `Fuera hay ${a.tempExt} °C y ${a.presion} Pa, menos del 1% de la presión de la Tierra. Con alguien fuera la escala de tiempo no pasa de ×60.` : 'Solo se puede salir cuando la nave esté en Marte.'} La esclusa lo recarga al volver.`
+    return `Your suit has ${o2}% oxygen and ${Math.round(autor.trajeBateria * 100)}% battery. When full it lasts between 7 and ${C.TRAJE_BATERIA_H} hours of work. It runs on pure oxygen at ${C.TRAJE_PRESION_KPA} kPa. ${sup ? `Outside it is ${a.tempExt} °C and ${a.presion} Pa, less than 1% of the pressure on Earth. With someone outside, the time scale cannot go above ×60.` : 'You can only go outside once the ship is on Mars.'} The airlock refills it when you come back.`
   }
-  if (/co2|dioxido|depurador|lioh|hidroxido/.test(t)) {
+  if (/co2|dioxido|depurador|lioh|hidroxido|carbon dioxide|scrubber|lithium|hydroxide/.test(t)) {
     const mmHg = c.ppCO2 * 7.5
     const cdra = sis(room, 'cdra')
-    return `CO2 en cabina: ${n1(mmHg)} mmHg. El límite de NASA es 3; en el juego, por encima de 15 daña la salud. Depurador ${cdra.operativo ? `en marcha al ${Math.round(cdra.integridad)}%` : 'DETENIDO'}. La tripulación produce ${n1(n * 1.0)} kg de CO2 al día. Cartuchos de reserva: ${r.lioh} (cada uno absorbe ${C.LIOH_KG_CO2} kg).`
+    return `CO2 in the cabin: ${n1(mmHg)} mmHg. The NASA limit is 3. In the game, above 15 it harms your health. CO2 Scrubber ${cdra.operativo ? `running at ${Math.round(cdra.integridad)}%` : 'STOPPED'}. The crew makes ${n1(n * 1.0)} kg of CO2 per day. Spare cartridges: ${r.lioh} (each one absorbs ${C.LIOH_KG_CO2} kg).`
   }
-  if (/oxigeno|o2|aire|respir|asfix/.test(t)) {
+  if (/oxigeno|o2|aire|respir|asfix|oxygen|\bair\b|breath|suffocat|hypoxi/.test(t)) {
     const oga = sis(room, 'oga')
-    return `Oxígeno en cabina: ${n1(c.ppO2)} kPa (lo normal es ${C.PPO2_NOMINAL_KPA}; por debajo de ${C.PPO2_MINIMA_KPA} empieza la hipoxia). Tu sangre está al ${Math.round(v.spo2)}%. Generador ${oga.operativo ? `en marcha al ${Math.round(oga.integridad)}%` : 'detenido'}; tanques con ${Math.round(r.o2)} kg. La tripulación consume ${n1(n * 0.84)} kg al día. Alcanza para ${dias(room.autonomia.aire)}.`
+    return `Oxygen in the cabin: ${n1(c.ppO2)} kPa. Normal is ${C.PPO2_NOMINAL_KPA}, and below ${C.PPO2_MINIMA_KPA} hypoxia begins. Your blood is at ${Math.round(v.spo2)}%. Oxygen Generator ${oga.operativo ? `running at ${Math.round(oga.integridad)}%` : 'stopped'}. The tanks hold ${Math.round(r.o2)} kg. The crew uses ${n1(n * 0.84)} kg per day. It lasts ${dias(room.autonomia.aire)}.`
   }
-  if (/agua|hidrat|sed|recicl/.test(t)) {
+  if (/agua|hidrat|\bsed\b|recicl|water|hydrat|thirst|drink|recycl/.test(t)) {
     const wrs = sis(room, 'wrs')
-    return `Agua potable: ${Math.round(r.agua)} kg, más ${Math.round(r.aguaResidual)} kg usados esperando reciclaje. Reciclador ${wrs.operativo ? `en marcha: recupera el ${Math.round((0.9 + (C.WRS_EFICIENCIA - 0.9) * rendimiento(wrs.integridad)) * 100)}%` : 'DETENIDO: se pierde toda el agua usada'}. Cada persona usa unos 3.2 kg al día y el generador de oxígeno gasta ${C.OGA_AGUA_POR_O2} kg por kg de oxígeno. Alcanza para ${dias(room.autonomia.agua)}; faltan ${Math.round(diasRestantes(room))} días de misión.`
+    return `Drinking water: ${Math.round(r.agua)} kg, plus ${Math.round(r.aguaResidual)} kg of used water waiting to be recycled. Water Recycler ${wrs.operativo ? `running: it recovers ${Math.round((0.9 + (C.WRS_EFICIENCIA - 0.9) * rendimiento(wrs.integridad)) * 100)}%` : 'STOPPED: all used water is lost'}. Each person uses about 3.2 kg per day, and the Oxygen Generator uses ${C.OGA_AGUA_POR_O2} kg of water per kg of oxygen. It lasts ${dias(room.autonomia.agua)}. There are ${Math.round(diasRestantes(room))} mission days left.`
   }
-  if (/comida|aliment|racion|hambre|huerto|cosecha/.test(t)) {
+  if (/comida|aliment|racion|hambre|huerto|cosecha|food|\beat|meal|ration|hungry|hunger|garden|harvest|crops?\b|lettuce/.test(t)) {
     const h = room.huerto
-    return `Alimentos: ${Math.round(r.comida)} kg. Ración ${room.ajustes.racionComida}: ${n1(n * C.COMIDA_KG_DIA * { normal: 1, ahorro: 0.8, estricto: 0.6 }[room.ajustes.racionComida])} kg al día. Alcanza para ${dias(room.autonomia.comida)}; faltan ${Math.round(diasRestantes(room))}. Tus reservas están al ${Math.round(v.reservas)}%. Huerto: ${h.establecido ? estadoHuerto(room) : room.cargamento.huerto ? `${h.progreso}% montado` : 'no trajeron el kit'}.`
+    return `Food: ${Math.round(r.comida)} kg. ${RACION_EN[room.ajustes.racionComida]} ration: ${n1(n * C.COMIDA_KG_DIA * { normal: 1, ahorro: 0.8, estricto: 0.6 }[room.ajustes.racionComida])} kg per day. It lasts ${dias(room.autonomia.comida)}. There are ${Math.round(diasRestantes(room))} days left. Your reserves are at ${Math.round(v.reservas)}%. Garden: ${h.establecido ? estadoHuerto(room) : room.cargamento.huerto ? `${h.progreso}% set up` : 'the crew did not bring the kit'}.`
   }
-  if (/energia|bateria|panel|solar|reactor|electric|luz/.test(t)) {
-    const pct = e.capacidad ? Math.round((e.bateria / e.capacidad) * 100) : 0
-    return `Generación ${n1(e.generacion)} kW, consumo ${n1(e.consumo)} kW, baterías al ${pct}% (${Math.round(e.bateria)} de ${e.capacidad} kWh). ${sup ? `Son las ${formatoHora(a.hora)}; opacidad del polvo ${a.tau}; polvo sobre los paneles −${Math.round(e.polvo * 100)}%.` : 'En el espacio los paneles reciben luz todo el tiempo.'} ${e.cortes.length ? `Sin energía: ${e.cortes.map((id) => nombreSistema(id)).join(', ')}.` : ''} Prioridad si falta energía: ${room.ajustes.prioridad}.`
-  }
-  if (/radiac|dosis|tormenta solar|refugio|blindaje|fulgur|particul/.test(t)) {
+  // La radiación va antes que la energía para que "tormenta solar" o "solar storm" no caigan en la regla de los paneles.
+  if (/radiac|dosis|tormenta solar|refugio|blindaje|fulgur|particul|radiation|dose|solar storm|shelter|shield|flare|particle|cosmic|sievert|msv/.test(t)) {
     const cabina = tasaDeDosis(room, 'nave', false)
     const refugio = tasaDeDosis(room, 'nave', true)
-    return `Ahora recibes ${n1(v.dosisTasa)} mSv por día y llevas ${n1(v.dosis)} mSv; el límite de carrera de NASA es ${C.LIMITE_CARRERA_MSV}. En la cabina son ${n1(cabina)} mSv/día y en el refugio ${n1(refugio)}. ${a.tormentaSolar ? `Hay una tormenta solar activa (la del ${a.tormentaSolar.fecha}).` : 'No hay tormenta solar.'} El refugio tiene ${room.blindaje} capa(s) de blindaje. Los rayos cósmicos casi no se frenan; las partículas del Sol sí.`
+    return `Right now you get ${n1(v.dosisTasa)} mSv per day and you have ${n1(v.dosis)} mSv in total. The NASA career limit is ${C.LIMITE_CARRERA_MSV}. In the cabin it is ${n1(cabina)} mSv per day and in the Storm Shelter ${n1(refugio)}. ${a.tormentaSolar ? `A solar storm is active (the one from ${a.tormentaSolar.fecha}).` : 'There is no solar storm.'} The shelter has ${room.blindaje} layer${room.blindaje === 1 ? '' : 's'} of shielding. Cosmic rays are hard to stop. Particles from the Sun are not.`
   }
-  if (/clima|temperatura|frio|calor|polvo|viento|presion|tiempo hace|afuera/.test(t)) {
-    if (!sup) return `Estamos en el espacio: fuera no hay aire. La cabina está a ${n1(c.temp)} °C. Llegan ${a.flujoSolar} W/m² de luz solar; en la órbita de la Tierra son ${C.IRRADIANCIA_TIERRA} y en la de Marte ${C.IRRADIANCIA_MARTE}.`
-    return `Sol ${a.sol}, ${formatoHora(a.hora)} hora local. Fuera hay ${a.tempExt} °C y ${a.presion} Pa. Son los datos que midió Curiosity en su sol ${a.solCuriosity}${room.sitio !== 'gale' ? ', con un ajuste estimado para este sitio' : ''}. Opacidad del polvo ${a.tau}${a.tormentaPolvo ? `, hay tormenta de polvo para ${a.polvoSoles} soles más` : ''}. La cabina está a ${n1(c.temp)} °C.`
+  if (/energia|bateria|panel|solar|reactor|electric|luz|energy|power|batter|\blight|\bkw/.test(t)) {
+    const pct = e.capacidad ? Math.round((e.bateria / e.capacidad) * 100) : 0
+    return `Generation ${n1(e.generacion)} kW, use ${n1(e.consumo)} kW, batteries at ${pct}% (${Math.round(e.bateria)} of ${e.capacidad} kWh). ${sup ? `It is ${formatoHora(a.hora)}. Dust opacity ${a.tau}. Dust on the panels −${Math.round(e.polvo * 100)}%.` : 'In space the panels get light all the time.'} ${e.cortes.length ? `No power: ${e.cortes.map((id) => nombreSistema(id)).join(', ')}.` : ''} Priority if power runs short: ${PRIORIDAD_EN[room.ajustes.prioridad]}.`
   }
-  if (/equipo|reparar|averia|mantenim|integridad|repuesto|sistema/.test(t)) {
-    const lista = room.sistemas.filter((s) => s.instalado).map((s) => `${nombreSistema(s.id)} ${Math.round(s.integridad)}%${s.integridad <= UMBRAL_AVERIA ? ' (averiado)' : !s.activo ? ' (apagado)' : ''}`)
-    return `Equipos: ${lista.join(', ')}. Repuestos: ${r.repuestos} kits. Una reparación sube 45 puntos y usa 1 kit, o 2 si el equipo está por debajo de 30%. Por debajo de ${UMBRAL_AVERIA}% el equipo se detiene.`
+  if (/clima|temperatura|frio|calor|polvo|viento|presion|tiempo hace|afuera|weather|temperature|\bcold\b|\bhot\b|heat|dust|wind|pressure|outside|climate/.test(t)) {
+    if (!sup) return `We are in space, so there is no air outside. The cabin is at ${n1(c.temp)} °C. Sunlight arrives at ${a.flujoSolar} W/m². At the orbit of Earth it is ${C.IRRADIANCIA_TIERRA} and at the orbit of Mars ${C.IRRADIANCIA_MARTE}.`
+    return `Sol ${a.sol}, ${formatoHora(a.hora)} local time. Outside it is ${a.tempExt} °C and ${a.presion} Pa. These are the values Curiosity measured on its sol ${a.solCuriosity}${room.sitio !== 'gale' ? ', with an estimated adjustment for this site' : ''}. Dust opacity ${a.tau}${a.tormentaPolvo ? `, with a dust storm for ${a.polvoSoles} more sols` : ''}. The cabin is at ${n1(c.temp)} °C.`
   }
-  if (/escala|tiempo|acelera|rapido|lento|pausa|cuanto falta|reloj/.test(t)) {
-    return `La misión corre a ×${room.escala}: cada segundo real son ${room.escala >= 3600 ? `${room.escala / 3600} hora(s)` : room.escala >= 60 ? `${room.escala / 60} minuto(s)` : `${room.escala} segundo(s)`} de misión. Tiempo de misión: ${formatoMET(room.t)}. La escala la fija el comandante; baja sola a ×60 si hay una emergencia o alguien está fuera. Faltan ${Math.round(diasRestantes(room))} días de misión.`
+  if (/equipo|reparar|averia|mantenim|integridad|repuesto|sistema|equipment|repair|broken|\bfix|maintenance|integrity|spare|system|machine/.test(t)) {
+    const lista = room.sistemas.filter((s) => s.instalado).map((s) => `${nombreSistema(s.id)} ${Math.round(s.integridad)}%${s.integridad <= UMBRAL_AVERIA ? ' (broken)' : !s.activo ? ' (off)' : ''}`)
+    return `Equipment: ${lista.join(', ')}. Spare parts: ${r.repuestos} kits. A repair adds 45 points and uses 1 kit, or 2 if the equipment is below 30%. Below ${UMBRAL_AVERIA}% the equipment stops.`
   }
-  if (/viaje|distancia|tierra|marte|llegar|trayect|senal|comunic/.test(t) && !sup) {
+  if (/escala|tiempo|acelera|rapido|lento|pausa|cuanto falta|reloj|time scale|timescale|\btime\b|speed|faster|slower|accelerat|pause|how long|clock/.test(t)) {
+    return `The mission runs at ×${room.escala}. Each real second is ${room.escala >= 3600 ? `${room.escala / 3600} hour${room.escala === 3600 ? '' : 's'}` : room.escala >= 60 ? `${room.escala / 60} minute${room.escala === 60 ? '' : 's'}` : `${room.escala} second${room.escala === 1 ? '' : 's'}`} of mission time. Mission time: ${formatoMET(room.t)}. The Mission Commander sets the time scale. It drops to ×60 on its own if there is an emergency or someone is outside. There are ${Math.round(diasRestantes(room))} mission days left.`
+  }
+  if (/viaje|distancia|tierra|marte|llegar|trayect|senal|comunic|\btrip|distance|earth|mars|arriv|trajector|signal|communicat|journey|travel|delay/.test(t) && !sup) {
     const f = room.vuelo
-    return `Vamos por el ${Math.round(f.progreso * 100)}% del viaje de ${room.mision.diasTransito} días. La Tierra está a ${f.distTierra} millones de km y Marte a ${f.distMarte}. Una señal tarda ${Math.round(f.retardo / 60)} min ${f.retardo % 60} s en llegar a la Tierra, por eso las decisiones urgentes son de la tripulación. Margen de propelente: ${Math.round(r.propelente)}%.`
+    return `We are ${Math.round(f.progreso * 100)}% of the way through the ${room.mision.diasTransito}-day cruise. Earth is ${f.distTierra} million km away and Mars is ${f.distMarte} million km away. A signal takes ${Math.round(f.retardo / 60)} min ${f.retardo % 60} s to reach Earth, so urgent decisions are up to the crew. Propellant margin: ${Math.round(r.propelente)}%.`
   }
-  if (/objetivo|mision|muestra|ganar|ciencia|meta/.test(t)) {
-    return `${room.mision.objetivo} ${sup ? `Vamos en el sol ${a.sol} de ${room.mision.solesObjetivo}, en ${SITE_BY_ID[room.sitio ?? 'gale'].nombre}. ` : ''}Muestras analizadas: ${room.mision.muestrasAnalizadas} de ${room.mision.muestrasObjetivo}. Perfil: ${PERFIL_BY_ID[room.perfil].nombre}. ${riesgos(room)}`
+  if (/objetivo|mision|muestra|ganar|ciencia|meta|objective|goal|mission|sample|\bwin|science/.test(t)) {
+    return `${room.mision.objetivo} ${sup ? `We are on sol ${a.sol} of ${room.mision.solesObjetivo}, at ${SITE_BY_ID[room.sitio ?? 'gale'].nombre}. ` : ''}Samples analyzed: ${room.mision.muestrasAnalizadas} of ${room.mision.muestrasObjetivo}. Profile: ${PERFIL_BY_ID[room.perfil].nombre}. ${riesgos(room)}`
   }
-  if (/que hago|que debo|recomiend|consejo|ayuda|sugerenc|mi rol|que sigue/.test(t)) {
-    return `Como ${autor.rol ? ROLE_BY_ID[autor.rol].nombre : 'tripulante'}: ${porRol(room, autor)} ${riesgos(room)}`
+  if (/que hago|que debo|recomiend|consejo|ayuda|sugerenc|mi rol|que sigue|what should i|what do i do|what now|what next|next step|advice|advise|recommend|help|suggest|my role|\btips?\b/.test(t)) {
+    return `As ${autor.rol ? ROLE_BY_ID[autor.rol].nombre : 'a crew member'}: ${porRol(room, autor)} ${riesgos(room)}`
   }
-  if (/estado|resumen|como vamos|situacion|todo bien/.test(t)) {
-    return `${sup ? `Sol ${a.sol}, ${formatoHora(a.hora)}` : formatoMET(room.t)}. Aire: ${n1(c.ppO2)} kPa de oxígeno y ${n1(c.ppCO2 * 7.5)} mmHg de CO2. Agua para ${dias(room.autonomia.agua)}, aire para ${dias(room.autonomia.aire)}, comida para ${dias(room.autonomia.comida)}. Energía ${n1(e.generacion)} de ${n1(e.consumo)} kW, baterías ${e.capacidad ? Math.round((e.bateria / e.capacidad) * 100) : 0}%. ${riesgos(room)}`
+  if (/estado|resumen|como vamos|situacion|todo bien|status|summary|overview|how are we|how is it going|how are things|everything ok|situation|report/.test(t)) {
+    return `${sup ? `Sol ${a.sol}, ${formatoHora(a.hora)}` : formatoMET(room.t)}. Air: ${n1(c.ppO2)} kPa of oxygen and ${n1(c.ppCO2 * 7.5)} mmHg of CO2. Water for ${dias(room.autonomia.agua)}, air for ${dias(room.autonomia.aire)}, food for ${dias(room.autonomia.comida)}. Power ${n1(e.generacion)} kW generated, ${n1(e.consumo)} kW used, batteries ${e.capacidad ? Math.round((e.bateria / e.capacidad) * 100) : 0}%. ${riesgos(room)}`
   }
-  return `Revisé el estado de la misión. ${riesgos(room)} Puedes preguntarme por tu pulso, tu estado, el traje, oxígeno, CO2, agua, comida, energía, radiación, clima, equipos, el viaje, la escala de tiempo, el objetivo o qué debe hacer tu rol.`
+  return `I checked the mission status. ${riesgos(room)} You can ask me about your pulse, how you are, your suit, oxygen, CO2, water, food, power, radiation, weather, equipment, the trip, the time scale, the objective, or what your role should do.`
 }

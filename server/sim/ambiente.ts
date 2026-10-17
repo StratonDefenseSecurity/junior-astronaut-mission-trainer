@@ -132,8 +132,8 @@ export function iniciarClimaEspacial(room: RoomState) {
 
 const fechaLegible = (iso: string) => {
   const [a, m, d] = iso.split('-')
-  const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
-  return `${Number(d)} de ${meses[Number(m) - 1]} de ${a}`
+  const meses = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+  return `${meses[Number(m) - 1]} ${Number(d)}, ${a}`
 }
 
 export interface EventoSolar {

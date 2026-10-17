@@ -25,7 +25,7 @@ import { Barra } from './comun'
 interface Aviso { tipo: 'ok' | 'warn' | 'bad'; texto: string }
 type Enviar = (valor: unknown) => Promise<void>
 
-const nombreDe = (sala: RoomState, id: string) => sala.jugadores.find((j) => j.id === id)?.nombre ?? (id ? 'alguien' : 'no hacía falta')
+const nombreDe = (sala: RoomState, id: string) => sala.jugadores.find((j) => j.id === id)?.nombre ?? (id ? 'someone' : 'not needed')
 
 // ---------- Mantener pulsado ----------
 
@@ -102,7 +102,7 @@ function Mantener({ paso, enviar, activo }: { paso: PasoMantener; enviar: Enviar
       </button>
       <div className="grow">
         <Barra valor={progreso * 100} tono="azul" />
-        <span className="mini muted">{progreso > 0 && progreso < 1 ? `${Math.ceil(paso.segundos * (1 - progreso))} s` : `${paso.segundos} s · también con la barra espaciadora`}</span>
+        <span className="mini muted">{progreso > 0 && progreso < 1 ? `${Math.ceil(paso.segundos * (1 - progreso))} s` : `${paso.segundos} s · or hold the space bar`}</span>
       </div>
     </div>
   )
@@ -121,13 +121,13 @@ function Secuencia({ paso, enviar, activo, avisar }: { paso: PasoSecuencia; envi
     const nuevo = [...orden, id]
     if (!prefijoValido(paso, nuevo)) {
       setErrores((e) => e + 1)
-      avisar({ tipo: 'bad', texto: `No en ese orden. ${paso.error}` })
+      avisar({ tipo: 'bad', texto: `Not in that order. ${paso.error}` })
       return
     }
     setOrden(nuevo)
     if (nuevo.length === paso.elementos.length) {
       void enviar({ orden: nuevo, errores }).then(() => setOrden([]))
-    } else avisar({ tipo: 'ok', texto: 'Bien. Sigue.' })
+    } else avisar({ tipo: 'ok', texto: 'Good. Keep going.' })
   }
   return (
     <div className="proc-secuencia">
@@ -140,7 +140,7 @@ function Secuencia({ paso, enviar, activo, avisar }: { paso: PasoSecuencia; envi
         )
       })}
       {orden.length > 0 && (
-        <button className="small plano" onClick={() => setOrden([])}>Empezar de nuevo</button>
+        <button className="small plano" onClick={() => setOrden([])}>Start over</button>
       )}
     </div>
   )
@@ -168,10 +168,10 @@ function Ajustar({ paso, enviar, activo }: { paso: PasoAjustar; enviar: Enviar; 
         <b className="mono">{v.toFixed(decimales)} {paso.unidad}</b>
       </div>
       <div className="row" style={{ gap: 6, marginTop: 6 }}>
-        <button className="small" disabled={!activo || v <= paso.min} onClick={() => setV((x) => Math.max(paso.min, +(x - paso.paso).toFixed(2)))}>Menos</button>
-        <button className="small" disabled={!activo || v >= paso.max} onClick={() => setV((x) => Math.min(paso.max, +(x + paso.paso).toFixed(2)))}>Más</button>
+        <button className="small" disabled={!activo || v <= paso.min} onClick={() => setV((x) => Math.max(paso.min, +(x - paso.paso).toFixed(2)))}>Less</button>
+        <button className="small" disabled={!activo || v >= paso.max} onClick={() => setV((x) => Math.min(paso.max, +(x + paso.paso).toFixed(2)))}>More</button>
         <span className="grow" />
-        <button className="primary small" disabled={!activo} onClick={() => void enviar(v)}>Confirmar</button>
+        <button className="primary small" disabled={!activo} onClick={() => void enviar(v)}>Confirm</button>
       </div>
     </div>
   )
@@ -248,9 +248,9 @@ function Comprobar({ sala, paso, enviar, activo }: { sala: RoomState; paso: Paso
       <Grafica l={l} visibles={visibles} />
       <p className="mini">{l.pregunta}</p>
       <div className="row" style={{ gap: 6 }}>
-        <button className="ok" disabled={!activo || !completa} onClick={() => void enviar('pasa')}>Pasa</button>
-        <button className="danger" disabled={!activo || !completa} onClick={() => void enviar('falla')}>Falla</button>
-        {!completa && <span className="mini muted">Registrando…</span>}
+        <button className="ok" disabled={!activo || !completa} onClick={() => void enviar('pasa')}>Pass</button>
+        <button className="danger" disabled={!activo || !completa} onClick={() => void enviar('falla')}>Fail</button>
+        {!completa && <span className="mini muted">Recording…</span>}
       </div>
     </div>
   )
@@ -275,11 +275,11 @@ function Interaccion(props: { sala: RoomState; paso: Paso; enviar: Enviar; activ
 }
 
 const TIPO: Record<Paso['tipo'], string> = {
-  mantener: 'Mantener pulsado',
-  secuencia: 'Tocar en orden',
-  ajustar: 'Ajustar',
-  elegir: 'Elegir',
-  comprobar: 'Leer el instrumento',
+  mantener: 'Hold',
+  secuencia: 'Sequence',
+  ajustar: 'Adjust',
+  elegir: 'Choose',
+  comprobar: 'Check',
 }
 
 function Tarjeta({ sala, yo, proc, paso, remoto, alTerminar }: { sala: RoomState; yo: Player; proc: Procedimiento; paso: number; remoto: boolean; alTerminar: (a: Aviso) => void }) {
@@ -289,8 +289,8 @@ function Tarjeta({ sala, yo, proc, paso, remoto, alTerminar }: { sala: RoomState
   const def = proc.pasos[paso]
   const tarea = proc.tarea ? TAREAS_ENSAMBLAJE.find((t) => t.id === proc.tarea) : null
   const mio = puede(sala, yo, def.roles)
-  const impedido = yo.incapacitado > 0 ? 'Estás fuera de servicio.' : yo.enRefugio ? 'Estás en el refugio.' : null
-  const motivo = remoto ? 'Hay que ir hasta la estación para hacerlo.' : impedido ? impedido : yo.zona !== def.zona ? (def.zona === 'exterior' ? 'Este paso se hace fuera, con el traje.' : 'Este paso se hace dentro del hábitat.') : null
+  const impedido = yo.incapacitado > 0 ? 'You are out of action.' : yo.enRefugio ? 'You are in the shelter.' : null
+  const motivo = remoto ? 'You have to go to the station to do this.' : impedido ? impedido : yo.zona !== def.zona ? (def.zona === 'exterior' ? 'This step is done outside, in the suit.' : 'This step is done inside the habitat.') : null
   const activo = mio && !motivo && !ocupado
 
   const enviar: Enviar = async (valor) => {
@@ -303,21 +303,21 @@ function Tarjeta({ sala, yo, proc, paso, remoto, alTerminar }: { sala: RoomState
     setOcupado(true)
     const r = await api.procedimiento(proc.id, paso, valor)
     setOcupado(false)
-    if (!r) setAviso({ tipo: 'bad', texto: 'Sin conexión con el servidor.' })
+    if (!r) setAviso({ tipo: 'bad', texto: 'No connection to the server.' })
     else if (r.error) setAviso({ tipo: 'bad', texto: r.error })
     else {
       const a: Aviso = { tipo: ev.calidad >= 0.8 ? 'ok' : ev.calidad >= 0.5 ? 'warn' : 'bad', texto: ev.mensaje }
       setAviso(a)
-      if (paso === proc.pasos.length - 1) alTerminar({ ...a, texto: `${proc.titulo}: listo. ${ev.mensaje}` })
+      if (paso === proc.pasos.length - 1) alTerminar({ ...a, texto: `${proc.titulo}: done. ${ev.mensaje}` })
     }
   }
 
   return (
     <div className="tarea proc">
-      <strong>{tarea ? `Montaje de la base · paso ${tarea.paso}` : proc.recurrente ? 'Cuidado del huerto' : 'Procedimiento'}</strong>
+      <strong>{tarea ? `Base Assembly · step ${tarea.paso}` : proc.recurrente ? 'Garden care' : 'Procedure'}</strong>
       <p>{proc.titulo}</p>
       <details className="proc-real">
-        <summary>Cómo se hace en la vida real</summary>
+        <summary>How it is done in real life</summary>
         <p className="mini">{proc.intro}</p>
       </details>
       <ol className="proc-pasos">
@@ -341,14 +341,14 @@ function Tarjeta({ sala, yo, proc, paso, remoto, alTerminar }: { sala: RoomState
           <span className="tag">{TIPO[def.tipo]}</span>
         </div>
         <p className="mini">{textoDe(sala, def.instruccion)}</p>
-        <p className="mini muted">Por qué así: {def.porque}</p>
+        <p className="mini muted">Why: {def.porque}</p>
         {mio ? (
           <>
             <Interaccion key={`${proc.id}:${paso}`} sala={sala} paso={def} enviar={enviar} activo={activo} avisar={setAviso} />
             {motivo && <span className="mini warn">{motivo}</span>}
           </>
         ) : (
-          <span className="mini muted">Lo hace: {def.roles.map((r) => ROLE_BY_ID[r].nombre).join(' o ')}</span>
+          <span className="mini muted">Done by: {def.roles.map((r) => ROLE_BY_ID[r].nombre).join(' or ')}</span>
         )}
         {aviso && <p className={`mini ${aviso.tipo}`}>{aviso.texto}</p>}
       </div>
@@ -368,9 +368,9 @@ export function Procedimientos({ sala, yo, estacion, remoto }: { sala: RoomState
         const media = e?.calidad.length ? e.calidad.reduce((a, b) => a + b, 0) / e.calidad.length : null
         return (
           <div key={t.id} className="tarea hecha">
-            <strong>Montaje de la base · paso {t.paso}</strong>
+            <strong>Base Assembly · step {t.paso}</strong>
             <p>{t.titulo}</p>
-            <span className="mini ok">Hecha por {nombreDe(sala, sala.ensamblaje.hechas[t.id])}{media !== null ? `, al ${Math.round(media * 100)}% de como lo haría un experto` : ''}.</span>
+            <span className="mini ok">Done by {nombreDe(sala, sala.ensamblaje.hechas[t.id])}{media !== null ? `, at ${Math.round(media * 100)}% of expert level` : ''}.</span>
           </div>
         )
       })}

@@ -1,58 +1,58 @@
-# Cielo real
+# Real sky
 
-El cielo que ve la tripulación por la ventana: estrellas, Vía Láctea, constelaciones, Sol,
-planetas y Luna en sus posiciones verdaderas para la fecha de la misión, vistos desde donde está
-el observador (la Tierra, la nave en ruta o la superficie de Marte).
+The sky the crew sees through the window: stars, the Milky Way, constellations, the Sun,
+planets and the Moon in their true positions for the mission date, seen from where the
+observer is (Earth, the ship on its way or the surface of Mars).
 
-## Archivos
+## Files
 
-| Archivo | Qué hace |
+| File | What it does |
 | --- | --- |
-| `marco.ts` | Convención de ejes: EQJ (ecuatorial J2000) a la escena. Y de la escena = norte celeste. |
-| `datos.ts` | **Generado** por `node scripts/datos-cielo.mjs` (no editar): 5044 estrellas hasta magnitud 6, ~30 nombres en español, las 88 constelaciones y la Vía Láctea. |
-| `astro.ts` | Posiciones (astronomy-engine), brillo de planetas desde cualquier punto, trayectoria de la nave (Lambert), ventanas de lanzamiento y orientación en la superficie de la Tierra o Marte. |
-| `color.ts` | Color de cada estrella desde su índice B-V. |
-| `orientacion.ts` | `orientacionHacia`: gira el cielo para que una dirección real quede frente a la ventana. |
-| `Cielo.tsx` | Componente de React Three Fiber que dibuja todo. |
+| `marco.ts` | Axis convention: EQJ (J2000 equatorial) to the scene. Scene Y = celestial north. |
+| `datos.ts` | **Generated** by `node scripts/datos-cielo.mjs` (do not edit): 5044 stars down to magnitude 6, proper names for ~30 of them, the 88 constellations and the Milky Way. |
+| `astro.ts` | Positions (astronomy-engine), planet brightness from any point, the ship's trajectory (Lambert), launch windows and orientation on the surface of Earth or Mars. |
+| `color.ts` | The color of each star from its B-V index. |
+| `orientacion.ts` | `orientacionHacia`: turns the sky so that a real direction faces the window. |
+| `Cielo.tsx` | React Three Fiber component that draws everything. |
 
-Pruebas: `npx tsx scripts/probar-cielo.ts`.
+Tests: `npx tsx scripts/probar-cielo.ts`.
 
-## Uso
+## Usage
 
 ```tsx
 <Cielo fecha={fecha} observador={posicionNave(salida, llegada, f)} etiquetas ocultarCuerpos={['Tierra']} />
-// En Marte, de noche:
+// On Mars, at night:
 <Cielo fecha={fecha} observador={vectorHelio('Marte', fecha)} brillo={0.8} atmosfera centelleo={0.05}
        orientacion={orientacionSuperficie('Marte', fecha, 18.44, 77.45)} />
 ```
 
-El cielo se dibuja primero y sin escribir profundidad: las paredes lo tapan y por la ventana se ve.
-El fondo detrás debe ser negro (o usar `fondoNegro`). Cuando la Tierra, Marte o la Luna están
-cerca, la escena dibuja su globo (con `cuerposVisibles` sabe dirección y tamaño) y los oculta con
-`ocultarCuerpos`; los que pasan de 2° de diámetro aparente no se dibujan como punto.
+The sky is drawn first and without writing depth: the walls cover it and it shows through the window.
+The background behind it must be black (or use `fondoNegro`). When Earth, Mars or the Moon are
+close, the scene draws their globe (`cuerposVisibles` gives it the direction and size) and hides them with
+`ocultarCuerpos`. Bodies larger than 2° in apparent diameter are not drawn as a point.
 
-## Fuentes
+## Sources
 
-- Estrellas: XHIP, An Extended Hipparcos Compilation, Anderson y Francis (2012), VizieR V/137D,
-  https://cdsarc.cds.unistra.fr/viz-bin/cat/V/137D , a través de d3-celestial (Olaf Frohn,
+- Stars: XHIP, An Extended Hipparcos Compilation, Anderson and Francis (2012), VizieR V/137D,
+  https://cdsarc.cds.unistra.fr/viz-bin/cat/V/137D , through d3-celestial (Olaf Frohn,
   BSD-3-Clause), https://github.com/ofrohn/d3-celestial
-- Constelaciones (figuras y nombres): IAU, https://www.iau.org/public/themes/constellations/ , vía d3-celestial.
-- Vía Láctea: Milky Way Outline Catalog, Jose R. Vieira, http://www.skymap.com/milkyway_cat.htm , vía d3-celestial.
-- Posiciones del Sol, planetas y Luna, ejes de rotación: astronomy-engine (Don Cross, MIT),
-  validado contra JPL Horizons, https://github.com/cosinekitty/astronomy
-- Brillo de los planetas: Mallama y Hilton (2018), Astronomy and Computing 25, 10-24,
+- Constellations (figures and names): IAU, https://www.iau.org/public/themes/constellations/ , via d3-celestial.
+- Milky Way: Milky Way Outline Catalog, Jose R. Vieira, http://www.skymap.com/milkyway_cat.htm , via d3-celestial.
+- Positions of the Sun, planets and Moon, rotation axes: astronomy-engine (Don Cross, MIT),
+  validated against JPL Horizons, https://github.com/cosinekitty/astronomy
+- Planet brightness: Mallama and Hilton (2018), Astronomy and Computing 25, 10-24,
   https://arxiv.org/abs/1808.01973
-- Radios: NASA Planetary Fact Sheets, https://nssdc.gsfc.nasa.gov/planetary/factsheet/
-- Color: Ballesteros (2012), EPL 97, 34008, https://arxiv.org/abs/1201.1809 ; Wyman, Sloan y
+- Radii: NASA Planetary Fact Sheets, https://nssdc.gsfc.nasa.gov/planetary/factsheet/
+- Color: Ballesteros (2012), EPL 97, 34008, https://arxiv.org/abs/1201.1809 ; Wyman, Sloan and
   Shirley (2013), JCGT 2(2), https://jcgt.org/published/0002/02/01/
-- Órbitas medias para la fase de Hohmann: Standish, JPL, https://ssd.jpl.nasa.gov/planets/approx_pos.html
-- Lambert y Kepler: H. Curtis, *Orbital Mechanics for Engineering Students*, algoritmos 3.3, 3.4 y 5.2.
+- Mean orbits for the Hohmann phase: Standish, JPL, https://ssd.jpl.nasa.gov/planets/approx_pos.html
+- Lambert and Kepler: H. Curtis, *Orbital Mechanics for Engineering Students*, algorithms 3.3, 3.4 and 5.2.
 
-## Aproximaciones declaradas
+## Stated approximations
 
-- Estrellas en J2000, sin movimiento propio ni paralaje (desde Marte cambian menos de 1").
-- Planetas sin corrección por tiempo de luz ni aberración.
-- La nave sigue un arco kepleriano alrededor del Sol, sin la gravedad de la Tierra ni de Marte
-  cerca de los extremos ni maniobras de corrección.
-- Las ventanas usan la fase de Hohmann de órbitas circulares (44.35°); una misión real afina la fecha.
-- Tintes de los planetas y tamaño visual de los puntos: decisiones de presentación, no medidas.
+- Stars at J2000, with no proper motion or parallax (from Mars they shift less than 1").
+- Planets with no light-time or aberration correction.
+- The ship follows a Keplerian arc around the Sun, without the gravity of Earth or Mars
+  near the ends and without correction maneuvers.
+- The windows use the Hohmann phase for circular orbits (44.35°). A real mission fine-tunes the date.
+- Planet tints and the visual size of the points are presentation choices, not measurements.

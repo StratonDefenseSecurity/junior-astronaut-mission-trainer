@@ -47,16 +47,16 @@ export const LUGARES_MARTE = {
   acidalia: { nombre: 'Acidalia Planitia', lat: 46.66, lon: lonEste(338.0), km: 2300, fuente: 'iauAcidalia' },
   utopia: { nombre: 'Utopia Planitia', lat: 49.67, lon: 118.0, km: 3200, fuente: 'iauUtopia' },
   meridiani: { nombre: 'Meridiani Planum', lat: 0.2, lon: lonEste(357.5), km: 1100, fuente: 'iauMeridiani' },
-  gale: { nombre: 'Cráter Gale', lat: -5.44, lon: 137.7, km: 155.3, fuente: 'iauGale' },
-  jezero: { nombre: 'Cráter Jezero', lat: 18.41, lon: 77.69, km: 47.52, fuente: 'iauJezero' },
+  gale: { nombre: 'Gale Crater', lat: -5.44, lon: 137.7, km: 155.3, fuente: 'iauGale' },
+  jezero: { nombre: 'Jezero Crater', lat: 18.41, lon: 77.69, km: 47.52, fuente: 'iauJezero' },
   // Punto de aterrizaje de Curiosity (Bradbury Landing): 4.5895°S, 137.4417°E.
-  curiosity: { nombre: 'Curiosity (aterrizaje)', lat: -4.5895, lon: 137.4417, km: null, fuente: 'pdsMsl' },
+  curiosity: { nombre: 'Curiosity landing site', lat: -4.5895, lon: 137.4417, km: null, fuente: 'pdsMsl' },
   // Punto de aterrizaje de Perseverance (Octavia E. Butler Landing): 18.44°N, 77.45°E.
-  perseverance: { nombre: 'Perseverance (aterrizaje)', lat: 18.44, lon: 77.45, km: null, fuente: 'gissLanders' },
+  perseverance: { nombre: 'Perseverance landing site', lat: 18.44, lon: 77.45, km: null, fuente: 'gissLanders' },
   // Hielo enterrado detectado con el radar SHARAD (Stuurman et al. 2016): entre 39° y 49° N (JPL)
   // en el borde occidental de Utopia, 70°-90° E (según Xu et al. 2025, que cita ese trabajo).
   // El punto es el centro de ese recuadro, no un sitio puntual.
-  hieloUtopia: { nombre: 'Hielo enterrado (Utopia)', lat: 44, lon: 80, km: null, fuente: 'jplHieloUtopia' },
+  hieloUtopia: { nombre: 'Buried ice, Utopia', lat: 44, lon: 80, km: null, fuente: 'jplHieloUtopia' },
 } satisfies Record<string, Lugar>
 
 /** Región del hielo enterrado de Utopia (recuadro, grados). */
@@ -127,22 +127,22 @@ export const LUGARES_LUNA = {
   ingenii: { nombre: 'Mare Ingenii', lat: -33.25, lon: 164.83, km: 282.2, fuente: 'iauMaresLuna' },
   humboldtianum: { nombre: 'Mare Humboldtianum', lat: 56.92, lon: 81.54, km: 230.78, fuente: 'iauMaresLuna' },
   // Cráter Tycho: ~85 km; sus rayos llegan a ~1500 km.
-  tycho: { nombre: 'Cráter Tycho', lat: -43.31, lon: -11.36, km: 85, fuente: 'iauTycho' },
+  tycho: { nombre: 'Tycho Crater', lat: -43.31, lon: -11.36, km: 85, fuente: 'iauTycho' },
 } satisfies Record<string, Lugar>
 
 // --------------------------------------------------------------------------------- fuentes
 
 export const FUENTES_PLANETAS = {
   naturalEarth: {
-    titulo: 'Natural Earth 4.1.0 (dominio público), vía el paquete world-atlas 2.0.2 (licencia ISC)',
+    titulo: 'Natural Earth 4.1.0 (public domain), via the world-atlas 2.0.2 package (ISC license)',
     url: 'https://www.naturalearthdata.com/about/terms-of-use/',
   },
-  worldAtlas: { titulo: 'world-atlas: TopoJSON precompilado de Natural Earth', url: 'https://github.com/topojson/world-atlas' },
+  worldAtlas: { titulo: 'world-atlas: prebuilt TopoJSON from Natural Earth', url: 'https://github.com/topojson/world-atlas' },
   iauRotacion: {
-    titulo: 'Report of the IAU Working Group on Cartographic Coordinates and Rotational Elements: 2015 (vía astronomy-engine RotationAxis)',
+    titulo: 'Report of the IAU Working Group on Cartographic Coordinates and Rotational Elements: 2015 (via astronomy-engine RotationAxis)',
     url: 'https://astropedia.astrogeology.usgs.gov/download/Docs/WGCCRE/WGCCRE2015reprint.pdf',
   },
-  astronomyEngine: { titulo: 'astronomy-engine (Don Cross, licencia MIT)', url: 'https://github.com/cosinekitty/astronomy' },
+  astronomyEngine: { titulo: 'astronomy-engine (Don Cross, MIT license)', url: 'https://github.com/cosinekitty/astronomy' },
   wikiLambayeque: { titulo: 'Wikipedia: Lambayeque, Peru', url: 'https://en.wikipedia.org/wiki/Lambayeque,_Peru' },
   wikiLima: { titulo: 'Wikipedia: Lima', url: 'https://en.wikipedia.org/wiki/Lima' },
   iauOlympus: { titulo: 'Gazetteer of Planetary Nomenclature (IAU/USGS): Olympus Mons', url: 'https://planetarynames.wr.usgs.gov/Feature/4453' },
@@ -161,21 +161,21 @@ export const FUENTES_PLANETAS = {
   iauJezero: { titulo: 'Gazetteer of Planetary Nomenclature (IAU/USGS): Jezero', url: 'https://planetarynames.wr.usgs.gov/Feature/14300' },
   iauAlbedo: {
     titulo:
-      'Gazetteer of Planetary Nomenclature (IAU/USGS), rasgos de albedo de Marte: Syrtis Major (5795), Mare Acidalium (3663), Mare Erythraeum (3672), Mare Cimmerium (3669), Mare Tyrrhenum (3692), Mare Sirenum (3688), Mare Serpentis (3687), Mare Chronium (3668), Sinus Meridiani (5568), Sinus Sabaeus (5570), Solis Lacus (5624)',
+      'Gazetteer of Planetary Nomenclature (IAU/USGS), Mars albedo features: Syrtis Major (5795), Mare Acidalium (3663), Mare Erythraeum (3672), Mare Cimmerium (3669), Mare Tyrrhenum (3692), Mare Sirenum (3688), Mare Serpentis (3687), Mare Chronium (3668), Sinus Meridiani (5568), Sinus Sabaeus (5570), Solis Lacus (5624)',
     url: 'https://planetarynames.wr.usgs.gov/Feature/5795',
   },
   wikiChasmata: {
-    titulo: 'Wikipedia: Ius, Melas, Coprates y Eos Chasma, Noctis Labyrinthus (fichas tomadas del Nomenclátor de la IAU)',
+    titulo: 'Wikipedia: Ius, Melas, Coprates and Eos Chasma, Noctis Labyrinthus (entries taken from the IAU Gazetteer)',
     url: 'https://en.wikipedia.org/wiki/Coprates_Chasma',
   },
   pdsMsl: {
-    titulo: 'NASA PDS / NAIF, catálogo de la misión MSL (Curiosity): aterrizaje en 4.5895° S, 137.4417° E',
+    titulo: 'NASA PDS / NAIF, MSL (Curiosity) mission catalog: landing at 4.5895° S, 137.4417° E',
     url: 'https://pds.nasa.gov/data/pds3/releases/latest/2026/202603-naif/msl/zzold/mission.cat',
   },
   gissLanders: { titulo: 'NASA GISS Mars24: Mars Lander Missions (Perseverance 18.44° N, 77.45° E)', url: 'https://www.giss.nasa.gov/tools/mars24/help/landers.html' },
   jplHieloUtopia: {
     titulo:
-      'NASA JPL (2016): Mars Ice Deposit Holds as Much Water as Lake Superior (39°-49° N); Stuurman et al. 2016, GRL 43, doi:10.1002/2016GL070138; longitud 70°-90° E según Xu et al. 2025, JGR Planets, doi:10.1029/2023JE008145',
+      'NASA JPL (2016): Mars Ice Deposit Holds as Much Water as Lake Superior (39°-49° N); Stuurman et al. 2016, GRL 43, doi:10.1002/2016GL070138; longitude 70°-90° E from Xu et al. 2025, JGR Planets, doi:10.1029/2023JE008145',
     url: 'https://www.jpl.nasa.gov/news/mars-ice-deposit-holds-as-much-water-as-lake-superior/',
   },
   casquetes: {
@@ -183,14 +183,14 @@ export const FUENTES_PLANETAS = {
     url: 'https://www.esa.int/Science_Exploration/Space_Science/Mars_Express/Mars_polar_cap_mystery_solved',
   },
   atardecerMarte: {
-    titulo: "NASA/JPL PIA19400: Sunset in Mars' Gale Crater (Curiosity, 2015): el cielo cerca del Sol se ve azul al atardecer",
+    titulo: "NASA/JPL PIA19400: Sunset in Mars' Gale Crater (Curiosity, 2015): the sky near the Sun looks blue at sunset",
     url: 'https://www.jpl.nasa.gov/images/pia19400-sunset-in-mars-gale-crater/',
   },
   iauMaresLuna: {
-    titulo: 'Gazetteer of Planetary Nomenclature (IAU/USGS), mares lunares (vía Wikipedia: List of maria on the Moon); p. ej. Mare Imbrium',
+    titulo: 'Gazetteer of Planetary Nomenclature (IAU/USGS), lunar maria (via Wikipedia: List of maria on the Moon), for example Mare Imbrium',
     url: 'https://planetarynames.wr.usgs.gov/Feature/3678',
   },
-  iauTycho: { titulo: 'Gazetteer of Planetary Nomenclature (IAU/USGS): Tycho (vía Wikipedia)', url: 'https://planetarynames.wr.usgs.gov/Feature/6163' },
+  iauTycho: { titulo: 'Gazetteer of Planetary Nomenclature (IAU/USGS): Tycho (via Wikipedia)', url: 'https://planetarynames.wr.usgs.gov/Feature/6163' },
 } as const
 
 export type ClaveFuente = keyof typeof FUENTES_PLANETAS

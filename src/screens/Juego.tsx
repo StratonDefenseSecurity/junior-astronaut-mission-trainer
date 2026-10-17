@@ -31,7 +31,7 @@ export function JuegoScreen() {
 function SinJugador() {
   return (
     <div className="center-screen">
-      <p className="muted">No formas parte de esta misión.</p>
+      <p className="muted">You are not part of this mission.</p>
     </div>
   )
 }

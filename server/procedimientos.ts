@@ -44,20 +44,22 @@ export interface Pendiente {
 }
 
 const r2 = (v: number) => Math.round(v * 100) / 100
+/** Nombre en inglés de cada orientación (los valores internos siguen en español). */
+const RUMBO: Record<string, string> = { norte: 'north', sur: 'south', este: 'east', oeste: 'west' }
 
 /** Por qué no se puede hacer ahora un procedimiento. */
 function noDisponible(room: RoomState, p: Procedimiento): string {
   if (p.tarea) {
     const t = TAREAS_ENSAMBLAJE.find((x) => x.id === p.tarea)!
-    if (room.fase !== 'ensamblaje') return 'No estamos montando la base.'
-    if (room.ensamblaje.hechas[t.id] || t.paso < room.ensamblaje.paso) return 'Esa tarea ya está hecha.'
-    return 'Aún no toca esa tarea.'
+    if (room.fase !== 'ensamblaje') return 'We are not building the base right now.'
+    if (room.ensamblaje.hechas[t.id] || t.paso < room.ensamblaje.paso) return 'That task is already done.'
+    return 'It is not time for that task yet.'
   }
   if (p.id === 'huerto') {
-    if (room.cargamento.huerto < 1) return 'No trajeron el kit de huerto.'
-    if (room.huerto.establecido) return 'El huerto ya está montado.'
+    if (room.cargamento.huerto < 1) return 'The crew did not bring the garden kit.'
+    if (room.huerto.establecido) return 'The garden is already set up.'
   }
-  return 'Ahora no hace falta.'
+  return 'That is not needed right now.'
 }
 
 /** Prepara lo que necesita un paso antes de hacerlo, como la lectura de un instrumento. */
@@ -88,13 +90,13 @@ function alHacerPaso(room: RoomState, p: Procedimiento, i: number, j: Player, va
   if (errores > 0 && (p.id === 'energia' || p.id === 'soporte')) {
     const s = sis(room, p.id === 'energia' ? 'energia' : 'oga')
     s.integridad = Math.max(20, s.integridad - 4 * errores)
-    log(room, p.id === 'energia' ? `Hubo picos de tensión al energizar fuera de orden: la planta de energía queda al ${Math.round(s.integridad)}%.` : `El generador de oxígeno arrancó sin agua: queda al ${Math.round(s.integridad)}%.`, 'alerta')
+    log(room, p.id === 'energia' ? `There were voltage spikes from powering up out of order. The Power Plant is now at ${Math.round(s.integridad)}%.` : `The Oxygen Generator started without water. It is now at ${Math.round(s.integridad)}%.`, 'alerta')
   }
   if (p.id === 'huerto') room.huerto.progreso = Math.round(((i + 1) / p.pasos.length) * 100)
   if (p.id === 'revisionInt' && id === 'caida' && valor === 'falla') {
     // Fuga encontrada: se busca, se limpia el sello y se repite la prueba.
     room.procedimientos![p.id] = { paso: 0, calidad: [], por: [], valores: [], inicio: e.inicio, terminado: false, datos: { reintento: 1 } }
-    log(room, `${j.nombre} detectó una fuga en la esclusa. Hay que revisar y limpiar el sello y repetir la prueba.`, 'alerta')
+    log(room, `${j.nombre} found a leak in the Airlock. The seal must be checked and cleaned, and the test repeated.`, 'alerta')
     return true
   }
   return false
@@ -121,13 +123,13 @@ function alTerminar(room: RoomState, p: Procedimiento, j: Player) {
   switch (p.id) {
     case 'paneles': {
       ef.solar = factorPanel(room.sitio, String(v[0]), Number(v[3]))
-      log(room, `Campos solares orientados al ${v[0]} con ${v[3]}° de inclinación: aprovechan el ${pct(ef.solar)} de la luz del mediodía.`, ef.solar < 0.9 ? 'alerta' : 'ok')
+      log(room, `Solar arrays facing ${RUMBO[String(v[0])] ?? v[0]} with a ${v[3]}° tilt. They capture ${pct(ef.solar)} of the noon sunlight.`, ef.solar < 0.9 ? 'alerta' : 'ok')
       break
     }
     case 'carga': {
       if (typeof v[2] === 'string') {
         ef.reactorDosis = DOSIS_REACTOR[v[2]] ?? 0
-        if (ef.reactorDosis > 0.5) log(room, `El reactor quedó junto al hábitat: la tripulación recibe ${ef.reactorDosis} mSv más al día.`, 'alerta')
+        if (ef.reactorDosis > 0.5) log(room, `The reactor ended up next to the habitat. The crew gets ${ef.reactorDosis} mSv more per day.`, 'alerta')
       }
       break
     }
@@ -136,10 +138,10 @@ function alTerminar(room: RoomState, p: Procedimiento, j: Player) {
       if (tension > 130) {
         const dano = Math.min(30, (tension - 124.5) * 1.2)
         for (const id of ['oga', 'cdra', 'wrs', 'termico'] as SistemaId[]) sis(room, id).integridad = Math.max(20, sis(room, id).integridad - dano)
-        log(room, `La sobretensión de ${tension} V dañó los equipos de soporte vital.`, 'alerta')
+        log(room, `The overvoltage of ${tension} V damaged the life support equipment.`, 'alerta')
       }
       ef.perdidaBus = tension < 119 ? r2(124.5 / tension) : 1
-      if (ef.perdidaBus > 1) log(room, `Con ${tension} V el hábitat consume un ${Math.round((ef.perdidaBus - 1) * 100)}% más de energía por las pérdidas.`, 'alerta')
+      if (ef.perdidaBus > 1) log(room, `At ${tension} V the habitat uses ${Math.round((ef.perdidaBus - 1) * 100)}% more power because of losses.`, 'alerta')
       break
     }
     case 'soporte':
@@ -149,18 +151,18 @@ function alTerminar(room: RoomState, p: Procedimiento, j: Player) {
     case 'revisionInt':
       if ((e.datos?.fuga ?? 0) > 0 && e.calidad[2] === 0) {
         room.cabina.fuga = Math.max(room.cabina.fuga, 0.05)
-        log(room, 'La prueba se dio por buena, pero la esclusa pierde aire poco a poco: hay una fuga lenta.', 'alerta')
+        log(room, 'The test was marked as passed, but the Airlock is slowly losing air. There is a slow leak.', 'alerta')
       }
       break
     case 'revisionExt':
       if ((e.datos?.dano ?? 0) > 0) {
         if (e.calidad[1] === 1 && room.rec.repuestos >= 1) {
           room.rec.repuestos -= 1
-          log(room, `${j.nombre} parcheó la marca del casco con un kit de repuestos.`, 'ok')
+          log(room, `${j.nombre} patched the mark on the hull with a spare parts kit.`, 'ok')
         } else {
           const t = sis(room, 'termico')
           t.integridad = Math.max(20, t.integridad - (e.calidad[1] === 1 ? 8 : 15))
-          log(room, e.calidad[1] === 1 ? 'No quedan repuestos para parchear el casco: el aislamiento dañado hace trabajar más al control térmico.' : 'Una marca del casco pasó del límite sin repararse: el aislamiento dañado hace trabajar más al control térmico.', 'alerta')
+          log(room, e.calidad[1] === 1 ? 'There are no spare parts left to patch the hull. The damaged insulation makes Thermal Control work harder.' : 'A mark on the hull was over the limit and was not repaired. The damaged insulation makes Thermal Control work harder.', 'alerta')
         }
       }
       break
@@ -174,13 +176,13 @@ function alTerminar(room: RoomState, p: Procedimiento, j: Player) {
       h.establecido = true
       h.progreso = 100
       h.diasCultivo = 0
-      log(room, `Huerto montado con ${enFrase(CULTIVO_BY_ID[cultivo].nombre)}. Cosecha prevista en ${CULTIVO_BY_ID[cultivo].dias} días si se cuida bien.`, 'ok')
+      log(room, `Garden set up with ${enFrase(CULTIVO_BY_ID[cultivo].nombre)}. Harvest expected in ${CULTIVO_BY_ID[cultivo].dias} days if it is well cared for.`, 'ok')
       break
     }
     case 'regar': {
       const ml = Number(v[1])
       for (const a of secas(room)) a.humedad = Math.min(100, a.humedad + ml * HUMEDAD_POR_ML)
-      log(room, `${j.nombre} regó el huerto con ${ml} mL por almohadilla.`, e.calidad[1] < 0.7 ? 'alerta' : 'info')
+      log(room, `${j.nombre} watered the garden with ${ml} mL per pad.`, e.calidad[1] < 0.7 ? 'alerta' : 'info')
       break
     }
     case 'ralear':
@@ -190,7 +192,7 @@ function alTerminar(room: RoomState, p: Procedimiento, j: Player) {
         if (v[0] !== 'dejar') a.plantulas = 1
         if (v[0] === 'arrancar') a.salud = Math.max(0, a.salud - 15)
       }
-      log(room, `${j.nombre} raleó las plántulas del huerto.`)
+      log(room, `${j.nombre} thinned the seedlings in the garden.`)
       break
     case 'moho':
       for (const a of h.almohadillas ?? []) {
@@ -205,7 +207,7 @@ function alTerminar(room: RoomState, p: Procedimiento, j: Player) {
       }
       if (v[1] === 'retirar') h.ventilador = 'alto'
       h.revisado = room.t
-      log(room, v[1] === 'retirar' ? `${j.nombre} retiró las hojas con moho y subió el ventilador del huerto.` : 'El moho sigue en el huerto.', v[1] === 'retirar' ? 'ok' : 'alerta')
+      log(room, v[1] === 'retirar' ? `${j.nombre} removed the moldy leaves and turned up the garden fan.` : 'The mold is still in the garden.', v[1] === 'retirar' ? 'ok' : 'alerta')
       break
     case 'amarillas': {
       if (v[1] === 'regar') {
@@ -220,7 +222,7 @@ function alTerminar(room: RoomState, p: Procedimiento, j: Player) {
         for (const a of h.almohadillas ?? []) if (!a.muerta) a.salud = Math.min(100, a.salud + 3)
       } else h.ventilador = 'alto'
       h.revisado = room.t
-      log(room, v[1] === 'regar' ? `${j.nombre} regó las almohadillas secas y bajó el ventilador.` : 'Las hojas siguen caídas: las raíces siguen sin agua.', v[1] === 'regar' ? 'ok' : 'alerta')
+      log(room, v[1] === 'regar' ? `${j.nombre} watered the dry pads and turned down the fan.` : 'The leaves are still drooping. The roots still have no water.', v[1] === 'regar' ? 'ok' : 'alerta')
       break
     }
     case 'cosechar': {
@@ -238,13 +240,13 @@ function alTerminar(room: RoomState, p: Procedimiento, j: Player) {
       }
       // La verdura fresca levanta el ánimo: la tripulación descansa mejor.
       for (const x of tripulacion(room)) x.vit.fatiga = limitar(x.vit.fatiga - 8, 0, 100)
-      log(room, `Cosecha del huerto: ${r2(kg)} kg de ${enFrase(cultivo.nombre)}. La tripulación come ${r2(comida)} kg${v[1] === 'mitad' ? ' y congela el resto para analizarlo' : ''}.`, 'ok')
+      log(room, `Garden harvest: ${r2(kg)} kg of ${enFrase(cultivo.nombre)}. The crew eats ${r2(comida)} kg${v[1] === 'mitad' ? ' and freezes the rest to analyze it' : ''}.`, 'ok')
       break
     }
   }
   if (p.tarea) completarTarea(room, j, p.tarea)
   const media = e.calidad.length ? e.calidad.reduce((a, b) => a + b, 0) / e.calidad.length : 1
-  if (p.tarea || p.id === 'huerto') log(room, `${p.titulo}: hecho al ${pct(media)} de como lo haría un experto.`, media < 0.8 ? 'alerta' : 'ok')
+  if (p.tarea || p.id === 'huerto') log(room, `${p.titulo}: done at ${pct(media)} of how an expert would do it.`, media < 0.8 ? 'alerta' : 'ok')
   e.terminado = true
   // Los que se repiten vuelven a empezar de cero la próxima vez.
   if (p.recurrente) delete room.procedimientos![p.id]
@@ -252,26 +254,26 @@ function alTerminar(room: RoomState, p: Procedimiento, j: Player) {
 
 export function pasoProcedimiento(room: RoomState, jugadorId: string, procId: string, paso: number, valor: unknown): string | null {
   const p = PROC_BY_ID[procId]
-  if (!p) return 'Procedimiento desconocido.'
+  if (!p) return 'Unknown procedure.'
   const j = jugador(room, jugadorId)
-  if (!j || !j.rol) return 'Jugador no encontrado.'
+  if (!j || !j.rol) return 'Player not found.'
   if (!disponible(room, p)) return noDisponible(room, p)
   const procs = (room.procedimientos ??= {})
   if (procs[procId]?.terminado) delete procs[procId]
   const actual = siguienteAplicable(room, p, procs[procId]?.paso ?? 0)
-  if (!Number.isInteger(paso) || paso !== actual) return paso < actual ? 'Ese paso ya está hecho.' : `Primero hay que hacer: ${p.pasos[actual]?.titulo.toLowerCase() ?? 'el paso anterior'}.`
+  if (!Number.isInteger(paso) || paso !== actual) return paso < actual ? 'That step is already done.' : `First you have to: ${p.pasos[actual] ? enFrase(p.pasos[actual].titulo) : 'do the previous step'}.`
   const def = p.pasos[actual]
-  if (j.incapacitado > 0) return 'Estás fuera de servicio. Necesitas descanso o al médico.'
-  if (j.enRefugio) return 'Estás en el refugio. No puedes trabajar hasta salir.'
-  if (!puedeActuar(room, j, def.roles)) return `Ese paso lo hace: ${def.roles.map((r) => ROLE_BY_ID[r].nombre).join(' o ')}.`
-  if (j.zona !== def.zona) return def.zona === 'exterior' ? 'Hay que salir con el traje para hacerlo.' : 'Se hace dentro del hábitat.'
+  if (j.incapacitado > 0) return 'You are out of action. You need rest or the Flight Surgeon.'
+  if (j.enRefugio) return 'You are in the Storm Shelter. You cannot work until you leave.'
+  if (!puedeActuar(room, j, def.roles)) return `This step is done by: ${def.roles.map((r) => ROLE_BY_ID[r].nombre).join(' or ')}.`
+  if (j.zona !== def.zona) return def.zona === 'exterior' ? 'You have to suit up and go outside to do it.' : 'This is done inside the habitat.'
 
   const e: EstadoProcedimiento = (procs[procId] ??= { paso: 0, calidad: [], por: [], valores: [], inicio: room.t, terminado: false })
   prepararPaso(room, p, actual)
   const ev = evaluarPaso(room, p, actual, valor)
   if (!ev.ok) return ev.mensaje
   const agua = aguaDelPaso(room, p, actual, ev.valor)
-  if (agua > 0 && room.rec.agua < agua + 2) return 'No queda agua potable suficiente para regar.'
+  if (agua > 0 && room.rec.agua < agua + 2) return 'There is not enough drinking water left to water the plants.'
   room.rec.agua -= agua
 
   const valores = (e.valores ??= [])
@@ -287,7 +289,7 @@ export function pasoProcedimiento(room: RoomState, jugadorId: string, procId: st
   e.paso = actual + 1
   j.aportes = (j.aportes ?? 0) + 1
   j.vit.fatiga = limitar(j.vit.fatiga + (def.zona === 'exterior' ? 1.5 : 0.5), 0, 100)
-  if (ev.calidad < 0.7) log(room, `${p.titulo}, ${def.titulo.toLowerCase()}: ${ev.mensaje}`, 'alerta')
+  if (ev.calidad < 0.7) log(room, `${p.titulo}, ${enFrase(def.titulo)}: ${ev.mensaje}`, 'alerta')
 
   if (!alHacerPaso(room, p, actual, j, ev.valor)) {
     e.paso = siguienteAplicable(room, p, e.paso)

@@ -30,7 +30,7 @@ export default async function handler(req: IncomingMessage & { body?: unknown },
   res.setHeader('cache-control', 'no-store')
   if (req.method !== 'POST') {
     res.statusCode = 405
-    res.end('{"error":"Usa POST."}')
+    res.end('{"error":"Use POST."}')
     return
   }
   const r = await manejar(await leerCuerpo(req), req.headers.authorization)

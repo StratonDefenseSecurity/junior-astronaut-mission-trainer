@@ -55,10 +55,10 @@ function Muestras({ titulo, colores, actual, onElegir }: { titulo: string; color
 
 /** El recorrido de la misión, en el orden del esquema del equipo. */
 const RECORRIDO = [
-  { titulo: 'Contextualización', texto: 'Se les da la situación que tienen que afrontar. Después cada uno recibe su rol, se establece el objetivo y eligen los suministros.' },
-  { titulo: 'Lanzamiento', texto: 'El despegue, el combustible y la energía que se gastan, y los días y horas que llevan en el espacio.' },
-  { titulo: 'Llegar a la base y administrar recursos', texto: 'Montar la base y cuidar el agua, el oxígeno, los alimentos, la energía, los equipos y a la tripulación.' },
-  { titulo: 'Emergencias', texto: 'Llega una alerta, se identifica el problema y se decide entre varias alternativas.' },
+  { titulo: 'Mission Briefing', texto: 'You get the situation your crew must face. Then each of you gets a role, you set the objective and you choose the supplies.' },
+  { titulo: 'Launch', texto: 'Liftoff, the fuel and energy you use, and the days and hours you spend in space.' },
+  { titulo: 'Reach the Base and Manage Resources', texto: 'Build the base and look after the water, oxygen, food, power, equipment and crew.' },
+  { titulo: 'Emergencies', texto: 'An alert comes in. You find the problem and choose between several options.' },
 ]
 
 export function LobbyScreen() {
@@ -69,32 +69,32 @@ export function LobbyScreen() {
   const solo = sala.modoJuego === 'solo'
   const presentes = sala.jugadores.filter((j) => j.conectado)
   const puedeIniciar = soyHost && (solo || presentes.length >= 2)
-  const anfitrion = sala.jugadores.find((j) => j.id === sala.hostId)?.nombre ?? 'Quien creó la sala'
+  const anfitrion = sala.jugadores.find((j) => j.id === sala.hostId)?.nombre ?? 'The host'
   const aviso = solo
-    ? 'Tu tripulación con IA ya está aquí. Tú eliges tu rol primero y ellos cubren los demás.'
+    ? 'Your AI crew is already here. You pick your role first and they cover the rest.'
     : presentes.length < 2
-      ? 'Se necesitan al menos 2 tripulantes. Comparte el código de la sala.'
+      ? 'You need at least 2 crew members. Share the room code.'
       : soyHost
-        ? 'Ya pueden empezar. Lo primero que verán es la situación que tienen que afrontar.'
-        : `Esperando a que ${anfitrion} empiece la misión.`
+        ? 'You can start now. First you will see the situation your crew must face.'
+        : `Waiting for ${anfitrion} to start the mission.`
 
   return (
     <div className="center-screen alto">
       <div className="card wide stack">
         <div className="row">
           <div className="grow">
-            <div className="brand">Sala de tripulación</div>
+            <div className="brand">Crew Room</div>
             <h1 className="mono" style={{ letterSpacing: '0.2em' }}>{sala.codigo}</h1>
             <p className="muted">
-              {solo ? 'Un jugador con bots.' : 'Comparte este código.'} Decisiones en disputa: {sala.modoDecision === 'comandante' ? 'las aprueba el comandante' : 'se votan por mayoría'}.
+              {solo ? 'Single player with bots.' : 'Share this code.'} Disputed decisions: {sala.modoDecision === 'comandante' ? 'the Mission Commander approves them' : 'majority vote'}.
             </p>
           </div>
-          <button onClick={() => api.salir()}>Salir</button>
+          <button onClick={() => api.salir()}>Leave</button>
         </div>
 
         <div className="lobby">
           <div className="stack">
-            <h3>Tripulación ({presentes.length} de 6)</h3>
+            <h3>Crew ({presentes.length} of 6)</h3>
             <div className="crew-lista">
               {sala.jugadores.map((j) => (
                 <div key={j.id} className={`crew-card ${j.id === usuario?.id ? 'me' : ''} ${j.conectado ? '' : 'offline'}`}>
@@ -102,37 +102,37 @@ export function LobbyScreen() {
                     <span className="punto" style={{ background: j.traje.color, borderColor: j.traje.acento }} />
                     <strong className="grow">
                       {j.nombre}
-                      {j.id === usuario?.id ? ' (tú)' : ''}
+                      {j.id === usuario?.id ? ' (you)' : ''}
                       <MarcaIA bot={j.bot} />
                     </strong>
                     <span className="mini muted">
-                      {j.bot ? (j.hogar ? CIUDAD_BY_ID[j.hogar as CiudadId]?.nombre : 'tripulante') : j.id === sala.hostId ? 'anfitrión' : j.conectado ? 'en la sala' : 'ausente'}
+                      {j.bot ? (j.hogar ? CIUDAD_BY_ID[j.hogar as CiudadId]?.nombre : 'crew member') : j.id === sala.hostId ? 'host' : j.conectado ? 'in the room' : 'away'}
                     </span>
                   </div>
                 </div>
               ))}
             </div>
 
-            <h3>La situación {soyHost ? '· la eliges tú' : ''}</h3>
+            <h3>The situation {soyHost ? '· you choose it' : ''}</h3>
             <div className="escenarios">
               <button className={`opcion ${sala.escenarioElegido === 'azar' ? 'activa' : ''}`} disabled={!soyHost} onClick={() => api.escenario('azar')}>
-                <strong>Que la asigne el centro de control</strong>
-                <small>Una de las seis situaciones, al azar. Nadie sabe cuál hasta empezar.</small>
+                <strong>Let Mission Control pick</strong>
+                <small>One of the six situations, at random. Nobody knows which one until you start.</small>
               </button>
               {ESCENARIOS.map((e) => (
                 <button key={e.id} className={`opcion ${sala.escenarioElegido === e.id ? 'activa' : ''}`} disabled={!soyHost} onClick={() => api.escenario(e.id)}>
                   <strong>{e.nombre}</strong>
-                  <small>{e.lema} Despegue: {fechaLarga(new Date(e.lanzamiento))}.</small>
+                  <small>{e.lema} Liftoff: {fechaLarga(new Date(e.lanzamiento))}.</small>
                 </button>
               ))}
             </div>
             {!soyHost && (
               <p className="mini muted">
-                {sala.escenarioElegido === 'azar' ? 'La situación se asignará al empezar.' : `Situación elegida: ${ESCENARIO_BY_ID[sala.escenarioElegido as EscenarioId]?.nombre}.`}
+                {sala.escenarioElegido === 'azar' ? 'The situation will be assigned when you start.' : `Chosen situation: ${ESCENARIO_BY_ID[sala.escenarioElegido as EscenarioId]?.nombre}.`}
               </p>
             )}
 
-            <h3>Cómo será la misión</h3>
+            <h3>How the mission works</h3>
             <ol className="recorrido">
               {RECORRIDO.map((r, i) => (
                 <li key={r.titulo} className={i === 0 ? 'siguiente' : ''}>
@@ -141,18 +141,18 @@ export function LobbyScreen() {
                 </li>
               ))}
             </ol>
-            <p className="mini muted">Un asistente acompaña toda la misión: consulta el estado real y explica los riesgos de cada decisión.</p>
+            <p className="mini muted">An assistant helps you through the whole mission. It checks the real status and explains the risks of each decision.</p>
           </div>
 
           <div className="stack lobby-lado">
-            <h3>Tu astronauta</h3>
+            <h3>Your astronaut</h3>
             {yo && (
               <>
                 <VistaTraje traje={yo.traje} distintivo="#94a3b8" />
-                <Muestras titulo="Piel" colores={TRAJE_PIELES} actual={yo.traje.piel} onElegir={(piel) => api.elegirTraje({ piel })} />
-                <Muestras titulo="Pelo" colores={TRAJE_PELOS} actual={yo.traje.pelo} onElegir={(pelo) => api.elegirTraje({ pelo })} />
+                <Muestras titulo="Skin" colores={TRAJE_PIELES} actual={yo.traje.piel} onElegir={(piel) => api.elegirTraje({ piel })} />
+                <Muestras titulo="Hair" colores={TRAJE_PELOS} actual={yo.traje.pelo} onElegir={(pelo) => api.elegirTraje({ pelo })} />
                 <div className="muestras">
-                  <span className="mini muted">Peinado</span>
+                  <span className="mini muted">Hairstyle</span>
                   <div className="row" style={{ gap: 4 }}>
                     {PEINADOS.map((x) => (
                       <button key={x.id} className={`chip ${yo.traje.peinado === x.id ? 'activo' : ''}`} onClick={() => api.elegirTraje({ peinado: x.id })}>
@@ -161,13 +161,13 @@ export function LobbyScreen() {
                     ))}
                   </div>
                 </div>
-                <Muestras titulo="Traje" colores={TRAJE_COLORES} actual={yo.traje.color} onElegir={(color) => api.elegirTraje({ color })} />
-                <Muestras titulo="Franjas" colores={TRAJE_COLORES} actual={yo.traje.acento} onElegir={(acento) => api.elegirTraje({ acento })} />
-                <Muestras titulo="Visor del casco" colores={TRAJE_VISORES} actual={yo.traje.visor} onElegir={(visor) => api.elegirTraje({ visor })} />
+                <Muestras titulo="Suit" colores={TRAJE_COLORES} actual={yo.traje.color} onElegir={(color) => api.elegirTraje({ color })} />
+                <Muestras titulo="Stripes" colores={TRAJE_COLORES} actual={yo.traje.acento} onElegir={(acento) => api.elegirTraje({ acento })} />
+                <Muestras titulo="Helmet visor" colores={TRAJE_VISORES} actual={yo.traje.visor} onElegir={(visor) => api.elegirTraje({ visor })} />
                 <label className="stack" style={{ gap: 3 }}>
-                  <span className="mini muted">Tu ciudad: se marcará en la Tierra y desde allí te escribirán</span>
+                  <span className="mini muted">Your city: it will be marked on Earth, and messages from home will come from there</span>
                   <select value={yo.hogar ?? ''} onChange={(e) => api.hogar(e.target.value || null)}>
-                    <option value="">Sin elegir</option>
+                    <option value="">Not chosen</option>
                     {CIUDADES.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.nombre}, {c.pais}
@@ -178,7 +178,7 @@ export function LobbyScreen() {
               </>
             )}
             <div className="assistant">{aviso}</div>
-            <button className="primary" disabled={!puedeIniciar} onClick={() => api.iniciar()}>Empezar la misión</button>
+            <button className="primary" disabled={!puedeIniciar} onClick={() => api.iniciar()}>Start the mission</button>
           </div>
         </div>
       </div>

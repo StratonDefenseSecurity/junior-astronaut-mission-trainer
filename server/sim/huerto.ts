@@ -39,7 +39,7 @@ export function pasoHuerto(room: RoomState, dt: number) {
     a.salud = limitar(a.salud + ((bien ? 3 : 0) - dano) * dias, 0, 100)
     if (a.salud <= 0) {
       a.muerta = true
-      log(room, `Se murió una planta del huerto${a.moho > 0.4 ? ' por el moho' : a.humedad < 15 ? ' por falta de agua' : ''}.`, 'alerta')
+      log(room, `A plant in the garden died${a.moho > 0.4 ? ' from mold' : a.humedad < 15 ? ' from lack of water' : ''}.`, 'alerta')
       continue
     }
     // Crecimiento: con buena luz, salud y agua llega a la cosecha en los días del cultivo.

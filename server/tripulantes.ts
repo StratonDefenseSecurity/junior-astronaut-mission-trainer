@@ -68,15 +68,17 @@ const NOMBRES_MISION = ['Wayra 1', 'Inti 1', 'Killa 1', 'Chaski 1', 'Kuntur 1', 
 /** Orden en que los bots toman los roles que quedan libres. */
 const ORDEN_ROLES: Role[] = ['comandante', 'piloto', 'sistemas', 'medico', 'logistica', 'cientifico']
 const FRASE_ROL: Record<Role, string> = {
-  comandante: 'Asumo el mando. Yo autorizo el lanzamiento.',
-  piloto: 'Me quedo con la navegación.',
-  medico: 'Yo cuido la salud de todos.',
-  logistica: 'Llevo los recursos y las raciones.',
-  cientifico: 'Me encargo de las muestras y del huerto.',
-  sistemas: 'Yo me ocupo de los equipos.',
+  comandante: 'I will take command. I authorize the launch.',
+  piloto: 'I will take navigation.',
+  medico: 'I will look after everyone\'s health.',
+  logistica: 'I will handle the supplies and the rations.',
+  cientifico: 'I will take care of the samples and the garden.',
+  sistemas: 'I will look after the equipment.',
 }
 const FACTOR_RACION: Record<RacionComida, number> = { normal: 1, ahorro: 0.8, estricto: 0.6 }
-const NOMBRE_RECURSO = { comida: 'la comida', agua: 'el agua', aire: 'el aire' } as const
+const NOMBRE_RECURSO = { comida: 'food', agua: 'water', aire: 'air' } as const
+/** Inicial en minúscula, para mitad de frase (respeta los nombres propios que siguen). */
+const minus = (s: string) => s.charAt(0).toLowerCase() + s.slice(1)
 /** Quién hace cada tarea de ensamblaje cuando la comparten dos roles. */
 const PREFERIDO: Record<string, Role> = { paneles: 'piloto', carga: 'logistica', energia: 'sistemas', soporte: 'comandante', revisionInt: 'sistemas', revisionExt: 'sistemas' }
 
@@ -92,31 +94,31 @@ const MARGEN_EMERGENCIA_MS = 12_000
  * Si cambian allí, hay que cambiarlas aquí.
  */
 const ESTACIONES: Record<string, { zona: Zona; nombre: string; x: number; z: number; radio: number }> = {
-  puente: { zona: 'nave', nombre: 'el puente', x: -7.6, z: 0, radio: 0.85 },
-  soporte: { zona: 'nave', nombre: 'soporte vital', x: -4.6, z: -2.6, radio: 0 },
-  energia: { zona: 'nave', nombre: 'energía', x: -1.5, z: -2.6, radio: 0 },
-  almacen: { zona: 'nave', nombre: 'el almacén', x: 1.6, z: -2.6, radio: 0 },
-  laboratorio: { zona: 'nave', nombre: 'el laboratorio', x: 4.7, z: -2.6, radio: 0 },
-  enfermeria: { zona: 'nave', nombre: 'la enfermería', x: -4.6, z: 2.6, radio: 0 },
-  ejercicio: { zona: 'nave', nombre: 'el gimnasio', x: -1.5, z: 2.6, radio: 0 },
-  literas: { zona: 'nave', nombre: 'las literas', x: 1.6, z: 2.6, radio: 0 },
-  refugio: { zona: 'nave', nombre: 'el refugio', x: 4.7, z: 2.6, radio: 0 },
-  esclusa: { zona: 'nave', nombre: 'la esclusa', x: 8.4, z: 0, radio: 0 },
-  comedor: { zona: 'nave', nombre: 'la mesa común', x: 0.05, z: 0, radio: 0.62 },
-  esclusaExt: { zona: 'exterior', nombre: 'la esclusa', x: 10.6, z: 0, radio: 0 },
-  plantaExt: { zona: 'exterior', nombre: 'la planta de energía', x: 14.5, z: -8, radio: 1.1 },
-  campoSolar: { zona: 'exterior', nombre: 'los campos solares', x: 21, z: -15, radio: 0 },
-  carga: { zona: 'exterior', nombre: 'la zona de carga', x: 17, z: 10, radio: 1.6 },
-  antena: { zona: 'exterior', nombre: 'la antena', x: -12.5, z: -7, radio: 0.7 },
-  isruExt: { zona: 'exterior', nombre: 'el extractor de hielo', x: -17, z: 12, radio: 1.3 },
-  muestra1: { zona: 'exterior', nombre: 'el punto de muestreo 1', x: 25, z: 5, radio: 0 },
-  muestra2: { zona: 'exterior', nombre: 'el punto de muestreo 2', x: -23, z: -5, radio: 0 },
-  muestra3: { zona: 'exterior', nombre: 'el punto de muestreo 3', x: 7, z: 27, radio: 0 },
-  muestra4: { zona: 'exterior', nombre: 'el punto de muestreo 4', x: -9, z: -25, radio: 0 },
-  muestra5: { zona: 'exterior', nombre: 'el punto de muestreo 5', x: 32, z: -20, radio: 0 },
-  muestra6: { zona: 'exterior', nombre: 'el punto de muestreo 6', x: -29, z: 15, radio: 0 },
-  muestra7: { zona: 'exterior', nombre: 'el punto de muestreo 7', x: 21, z: 31, radio: 0 },
-  muestra8: { zona: 'exterior', nombre: 'el punto de muestreo 8', x: -31, z: -27, radio: 0 },
+  puente: { zona: 'nave', nombre: 'the Bridge', x: -7.6, z: 0, radio: 0.85 },
+  soporte: { zona: 'nave', nombre: 'Life Support', x: -4.6, z: -2.6, radio: 0 },
+  energia: { zona: 'nave', nombre: 'the Power station', x: -1.5, z: -2.6, radio: 0 },
+  almacen: { zona: 'nave', nombre: 'Storage', x: 1.6, z: -2.6, radio: 0 },
+  laboratorio: { zona: 'nave', nombre: 'the Lab & Garden', x: 4.7, z: -2.6, radio: 0 },
+  enfermeria: { zona: 'nave', nombre: 'the Medical Bay', x: -4.6, z: 2.6, radio: 0 },
+  ejercicio: { zona: 'nave', nombre: 'the Gym', x: -1.5, z: 2.6, radio: 0 },
+  literas: { zona: 'nave', nombre: 'the Bunks', x: 1.6, z: 2.6, radio: 0 },
+  refugio: { zona: 'nave', nombre: 'the Storm Shelter', x: 4.7, z: 2.6, radio: 0 },
+  esclusa: { zona: 'nave', nombre: 'the Airlock', x: 8.4, z: 0, radio: 0 },
+  comedor: { zona: 'nave', nombre: 'the Galley Table', x: 0.05, z: 0, radio: 0.62 },
+  esclusaExt: { zona: 'exterior', nombre: 'the Airlock', x: 10.6, z: 0, radio: 0 },
+  plantaExt: { zona: 'exterior', nombre: 'the Power Plant', x: 14.5, z: -8, radio: 1.1 },
+  campoSolar: { zona: 'exterior', nombre: 'the Solar Arrays', x: 21, z: -15, radio: 0 },
+  carga: { zona: 'exterior', nombre: 'the Cargo Area', x: 17, z: 10, radio: 1.6 },
+  antena: { zona: 'exterior', nombre: 'the Antenna & Hull', x: -12.5, z: -7, radio: 0.7 },
+  isruExt: { zona: 'exterior', nombre: 'the Ice Extractor', x: -17, z: 12, radio: 1.3 },
+  muestra1: { zona: 'exterior', nombre: 'Sample Site 1', x: 25, z: 5, radio: 0 },
+  muestra2: { zona: 'exterior', nombre: 'Sample Site 2', x: -23, z: -5, radio: 0 },
+  muestra3: { zona: 'exterior', nombre: 'Sample Site 3', x: 7, z: 27, radio: 0 },
+  muestra4: { zona: 'exterior', nombre: 'Sample Site 4', x: -9, z: -25, radio: 0 },
+  muestra5: { zona: 'exterior', nombre: 'Sample Site 5', x: 32, z: -20, radio: 0 },
+  muestra6: { zona: 'exterior', nombre: 'Sample Site 6', x: -29, z: 15, radio: 0 },
+  muestra7: { zona: 'exterior', nombre: 'Sample Site 7', x: 21, z: 31, radio: 0 },
+  muestra8: { zona: 'exterior', nombre: 'Sample Site 8', x: -31, z: -27, radio: 0 },
 }
 /** Puesto habitual de cada rol y punto de aparición al cruzar la esclusa (como en mapa.ts). */
 const PUESTO: Record<Role, { x: number; z: number }> = {
@@ -254,8 +256,8 @@ const botDeRol = (room: RoomState, rol: Role) => room.jugadores.find((j) => j.bo
 /** El bot que habla por la tripulación: el de ese rol, el comandante o el primero. */
 const portavoz = (room: RoomState, bots: Player[], rol?: Role) => (rol && botDeRol(room, rol)) || botDeRol(room, 'comandante') || bots[0]
 const r0 = (v: number) => Math.round(Math.min(999, v))
-/** El nombre del equipo con su artículo: «el depurador de CO2», «la esclusa». */
-const elSistema = (id: SistemaId) => `${id === 'esclusa' || id === 'energia' ? 'la' : 'el'} ${nombreSistema(id)}`
+/** El nombre del equipo con su artículo: «the CO2 Scrubber», «the Airlock». */
+const elSistema = (id: SistemaId) => `the ${nombreSistema(id)}`
 const decideComandante = (room: RoomState) => room.modoDecision === 'comandante' && conRol(room, 'comandante').length > 0
 
 // ---------- Entrada desde la simulación ----------
@@ -283,7 +285,7 @@ function contexto(room: RoomState, bots: Player[]) {
     const m = mem(room, j)
     // Si la persona le pidió su rol, el bot lo cede y lo dice.
     const rolPrevio = m.marcas.rol === undefined ? null : ORDEN_ROLES[m.marcas.rol]
-    if (j.rol && rolPrevio && j.rol !== rolPrevio) decir(room, j, `Te dejo ${ROLE_BY_ID[rolPrevio].nombre.toLowerCase()}. Yo me quedo con ${ROLE_BY_ID[j.rol].nombre.toLowerCase()}.`, undefined, Infinity, true)
+    if (j.rol && rolPrevio && j.rol !== rolPrevio) decir(room, j, `You can have ${ROLE_BY_ID[rolPrevio].nombre}. I will take ${ROLE_BY_ID[j.rol].nombre}.`, undefined, Infinity, true)
     if (j.rol) m.marcas.rol = ORDEN_ROLES.indexOf(j.rol)
     else delete m.marcas.rol
     if (actuo || ahora() < m.libre) continue
@@ -310,7 +312,7 @@ function actuarContexto(room: RoomState, j: Player, m: MemoriaBot, persona: Play
   if (j.rol === 'comandante' && !m.marcas.objetivo) {
     m.marcas.objetivo = ahora()
     if (!room.nombreMision) nombrarMision(room, j.id, elegir(room, NOMBRES_MISION))
-    decir(room, j, `La misión se llama ${room.nombreMision}. Vamos con ${room.mision.solesObjetivo} soles en Marte y ${room.mision.diasTransito} días de viaje.`, undefined, Infinity, true)
+    decir(room, j, `Our mission is called ${room.nombreMision}. We are going for ${room.mision.solesObjetivo} sols on Mars and ${room.mision.diasTransito} days of travel.`, undefined, Infinity, true)
     return true
   }
   if (j.paso < 3) return fijarPaso(room, j.id, 3) === null
@@ -327,8 +329,8 @@ function actuarContexto(room: RoomState, j: Player, m: MemoriaBot, persona: Play
       room,
       j,
       justo
-        ? `Revisé la carga. La comida da para ${r0(a.comida)} días y el agua para ${r0(a.agua)}, pero la misión dura ${r0(a.total)}. Hay que subir algo.`
-        : `Revisé la carga. Comida para ${r0(a.comida)} días y la misión dura ${r0(a.total)}. Vamos bien.`,
+        ? `I checked the cargo. Food lasts ${r0(a.comida)} days and water ${r0(a.agua)}, but the mission lasts ${r0(a.total)}. We need to add some.`
+        : `I checked the cargo. Food for ${r0(a.comida)} days and the mission lasts ${r0(a.total)}. We are good.`,
       undefined,
       Infinity,
       true,
@@ -338,21 +340,21 @@ function actuarContexto(room: RoomState, j: Player, m: MemoriaBot, persona: Play
   if (!j.listo) return marcarListo(room, j.id, true) === null
   if (j.rol !== 'comandante') {
     if (persona?.rol === 'comandante' && room.jugadores.every((o) => o.listo || !o.bot)) {
-      decir(room, j, 'Todos listos por aquí. Cuando quieras, comandante.', 'listos')
+      decir(room, j, 'Everyone is ready here. Whenever you are, Commander.', 'listos')
     }
     return false
   }
   // El comandante bot autoriza el despegue cuando la persona está lista.
   if (persona && !persona.listo) {
-    decir(room, j, 'Cuando estés listo, márcalo y autorizo el lanzamiento.', 'esperaListo', 90_000)
+    decir(room, j, 'When you are ready, mark it and I will authorize the launch.', 'esperaListo', 90_000)
     return false
   }
   if (room.jugadores.some((o) => o.bot && !o.listo)) return false
   if (room.masa > room.capacidad) cargar(room, j)
   if (!madura(room, m, 'lanzar', 2000, 4000)) return false
-  decir(room, j, 'Todos listos. Autorizo el lanzamiento.', undefined, Infinity, true)
+  decir(room, j, 'Everyone is ready. I authorize the launch.', undefined, Infinity, true)
   const error = lanzar(room, j.id)
-  if (error) decir(room, j, `No puedo autorizar todavía. ${error}`, 'errorLanzar', 60_000, true)
+  if (error) decir(room, j, `I cannot authorize it yet. ${error}`, 'errorLanzar', 60_000, true)
   return true
 }
 
@@ -367,7 +369,7 @@ function cargar(room: RoomState, j: Player) {
   }
   ajustarCargamento(room, carga)
   const consejo = escenarioDe(room.escenario).consejo
-  decir(room, j, `Elegí la carga equilibrada: ${room.masa.toFixed(1)} de ${room.capacidad.toFixed(1)} toneladas.${consejo && room.escenario === 'tormentaPolvo' ? ' Llevamos el reactor por las tormentas.' : ''}`, undefined, Infinity, true)
+  decir(room, j, `I chose the Balanced cargo: ${room.masa.toFixed(1)} of ${room.capacidad.toFixed(1)} tons.${consejo && room.escenario === 'tormentaPolvo' ? ' We are taking the reactor because of the storms.' : ''}`, undefined, Infinity, true)
 }
 
 // ---------- Misión ----------
@@ -396,14 +398,14 @@ function mision(room: RoomState, bots: Player[]) {
 function sucesos(room: RoomState, bots: Player[]) {
   const piloto = portavoz(room, bots, 'piloto')
   const cmd = portavoz(room, bots, 'comandante')
-  if (room.fase === 'lanzamiento' && room.t > 20) decir(room, piloto, 'Despegue limpio. Todos los motores en verde.', 'despegue')
-  if (room.fase === 'transito' && room.vuelo.progreso < 0.05) decir(room, cmd, `Órbita alcanzada. Rumbo a Marte, ${room.mision.diasTransito} días por delante.`, 'transito')
-  if (room.fase === 'llegada' && room.subfase === 'orbita') decir(room, piloto, 'Estamos en órbita de Marte. Hay que elegir dónde bajar.', 'orbita')
-  if (room.fase === 'llegada' && room.subfase === 'descenso') decir(room, piloto, 'Entramos en la atmósfera. Sujétense.', 'descenso')
-  if (room.fase === 'ensamblaje') decir(room, piloto, 'Contacto confirmado. Estamos en Marte.', 'aterrizaje')
-  if (room.fase === 'base') decir(room, cmd, 'Base operativa. Cada uno a su puesto.', 'base')
+  if (room.fase === 'lanzamiento' && room.t > 20) decir(room, piloto, 'Clean liftoff. All engines in the green.', 'despegue')
+  if (room.fase === 'transito' && room.vuelo.progreso < 0.05) decir(room, cmd, `Orbit reached. Heading for Mars, ${room.mision.diasTransito} days ahead.`, 'transito')
+  if (room.fase === 'llegada' && room.subfase === 'orbita') decir(room, piloto, 'We are in Mars orbit. We need to choose where to land.', 'orbita')
+  if (room.fase === 'llegada' && room.subfase === 'descenso') decir(room, piloto, 'Entering the atmosphere. Hold on tight.', 'descenso')
+  if (room.fase === 'ensamblaje') decir(room, piloto, 'Touchdown confirmed. We are on Mars.', 'aterrizaje')
+  if (room.fase === 'base') decir(room, cmd, 'The base is up and running. Everyone to your stations.', 'base')
   if (room.fase === 'fin' && room.resultado) {
-    decir(room, cmd, room.resultado.victoria ? 'Misión cumplida. Gracias, tripulación.' : 'No lo logramos esta vez. La próxima saldrá mejor.', 'fin', Infinity, true)
+    decir(room, cmd, room.resultado.victoria ? 'Mission accomplished. Thank you, crew.' : 'We did not make it this time. Next time will go better.', 'fin', Infinity, true)
   }
 }
 
@@ -418,8 +420,8 @@ function votarPropuestas(room: RoomState, j: Player, m: MemoriaBot) {
     const juicio = juzgar(room, p)
     votar(room, j.id, p.id, juicio.si)
     const deHumano = !jugadorBot(room, p.proponente)
-    if (!juicio.si) decir(room, j, `${manda ? 'Rechazo' : 'Voto no a'} "${p.titulo}". ${juicio.motivo}`, `~voto:${p.id}`, Infinity, deHumano)
-    else if (deHumano && manda) decir(room, j, `Aprobado: ${p.titulo.charAt(0).toLowerCase()}${p.titulo.slice(1)}.`, `~voto:${p.id}`)
+    if (!juicio.si) decir(room, j, `${manda ? 'I reject' : 'I vote no on'} "${p.titulo}". ${juicio.motivo}`, `~voto:${p.id}`, Infinity, deHumano)
+    else if (deHumano && manda) decir(room, j, `Approved: ${minus(p.titulo)}.`, `~voto:${p.id}`)
     return // un voto por segundo
   }
 }
@@ -438,41 +440,41 @@ function juzgar(room: RoomState, p: Proposal): { si: boolean; motivo: string } {
       const nivel = d.nivel as RacionComida
       const completa = a.comida * FACTOR_RACION[room.ajustes.racionComida]
       const conNivel = completa / FACTOR_RACION[nivel]
-      if (conNivel < faltan * 0.95) return no(`Con esa ración la comida dura ${r0(conNivel)} días y faltan ${r0(faltan)}.`)
-      if (nivel === 'estricto' && completa / 0.8 >= faltan) return no('Con la ración de ahorro ya alcanza. La estricta nos debilita sin necesidad.')
-      if (nivel !== 'normal' && completa >= faltan * 1.15) return no(`Hay comida para ${r0(completa)} días a ración completa y faltan ${r0(faltan)}.`)
+      if (conNivel < faltan * 0.95) return no(`With that ration the food lasts ${r0(conNivel)} days and there are ${r0(faltan)} days left.`)
+      if (nivel === 'estricto' && completa / 0.8 >= faltan) return no('The saver ration is already enough. The strict one weakens us for no reason.')
+      if (nivel !== 'normal' && completa >= faltan * 1.15) return no(`There is food for ${r0(completa)} days on the full ration and there are ${r0(faltan)} days left.`)
       return si
     }
     case 'racionAgua':
-      return d.nivel === 'normal' && a.agua < faltan * 1.3 ? no('El agua está justa. Mejor seguir ahorrando.') : si
+      return d.nivel === 'normal' && a.agua < faltan * 1.3 ? no('Water is tight. Better to keep saving.') : si
     case 'prioridad':
       return d.valor === 'ciencia' && room.energia.capacidad > 0 && room.energia.bateria < room.energia.capacidad * 0.3 && room.energia.generacion < room.energia.consumo
-        ? no('Con tan poca energía, el huerto no puede ir antes que la calefacción.')
+        ? no('With so little power, the garden cannot come before the heating.')
         : si
     case 'equipo': {
       if (d.activo) return si
       const id = d.sistema as SistemaId
-      if (id === 'oga' || id === 'cdra') return no(`Sin ${elSistema(id)} peligra el aire de la cabina.`)
-      if (id === 'wrs') return no('Sin el reciclador perdemos casi toda el agua que usamos.')
-      if (id === 'termico') return no('Sin control térmico la cabina se enfría o se calienta demasiado.')
-      if (id === 'isru' && room.mision.aguaObjetivo > room.mision.aguaExtraida) return no('Necesitamos el agua del hielo para cumplir el objetivo.')
+      if (id === 'oga' || id === 'cdra') return no(`Without ${elSistema(id)} the cabin air is at risk.`)
+      if (id === 'wrs') return no('Without the recycler we lose almost all the water we use.')
+      if (id === 'termico') return no('Without Thermal Control the cabin gets too cold or too hot.')
+      if (id === 'isru' && room.mision.aguaObjetivo > room.mision.aguaExtraida) return no('We need the water from the ice to meet the objective.')
       return si
     }
     case 'ejercicio':
-      return Number(d.horas) === 0 && a.aire >= faltan && a.agua >= faltan ? no('Sin ejercicio perdemos músculo y hueso, y aire y agua no faltan.') : si
+      return Number(d.horas) === 0 && a.aire >= faltan && a.agua >= faltan ? no('Without exercise we lose muscle and bone, and we have enough air and water.') : si
     case 'refugio':
-      if (d.salir) return room.ambiente.tormentaSolar ? no('La tormenta solar sigue. Mejor esperar en el refugio.') : si
-      return room.ambiente.tormentaSolar ? si : no('No hay tormenta solar. En el refugio nadie puede trabajar.')
+      if (d.salir) return room.ambiente.tormentaSolar ? no('The solar storm is still going. Better to wait in the Storm Shelter.') : si
+      return room.ambiente.tormentaSolar ? si : no('There is no solar storm. Nobody can work in the Storm Shelter.')
     case 'emergencia': {
       const em = room.emergencias.find((e) => e.id === d.emergenciaId)
       if (!em) return si
       const alt = String(d.altId)
       const mejor = opcion(room, em)
-      if (em.tipo === 'fallo' && alt === 'reparar' && mejor.id === 'reinicio') return no(room.rec.repuestos < 2 ? 'No quedan repuestos suficientes. Mejor el reinicio.' : 'Quedan pocos repuestos. Guardémoslos para el aire y el agua.')
-      if (em.tipo === 'fuga' && alt === 'sellar' && room.rec.repuestos < 1) return no('No quedan repuestos. Mejor cerrar la sección.')
-      if ((em.tipo === 'medico' || em.tipo === 'mareo') && alt === 'tratar' && room.rec.botiquines < 1) return no('No quedan botiquines. Mejor reposo.')
+      if (em.tipo === 'fallo' && alt === 'reparar' && mejor.id === 'reinicio') return no(room.rec.repuestos < 2 ? 'There are not enough spare parts. The restart is better.' : 'We have few spare parts left. Let us save them for air and water.')
+      if (em.tipo === 'fuga' && alt === 'sellar' && room.rec.repuestos < 1) return no('No spare parts left. Better to close off the section.')
+      if ((em.tipo === 'medico' || em.tipo === 'mareo') && alt === 'tratar' && room.rec.botiquines < 1) return no('No medical kits left. Rest is better.')
       const pasiva = em.alternativas[em.alternativas.length - 1].id
-      if (alt === pasiva && mejor.id !== pasiva) return no(`Mejor ${mejor.etiqueta.toLowerCase()}.`)
+      if (alt === pasiva && mejor.id !== pasiva) return no(`Better to ${minus(mejor.etiqueta)}.`)
       return si
     }
     default:
@@ -508,12 +510,12 @@ function opcion(room: RoomState, em: Emergency): EmergencyAlternative {
 const prescindible = (room: RoomState, id: SistemaId) => id === 'huerto' || (id === 'isru' && room.mision.aguaExtraida >= room.mision.aguaObjetivo)
 
 function porQue(room: RoomState, em: Emergency, alt: EmergencyAlternative): string {
-  if (alt.id === 'reparar') return `Quedan ${room.rec.repuestos} kits de repuestos.`
-  if (alt.id === 'reinicio') return room.rec.repuestos >= 2 ? `Quedan ${room.rec.repuestos} kits y mejor guardarlos para el aire y el agua.` : 'No hay repuestos para repararlo.'
-  if (alt.id === 'tratar') return `Quedan ${room.rec.botiquines} botiquines.`
-  if (alt.id === 'refugio') return 'Así la dosis baja mucho.'
-  if (alt.id === 'ahora') return 'Cuanto antes, menos propelente.'
-  if (alt.id === 'sellar') return 'Un kit y se acaba la pérdida de aire.'
+  if (alt.id === 'reparar') return `We have ${room.rec.repuestos} spare part kits left.`
+  if (alt.id === 'reinicio') return room.rec.repuestos >= 2 ? `We have ${room.rec.repuestos} kits left, and it is better to save them for air and water.` : 'There are no spare parts to repair it.'
+  if (alt.id === 'tratar') return `We have ${room.rec.botiquines} medical kits left.`
+  if (alt.id === 'refugio') return 'That way the dose drops a lot.'
+  if (alt.id === 'ahora') return 'The sooner, the less propellant.'
+  if (alt.id === 'sellar') return 'One kit and the air loss stops.'
   return alt.consecuencia
 }
 
@@ -532,10 +534,10 @@ function emergencia(room: RoomState, j: Player, m: MemoriaBot) {
     // Solo aconseja: el bot que comparte la responsabilidad, o el comandante, o quien sepa más.
     const consejero = decide ?? botDeRol(room, 'comandante') ?? room.jugadores.find((o) => o.bot)
     if (consejero?.id === j.id && madura(room, m, `consejo:${em.id}`, 3000, 6000)) {
-      decir(room, j, `${ROLE_BY_ID[persona!.rol!].nombre}, ${em.titulo.toLowerCase()}. Yo elegiría: ${alt.etiqueta.toLowerCase()}. ${porQue(room, em, alt)}`, `~em:${em.id}`)
+      decir(room, j, `${ROLE_BY_ID[persona!.rol!].nombre}, we have this: ${em.titulo}. I would choose: ${minus(alt.etiqueta)}. ${porQue(room, em, alt)}`, `~em:${em.id}`)
     }
     if (decide?.id !== j.id || em.vence - ahora() > MARGEN_EMERGENCIA_MS) return
-    decir(room, j, `Se acaba el tiempo. Decido yo: ${alt.etiqueta.toLowerCase()}.`, `~emYa:${em.id}`, Infinity, true)
+    decir(room, j, `Time is running out. I will decide: ${minus(alt.etiqueta)}.`, `~emYa:${em.id}`, Infinity, true)
   } else {
     if (decide?.id !== j.id || !madura(room, m, `em:${em.id}`, 2500, 5500)) return
   }
@@ -543,10 +545,10 @@ function emergencia(room: RoomState, j: Player, m: MemoriaBot) {
   if (error) return
   const propuesta = room.propuestas.find((p) => p.estado === 'pendiente' && p.tipo === 'emergencia' && p.payload.emergenciaId === em.id)
   if (propuesta) {
-    if (decideComandante(room) && persona?.rol === 'comandante') decir(room, j, `Comandante, ${em.titulo.toLowerCase()}. Propongo ${alt.etiqueta.toLowerCase()}. ${porQue(room, em, alt)} Apruébalo en Propuestas.`, undefined, Infinity, true)
-    else if (!decideComandante(room)) decir(room, j, `Propongo ${alt.etiqueta.toLowerCase()} para ${em.titulo.toLowerCase()}. Voten en Propuestas.`, undefined, Infinity, true)
+    if (decideComandante(room) && persona?.rol === 'comandante') decir(room, j, `Commander, we have this: ${em.titulo}. I propose: ${minus(alt.etiqueta)}. ${porQue(room, em, alt)} Approve it in Proposals.`, undefined, Infinity, true)
+    else if (!decideComandante(room)) decir(room, j, `For ${em.titulo}, I propose: ${minus(alt.etiqueta)}. Vote in Proposals.`, undefined, Infinity, true)
   } else if (!deLaPersona) {
-    decir(room, j, `${em.titulo}. Elijo ${alt.etiqueta.charAt(0).toLowerCase()}${alt.etiqueta.slice(1)}. ${porQue(room, em, alt)}`)
+    decir(room, j, `${em.titulo}. I choose: ${minus(alt.etiqueta)}. ${porQue(room, em, alt)}`)
   }
   // Va hasta el equipo afectado, aunque la decisión ya esté tomada.
   const sistema = em.datos.sistema as SistemaId | undefined
@@ -559,13 +561,13 @@ function emergencia(room: RoomState, j: Player, m: MemoriaBot) {
 // ---------- Comandante ----------
 
 const ESCALA_FASE: Partial<Record<RoomState['fase'], { valor: number; texto: string }>> = {
-  transito: { valor: 86400, texto: 'Acelero el reloj: un día de viaje por segundo.' },
-  ensamblaje: { valor: 600, texto: 'Diez minutos por segundo mientras montamos la base.' },
-  base: { valor: 3600, texto: 'Pongo el reloj a una hora por segundo.' },
+  transito: { valor: 86400, texto: 'Speeding up the clock: one day of travel per second.' },
+  ensamblaje: { valor: 600, texto: 'Ten minutes per second while we build the base.' },
+  base: { valor: 3600, texto: 'Setting the clock to one hour per second.' },
 }
 
 /** Con un huerto que cuida una persona, el viaje va a seis horas por segundo: a un día por segundo no da tiempo a regarlo. */
-const ESCALA_HUERTO = { valor: 21600, texto: 'Pongo el reloj a seis horas por segundo para que el huerto se pueda cuidar.' }
+const ESCALA_HUERTO = { valor: 21600, texto: 'Setting the clock to six hours per second so the garden can be looked after.' }
 
 function mando(room: RoomState, j: Player, m: MemoriaBot) {
   const huertoDePersona = room.fase === 'transito' && room.cargamento.huerto > 0 && (deRol(room, 'cientifico') ?? { bot: true }).bot !== true
@@ -583,7 +585,7 @@ function mando(room: RoomState, j: Player, m: MemoriaBot) {
     const piloto = deRol(room, 'piloto')
     if (piloto && !piloto.bot && esperando(m, 'orbita') > 90_000) {
       const sitio = sitioSensato(room)
-      if (proponerUbicacion(room, j.id, sitio) === null) decir(room, j, `Propongo yo ${SITE_BY_ID[sitio].nombre} para no perder tiempo.`, undefined, Infinity, true)
+      if (proponerUbicacion(room, j.id, sitio) === null) decir(room, j, `I will propose ${SITE_BY_ID[sitio].nombre} so we do not lose time.`, undefined, Infinity, true)
     }
   }
 }
@@ -608,54 +610,54 @@ function pedidos(room: RoomState, bots: Player[]) {
     if (p.estado !== 'pendiente' || typeof p.votos[persona.id] === 'boolean' || ahora() - p.creada < 15_000) continue
     if (decideComandante(room) && rol !== 'comandante') continue
     const quien = room.jugadores.find((o) => o.id === p.proponente && o.bot) ?? portavoz(room, bots)
-    habla(`Falta tu decisión sobre "${p.titulo}".`, `~pv:${p.id}`, Infinity, quien)
+    habla(`We still need your decision on "${p.titulo}".`, `~pv:${p.id}`, Infinity, quien)
   }
   // Tareas de montaje y procedimientos que le tocan.
   const tarea = tareasDeLaPersona(room, persona)[0]
-  if (tarea) habla(`${nombreRol}, te toca ${tarea.titulo} en ${ESTACIONES[tarea.estacion]?.nombre ?? 'su estación'}.`, 'tarea', 75_000)
+  if (tarea) habla(`${nombreRol}, up next for you: ${tarea.titulo}, at ${ESTACIONES[tarea.estacion]?.nombre ?? 'its station'}.`, 'tarea', 75_000)
 
   switch (rol) {
     case 'sistemas': {
       const peor = room.sistemas.filter((s) => s.instalado && s.integridad < 50).sort((a, b) => a.integridad - b.integridad)[0]
-      if (peor && room.rec.repuestos >= 1) habla(`Sistemas, ${elSistema(peor.id)} está al ${Math.round(peor.integridad)}%. Conviene repararlo.`, `rep:${peor.id}`, 90_000, portavoz(room, bots, 'logistica'))
-      if (room.cabina.fuga > 0 && !room.emergencias.some((e) => e.estado === 'activa' && e.tipo === 'fuga')) habla('Sistemas, sigue la fuga de presión. Hay que sellarla.', 'fuga', 60_000)
+      if (peor && room.rec.repuestos >= 1) habla(`${nombreRol}, ${elSistema(peor.id)} is at ${Math.round(peor.integridad)}%. It is a good idea to repair it.`, `rep:${peor.id}`, 90_000, portavoz(room, bots, 'logistica'))
+      if (room.cabina.fuga > 0 && !room.emergencias.some((e) => e.estado === 'activa' && e.tipo === 'fuga')) habla(`${nombreRol}, the pressure leak is still going. It needs to be sealed.`, 'fuga', 60_000)
       break
     }
     case 'medico':
       for (const o of tripulacion(room)) {
         if (!o.bot || !(o.dolencia || o.vit.salud < 60)) continue
         if (room.emergencias.some((e) => e.estado === 'activa' && e.datos.jugadorId === o.id)) continue
-        habla(o.dolencia ? `Médico, tengo ${o.dolencia}. ¿Me atiendes en la enfermería?` : 'Médico, no me siento bien. ¿Me revisas en la enfermería?', `paciente:${o.id}`, 120_000, o)
+        habla(o.dolencia ? `${nombreRol}, I have ${o.dolencia}. Can you treat me in the Medical Bay?` : `${nombreRol}, I do not feel well. Can you check me in the Medical Bay?`, `paciente:${o.id}`, 120_000, o)
       }
       break
     case 'cientifico': {
       const mis = room.mision
       const hora = room.ambiente.hora
-      if (room.fase === 'base' && persona.muestras > 0 && persona.zona === 'nave') habla('Ya tienes muestras. Analízalas en el laboratorio.', 'analiza', 120_000)
+      if (room.fase === 'base' && persona.muestras > 0 && persona.zona === 'nave') habla('You already have samples. Analyze them in the lab.', 'analiza', 120_000)
       else if (room.fase === 'base' && mis.muestrasAnalizadas + persona.muestras < mis.muestrasObjetivo && hora > 9 && hora < 15 && persona.zona === 'nave') {
-        habla(`Hay buena luz afuera. Faltan ${mis.muestrasObjetivo - mis.muestrasAnalizadas} muestras para el objetivo.`, 'muestras', 180_000)
+        habla(`There is good light outside. We still need ${mis.muestrasObjetivo - mis.muestrasAnalizadas} samples for the objective.`, 'muestras', 180_000)
       }
-      if (room.cargamento.huerto > 0 && !room.huerto.establecido && (room.fase === 'transito' || room.fase === 'base')) habla('Cuando puedas, monta el huerto en el laboratorio.', 'huerto', 240_000)
+      if (room.cargamento.huerto > 0 && !room.huerto.establecido && (room.fase === 'transito' || room.fase === 'base')) habla('When you can, set up the garden in the lab.', 'huerto', 240_000)
       break
     }
     case 'piloto':
       if (room.fase === 'llegada' && room.subfase === 'orbita' && !room.propuestas.some((p) => p.estado === 'pendiente' && p.tipo === 'ubicacion')) {
-        habla('Piloto, elige el sitio de aterrizaje desde el puente.', 'sitio', 40_000)
+        habla(`${nombreRol}, choose the landing site from the Bridge.`, 'sitio', 40_000)
       }
       if (room.fase === 'base' && room.energia.polvo > 0.1 && room.ambiente.hora > 9 && room.ambiente.hora < 16) {
-        habla(`Los paneles pierden un ${Math.round(room.energia.polvo * 100)}% por el polvo. ¿Sales a limpiarlos?`, 'polvo', 150_000, portavoz(room, bots, 'logistica'))
+        habla(`The panels are losing ${Math.round(room.energia.polvo * 100)}% to dust. Can you go out and clean them?`, 'polvo', 150_000, portavoz(room, bots, 'logistica'))
       }
       break
     case 'logistica':
       for (const recurso of ['comida', 'agua', 'aire'] as const) {
-        if (room.autonomia[recurso] < faltan * 0.95) habla(`Logística, ${NOMBRE_RECURSO[recurso]} alcanza para ${r0(room.autonomia[recurso])} días y faltan ${r0(faltan)}.`, `escasez:${recurso}`, 150_000)
+        if (room.autonomia[recurso] < faltan * 0.95) habla(`${nombreRol}, ${NOMBRE_RECURSO[recurso]} lasts ${r0(room.autonomia[recurso])} days and there are ${r0(faltan)} days left.`, `escasez:${recurso}`, 150_000)
       }
       break
     case 'comandante': {
       const calma = !room.emergencias.some((e) => e.estado === 'activa') && room.jugadores.every((o) => o.zona === 'nave')
       const sugerida = ESCALA_FASE[room.fase]?.valor
       if (calma && sugerida && room.escalaDeseada < sugerida / 4 && room.t - room.tFase > 60) {
-        habla('Comandante, todo estable. Podemos acelerar el tiempo.', `acelera:${room.fase}`, 180_000, portavoz(room, bots, 'piloto'))
+        habla('Commander, everything is stable. We can speed up time.', `acelera:${room.fase}`, 180_000, portavoz(room, bots, 'piloto'))
       }
       break
     }
@@ -666,7 +668,7 @@ function pedidos(room: RoomState, bots: Player[]) {
 function tareasDeLaPersona(room: RoomState, persona: Player): { clave: string; titulo: string; estacion: string }[] {
   const lista: { clave: string; titulo: string; estacion: string }[] = []
   for (const p of pendientes(room)) {
-    if (titularDe(room, p.roles)?.id === persona.id) lista.push({ clave: `${p.procId}:${p.paso}`, titulo: 'el siguiente paso del procedimiento', estacion: p.estacion })
+    if (titularDe(room, p.roles)?.id === persona.id) lista.push({ clave: `${p.procId}:${p.paso}`, titulo: 'the next step of the procedure', estacion: p.estacion })
   }
   if (usarTareasSimples(room)) {
     for (const t of tareasAbiertas(room)) {
@@ -828,12 +830,12 @@ function ejecutar(room: RoomState, j: Player, h: Record<string, unknown>): strin
 function relatar(room: RoomState, j: Player, h: Record<string, unknown>) {
   if (h.op === 'tarea') {
     const t = TAREAS_ENSAMBLAJE.find((x) => x.id === h.tarea)
-    if (t) decir(room, j, `Listo: ${t.titulo.charAt(0).toLowerCase()}${t.titulo.slice(1)}.`)
+    if (t) decir(room, j, `Done: ${minus(t.titulo)}.`)
     return
   }
   if (h.op === 'ubicacion') {
     const sitio = SITE_BY_ID[String(h.sitio)]
-    pedirAprobacion(room, j, `aterrizar en ${sitio.nombre}`)
+    pedirAprobacion(room, j, `landing at ${sitio.nombre}`)
     return
   }
   if (h.op !== 'accion') return
@@ -841,28 +843,28 @@ function relatar(room: RoomState, j: Player, h: Record<string, unknown>) {
   switch (h.tipo) {
     case 'reparar': {
       const s = sis(room, d.sistema as SistemaId)
-      decir(room, j, `Reparé ${elSistema(s.id)}. Está al ${Math.round(s.integridad)}% y quedan ${room.rec.repuestos} kits.`)
+      decir(room, j, `I repaired ${elSistema(s.id)}. It is at ${Math.round(s.integridad)}% and we have ${room.rec.repuestos} kits left.`)
       break
     }
     case 'sellar':
-      decir(room, j, 'Fuga sellada. La cabina ya no pierde aire.')
+      decir(room, j, 'Leak sealed. The cabin is no longer losing air.')
       break
     case 'lioh':
-      decir(room, j, `Instalé un cartucho de hidróxido de litio. Quedan ${room.rec.lioh}.`)
+      decir(room, j, `I installed a lithium hydroxide cartridge. ${room.rec.lioh} left.`)
       break
     case 'tratar': {
       const paciente = room.jugadores.find((o) => o.id === d.jugadorId)
-      if (paciente) decir(room, j, paciente.id === j.id ? 'Me traté en la enfermería. Ya estoy bien.' : `Ya atendí a ${paciente.nombre}.`)
+      if (paciente) decir(room, j, paciente.id === j.id ? 'I treated myself in the Medical Bay. I am fine now.' : `I treated ${paciente.nombre}.`)
       break
     }
     case 'analizar':
-      decir(room, j, `Muestras analizadas. Llevamos ${room.mision.muestrasAnalizadas} de ${room.mision.muestrasObjetivo}.`)
+      decir(room, j, `Samples analyzed. We have ${room.mision.muestrasAnalizadas} of ${room.mision.muestrasObjetivo}.`)
       break
     case 'limpiar':
-      decir(room, j, 'Paneles limpios. Vuelven a dar toda su potencia.')
+      decir(room, j, 'Panels clean. They are back to full power.')
       break
     case 'huerto':
-      decir(room, j, room.huerto.establecido ? 'El huerto ya está listo. La primera cosecha llega en 28 días.' : `El huerto va al ${room.huerto.progreso}%.`)
+      decir(room, j, room.huerto.establecido ? 'The garden is ready. The first harvest comes in 28 days.' : `The garden is ${room.huerto.progreso}% done.`)
       break
     case 'racionComida':
     case 'racionAgua':
@@ -871,7 +873,7 @@ function relatar(room: RoomState, j: Player, h: Record<string, unknown>) {
     case 'refugio':
     case 'prioridad': {
       const p = room.propuestas.find((x) => x.proponente === j.id)
-      if (p?.estado === 'pendiente') pedirAprobacion(room, j, p.titulo.charAt(0).toLowerCase() + p.titulo.slice(1))
+      if (p?.estado === 'pendiente') pedirAprobacion(room, j, minus(p.titulo))
       break
     }
   }
@@ -879,8 +881,8 @@ function relatar(room: RoomState, j: Player, h: Record<string, unknown>) {
 
 function pedirAprobacion(room: RoomState, j: Player, que: string) {
   const persona = humano(room)
-  if (decideComandante(room) && persona?.rol === 'comandante') decir(room, j, `Comandante, propongo ${que}. Revísalo en Propuestas.`, undefined, Infinity, true)
-  else if (!decideComandante(room)) decir(room, j, `Propongo ${que}. Voten en Propuestas.`, undefined, Infinity, true)
+  if (decideComandante(room) && persona?.rol === 'comandante') decir(room, j, `Commander, I propose: ${que}. Check it in Proposals.`, undefined, Infinity, true)
+  else if (!decideComandante(room)) decir(room, j, `I propose: ${que}. Vote in Proposals.`, undefined, Infinity, true)
 }
 
 // ---------- Qué hacer ahora ----------
@@ -920,7 +922,7 @@ function meToca(room: RoomState, j: Player, m: MemoriaBot, roles: Role[], clave:
   if (titular.id === j.id) return true
   if (titular.bot || !roles.includes(j.rol) || !titular.conectado) return false
   if (esperando(m, clave) < ESPERA_HUMANO_MS) return false
-  decir(room, j, 'Lo hago yo para no retrasar la base.', `~relevo:${clave}`)
+  decir(room, j, 'I will do it so the base is not delayed.', `~relevo:${clave}`)
   return true
 }
 
@@ -939,7 +941,7 @@ function decidir(room: RoomState, j: Player, m: MemoriaBot): Plan | null {
   // Alguien pidió ayuda a su rol.
   if (persona?.ayuda && (persona.ayuda.paraRol === j.rol || (j.rol === 'comandante' && !botDeRol(room, persona.ayuda.paraRol))) && madura(room, m, `ayuda:${persona.ayuda.desde}`, 2000, 4000)) {
     if (irAyudar(room, j.id, persona.id) === null) {
-      decir(room, j, j.rol === 'medico' ? 'Voy para allá. Te espero en la enfermería.' : 'Voy para allá.', undefined, Infinity, true)
+      decir(room, j, j.rol === 'medico' ? 'On my way. I will wait for you in the Medical Bay.' : 'On my way.', undefined, Infinity, true)
       if (j.rol === 'medico' && (persona.dolencia || persona.vit.salud < 60) && room.rec.botiquines > 0) {
         return plan('tratar', [etapa('enfermeria', 5, { op: 'accion', tipo: 'tratar', datos: { jugadorId: persona.id } })])
       }
@@ -1019,7 +1021,7 @@ function medico(room: RoomState, j: Player, m: MemoriaBot, plan: Planificar): Pl
   // Avisa de la dosis de uno en uno y sin prisa: de quien más lleva entre los que pasan de 500 mSv.
   const expuesto = [...tripulacion(room)].sort((a, b) => b.vit.dosis - a.vit.dosis).find((o) => o.vit.dosis > 500 && m.marcas[`dicho:dosis:${o.id}`] === undefined)
   if (expuesto && ahora() - (m.marcas.avisoDosis ?? -1e15) > 300_000) {
-    if (decir(room, j, `${expuesto.nombre} lleva ${Math.round(expuesto.vit.dosis)} mSv, cerca del límite de ${C.LIMITE_CARRERA_MSV}. Vigilemos su dosis.`, `dosis:${expuesto.id}`)) m.marcas.avisoDosis = ahora()
+    if (decir(room, j, `${expuesto.nombre} has ${Math.round(expuesto.vit.dosis)} mSv, close to the limit of ${C.LIMITE_CARRERA_MSV}. Let us watch their dose.`, `dosis:${expuesto.id}`)) m.marcas.avisoDosis = ahora()
   }
   return paseo(room, j, plan)
 }
@@ -1064,7 +1066,7 @@ function logistica(room: RoomState, j: Player, plan: Planificar): Plan | null {
     }
   }
   for (const recurso of ['comida', 'agua', 'aire'] as const) {
-    if (a[recurso] < faltan * 0.9) decir(room, j, `Ojo: ${NOMBRE_RECURSO[recurso]} alcanza para ${r0(a[recurso])} días y faltan ${r0(faltan)}.`, `aviso:${recurso}`, 180_000)
+    if (a[recurso] < faltan * 0.9) decir(room, j, `Heads up: ${NOMBRE_RECURSO[recurso]} lasts ${r0(a[recurso])} days and there are ${r0(faltan)} days left.`, `aviso:${recurso}`, 180_000)
   }
   return paseo(room, j, plan)
 }
@@ -1099,7 +1101,7 @@ function cientifico(room: RoomState, j: Player, m: MemoriaBot, plan: Planificar)
     if (ruta.length) {
       const p = plan('muestras', [...ruta.map((id) => etapa(id, 5, { op: 'accion', tipo: 'muestra', datos: { sitio: id } })), etapa('laboratorio', 6, { op: 'accion', tipo: 'analizar', datos: {} })])
       if (p) {
-        decir(room, j, `Salgo a recoger ${ruta.length} ${ruta.length === 1 ? 'muestra' : 'muestras'}.`)
+        decir(room, j, `Going out to collect ${ruta.length} ${ruta.length === 1 ? 'sample' : 'samples'}.`)
         return p
       }
     }
