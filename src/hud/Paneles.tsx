@@ -3,6 +3,7 @@
 // lado con su oxígeno, salud y pulso, y los puntos críticos abajo.
 import { useState } from 'react'
 import { useGraficos } from '../graficos'
+import { ASCENSO, llamadaCuenta, proximoEvento } from '@shared/ascenso'
 import { C } from '@shared/ciencia'
 import { ESCALAS, ESCALA_MAXIMA, ROLES, ROLE_BY_ID, SITE_BY_ID, etiquetaTiempo, formatoHora, type Player, type RoomState } from '@shared/types'
 import { puede } from '../mundo/mapa'
@@ -318,10 +319,20 @@ export function Registro({ sala }: { sala: RoomState }) {
 /** Telemetría grande durante el lanzamiento y el descenso. */
 export function Telemetria({ sala, yo }: { sala: RoomState; yo: Player }) {
   const v = sala.vuelo
+  const lanzamiento = sala.fase === 'lanzamiento'
   const cuenta = sala.t < 0
+  // Las llamadas reales de la cuenta terminal de Artemis I y el próximo evento del ascenso.
+  const llamada = lanzamiento ? llamadaCuenta(sala.t) : null
+  const proximo = lanzamiento && !cuenta ? proximoEvento(sala.t) : null
   return (
     <div className="telemetria">
-      <div className="etapa">{cuenta ? `Liftoff in ${Math.ceil(-sala.t)}` : v.etapa}</div>
+      <div className="etapa">{cuenta ? `T−${Math.ceil(-sala.t)} · Liftoff in ${Math.ceil(-sala.t)}` : v.etapa}</div>
+      {llamada && <div className="llamada">“{llamada}”</div>}
+      {proximo && !llamada && (
+        <div className="llamada muted">
+          Next: {proximo.nombre} at T+{Math.floor(proximo.t / 60)}:{String(proximo.t % 60).padStart(2, '0')}, in {Math.ceil(proximo.t - sala.t)} s
+        </div>
+      )}
       <div className="fila">
         <div><span>Altitude</span><b>{v.altitud} km</b></div>
         <div><span>Speed</span><b>{sala.fase === 'lanzamiento' ? `${v.velocidad} km/s` : `${Math.round(v.velocidad * 3600).toLocaleString('en-US')} km/h`}</b></div>
@@ -329,13 +340,13 @@ export function Telemetria({ sala, yo }: { sala: RoomState; yo: Player }) {
         <div><span>Your pulse</span><b className={nivel(yo.vit.fc > 150, yo.vit.fc > 110)}>{Math.round(yo.vit.fc)} bpm</b></div>
       </div>
       <div className="fila gasto">
-        <div><span>Fuel</span><b className={nivel(false, sala.rec.propelente < 25)}>{Math.round(sala.rec.propelente)}%</b></div>
+        <div><span>{lanzamiento ? (sala.t >= ASCENSO.separacionCentral ? 'Fuel (upper stage)' : 'Fuel (core stage)') : 'Fuel'}</span><b className={nivel(false, !lanzamiento && sala.rec.propelente < 25)}>{Math.round(sala.rec.propelente)}%</b></div>
         <div><span>Energy used</span><b>{energiaUsada(sala)}</b></div>
         <div><span>{sala.fase === 'lanzamiento' ? 'Flight time' : 'In space'}</span><b>{sala.fase === 'lanzamiento' ? (cuenta ? 'on the ground' : `${Math.floor(sala.t / 60)} min ${Math.floor(sala.t % 60)} s`) : tiempoEnEspacio(sala)}</b></div>
       </div>
       <div className="muted mini">
         {sala.fase === 'lanzamiento'
-          ? 'The acceleration presses you into your seat, and your heart beats faster to keep blood flowing to your head.'
+          ? 'This is the real climb of Artemis I, launched by the SLS rocket from Pad 39B on November 16, 2022. The acceleration presses you into your seat, and your heart beats faster to keep blood flowing to your head.'
           : 'This is the real descent of Perseverance. The capsule enters at 19,200 km/h and in seven minutes touches down at less than 3 km/h. Earth cannot help: the signal takes too long.'}
       </div>
     </div>

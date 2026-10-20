@@ -3,7 +3,7 @@
 // la página principal, que reúne las opciones del esquema del equipo.
 import { createContext, useContext, type ReactNode } from 'react'
 import { C } from '@shared/ciencia'
-import { CULTIVO_BY_ID, cultivoDe } from '@shared/procedimientos'
+import { CULTIVO_BY_ID, MAX_MUESTRAS, cultivoDe, estacionSistema, kitsReparacion } from '@shared/procedimientos'
 import {
   GESTION_BASE,
   PASOS_ENSAMBLAJE,
@@ -22,7 +22,7 @@ import { ESTACION_BY_ID, puede } from '../mundo/mapa'
 import { api } from '../red'
 import { useStore } from '../store'
 import { useVoz, voz } from '../voz'
-import { Procedimientos } from './Procedimiento'
+import { Procedimientos, Trabajo } from './Procedimiento'
 import { Barra, Dato, RolTag, diasRestantes, diasTexto, enMarte, energiaUsada, mmHg, nivel, pctTraje, roles, tiempoEnEspacio, type Nivel } from './comun'
 
 interface P {
@@ -35,6 +35,8 @@ interface P {
  * consultar y decidir, pero los trabajos manuales piden ir hasta allí.
  */
 const Remoto = createContext(false)
+/** Estación del panel abierto: los trabajos se ofrecen donde se hacen. */
+const Aqui = createContext('')
 const IR_HASTA_AQUI = 'You have to go to the station to do this.'
 
 const hayPropuesta = (sala: RoomState, tipo: string, filtro?: (payload: Record<string, unknown>) => boolean) =>
@@ -60,6 +62,13 @@ function Tarea({ sala, yo, estacion }: P & { estacion: string }) {
   return <Procedimientos sala={sala} yo={yo} estacion={estacion} remoto={remoto} />
 }
 
+/** Un trabajo por pasos de esta estación (reparar, curar, salir...), con su botón de empezar. */
+function Trabajar({ sala, yo, procId, motivo }: P & { procId: string; motivo?: boolean }) {
+  const remoto = useContext(Remoto)
+  const aqui = useContext(Aqui)
+  return <Trabajo sala={sala} yo={yo} procId={procId} estacion={aqui} remoto={remoto} motivo={motivo} />
+}
+
 /** Estado de un equipo, con sus botones de reparar y de encender o apagar. */
 function Equipo({ sala, yo, id, aqui = true }: P & { id: SistemaId; aqui?: boolean }) {
   const remoto = useContext(Remoto)
@@ -69,8 +78,9 @@ function Equipo({ sala, yo, id, aqui = true }: P & { id: SistemaId; aqui?: boole
   const averiado = s.integridad <= 15
   const cortado = sala.energia.cortes.includes(id)
   const estado = averiado ? 'broken' : !s.activo ? 'off' : cortado ? 'no power' : s.operativo ? 'running' : 'stopped'
-  const kits = s.integridad <= 30 ? 2 : 1
+  const kits = kitsReparacion(s.integridad)
   const interruptor = id !== 'energia' && id !== 'esclusa'
+  const lugar = estacionSistema(sala, id)
   return (
     <div className="equipo">
       <div className="row" style={{ gap: 6 }}>
@@ -83,20 +93,14 @@ function Equipo({ sala, yo, id, aqui = true }: P & { id: SistemaId; aqui?: boole
         <div className="grow"><Barra valor={s.integridad} tono={nivel(s.integridad < 30, s.integridad < 55)} /></div>
         <span className="mono mini">{Math.round(s.integridad)}%</span>
       </div>
+      {aqui && s.integridad < 95 && <Trabajar sala={sala} yo={yo} procId={`reparar:${id}`} />}
+      {s.integridad < 95 && sala.rec.repuestos < kits && <span className="mini warn">A repair needs {kits} spare parts kit{kits > 1 ? 's' : ''} and {sala.rec.repuestos} {sala.rec.repuestos === 1 ? 'is' : 'are'} left.</span>}
       <div className="row" style={{ gap: 6, marginTop: 6 }}>
         {remoto ? (
           <span className="mini muted">Repair it by going to the equipment.</span>
-        ) : aqui ? (
-          puede(sala, yo, ['sistemas']) ? (
-            <button className="small" disabled={s.integridad >= 95 || sala.rec.repuestos < kits} onClick={() => api.accion('reparar', { sistema: id })}>
-              Repair ({kits} kit{kits > 1 ? 's' : ''})
-            </button>
-          ) : (
-            <Reservado a={['sistemas']} />
-          )
-        ) : (
-          <span className="mini muted">It is repaired outside, where it stands.</span>
-        )}
+        ) : !aqui ? (
+          <span className="mini muted">It is repaired at {ESTACION_BY_ID[lugar.estacion]?.nombre ?? 'its station'}{lugar.zona === 'exterior' ? ', outside in the suit' : ''}.</span>
+        ) : null}
         {interruptor && puede(sala, yo, ['logistica', 'comandante', 'medico']) && (
           <button className="small" disabled={hayPropuesta(sala, 'equipo', (p) => p.sistema === id)} onClick={() => api.accion('equipo', { sistema: id })}>
             Propose {s.activo ? 'shutdown' : 'startup'}
@@ -183,12 +187,8 @@ function SoporteVital({ sala, yo }: P) {
           <Dato etiqueta="Temperature" valor={`${c.temp.toFixed(1)} °C`} tono={nivel(c.temp < 5 || c.temp > 32, c.temp < 15 || c.temp > 28)} />
         </div>
         <p className="mini muted">The crew uses about {(sala.jugadores.filter((j) => j.rol).length * 0.84).toFixed(1)} kg of oxygen a day and breathes out almost the same mass of CO₂.</p>
-        {c.fuga > 0 && (
-          <div className="help">
-            There is a leak: {c.fuga} kg of air lost per hour.{' '}
-            {puede(sala, yo, ['sistemas']) ? <button className="small" disabled={remoto} title={remoto ? IR_HASTA_AQUI : undefined} onClick={() => api.accion('sellar')}>Seal (1 kit)</button> : <Reservado a={['sistemas']} />}
-          </div>
-        )}
+        {c.fuga > 0 && <div className="help">There is a leak: {c.fuga} kg of air lost per hour.</div>}
+        {c.fuga > 0 && <Trabajar sala={sala} yo={yo} procId="sellar" motivo />}
       </Seccion>
       <Seccion titulo="Production and recycling">
         <Equipo sala={sala} yo={yo} id="oga" />
@@ -198,11 +198,7 @@ function SoporteVital({ sala, yo }: P) {
       </Seccion>
       <Seccion titulo="Lithium hydroxide cartridges">
         <p className="mini">{sala.rec.lioh} left. The installed ones can still absorb {sala.rec.liohActivo.toFixed(1)} kg of CO₂. They work without electricity.</p>
-        {puede(sala, yo, ['logistica', 'sistemas']) ? (
-          <button className="small" disabled={remoto || sala.rec.lioh < 1} title={remoto ? IR_HASTA_AQUI : undefined} onClick={() => api.accion('lioh')}>Install a cartridge ({C.LIOH_KG_CO2} kg of CO₂)</button>
-        ) : (
-          <Reservado a={['logistica', 'sistemas']} />
-        )}
+        <Trabajar sala={sala} yo={yo} procId="lioh" motivo />
       </Seccion>
     </>
   )
@@ -323,7 +319,7 @@ function Enfermeria({ sala, yo }: P) {
       <Seccion titulo="Crew vital signs">
         <table className="tabla compacta">
           <thead>
-            <tr><th></th><th>Pulse</th><th>Resp.</th><th>O₂</th><th>Water</th><th>Fatigue</th><th>Musc.</th><th>mSv</th><th></th></tr>
+            <tr><th></th><th>Pulse</th><th>Resp.</th><th>O₂</th><th>Water</th><th>Fatigue</th><th>Musc.</th><th>mSv</th><th>Health</th></tr>
           </thead>
           <tbody>
             {crew.map((j) => {
@@ -338,19 +334,21 @@ function Enfermeria({ sala, yo }: P) {
                   <td className={`mono ${nivel(v.fatiga > 85, v.fatiga > 60)}`}>{Math.round(v.fatiga)}%</td>
                   <td className={`mono ${nivel(v.condicion < 70, v.condicion < 88)}`}>{Math.round(v.condicion)}%</td>
                   <td className={`mono ${nivel(v.dosis > C.LIMITE_CARRERA_MSV, v.dosis > 450)}`}>{Math.round(v.dosis)}</td>
-                  <td>
-                    {soyMedico && (
-                      <button className="small" disabled={remoto || sala.rec.botiquines < 1 || (!j.dolencia && j.incapacitado <= 0 && v.salud > 90)} title={remoto ? IR_HASTA_AQUI : undefined} onClick={() => api.accion('tratar', { jugadorId: j.id })}>
-                        Treat
-                      </button>
-                    )}
-                  </td>
+                  <td className={`mono ${nivel(v.salud < 40, v.salud < 70)}`}>{Math.round(v.salud)}%</td>
                 </tr>
               )
             })}
           </tbody>
         </table>
         <p className="mini muted">Medical kits: {sala.rec.botiquines}. Each treatment uses one. Career radiation limit: {C.LIMITE_CARRERA_MSV} mSv.</p>
+      </Seccion>
+      <Seccion titulo="Patients">
+        {crew.some((j) => j.dolencia || j.incapacitado > 0 || j.vit.salud <= 90) ? (
+          crew.map((j) => <Trabajar key={j.id} sala={sala} yo={yo} procId={`tratar:${j.id}`} />)
+        ) : (
+          <p className="mini muted">Nobody needs treatment right now.</p>
+        )}
+        {!soyMedico && <Reservado a={['medico']} />}
       </Seccion>
       <Seccion titulo="Exercise plan">
         <Opciones
@@ -444,10 +442,8 @@ function Laboratorio({ sala, yo }: P) {
       </Seccion>
       <Seccion titulo="Soil samples">
         <p className="mini">Analyzed: {sala.mision.muestrasAnalizadas} of {sala.mision.muestrasObjetivo}. You are carrying {yo.muestras} not yet analyzed.</p>
-        <button className="small primary" disabled={remoto || yo.muestras < 1} title={remoto ? IR_HASTA_AQUI : undefined} onClick={() => api.accion('analizar')}>
-          Analyze my samples ({(1.5 * Math.max(1, yo.muestras)).toFixed(1)} kWh)
-        </button>
-        <p className="mini muted">Samples are collected outside, at the marked sites, once the base is running.</p>
+        <Trabajar sala={sala} yo={yo} procId={`analizar:${yo.id}`} />
+        <p className="mini muted">Samples are collected outside, at the marked sites, once the base is running. A sample only counts if it was taken and analyzed with care. The full analysis uses 1.5 kWh per sample.</p>
       </Seccion>
     </>
   )
@@ -494,9 +490,7 @@ function Refugio({ sala, yo }: P) {
 }
 
 function Esclusa({ sala, yo }: P) {
-  const abrir = useStore((s) => s.abrirEstacion)
   const o2 = pctTraje(yo.trajeO2)
-  const listo = yo.trajeO2 >= C.TRAJE_O2_KG * 0.3 && yo.trajeBateria >= 0.3
   const a = sala.ambiente
   return (
     <>
@@ -512,17 +506,8 @@ function Esclusa({ sala, yo }: P) {
         {enMarte(sala) ? (
           <>
             <p className="mini">Outside it is {a.tempExt} °C and {a.presion} Pa{a.tormentaPolvo ? ', with a dust storm' : ''}. While someone is outside, time runs no faster than ×60.</p>
-            <button
-              className="primary"
-              disabled={!listo || yo.enRefugio || yo.incapacitado > 0}
-              onClick={async () => {
-                const r = await api.zona('exterior')
-                if (r && !r.error) abrir(null)
-              }}
-            >
-              Suit up and go outside
-            </button>
-            {!listo && <span className="mini warn"> The suit is recharging.</span>}
+            <Trabajar sala={sala} yo={yo} procId={`salida:${yo.id}`} motivo />
+            <Trabajar sala={sala} yo={yo} procId={`entrada:${yo.id}`} />
           </>
         ) : (
           <p className="mini muted">You can only go outside once the ship is on Mars.</p>
@@ -535,20 +520,12 @@ function Esclusa({ sala, yo }: P) {
   )
 }
 
-function EsclusaExterior() {
-  const abrir = useStore((s) => s.abrirEstacion)
+function EsclusaExterior({ sala, yo }: P) {
+  const o2 = pctTraje(yo.trajeO2)
   return (
     <Seccion titulo="Back to the habitat">
-      <p className="mini">Inside you take off the suit and the airlock recharges it.</p>
-      <button
-        className="primary"
-        onClick={async () => {
-          const r = await api.zona('nave')
-          if (r && !r.error) abrir(null)
-        }}
-      >
-        Go inside
-      </button>
+      <p className="mini">Your suit has {o2}% of its oxygen{yo.trajeFuga ? ' and it is leaking' : ''}. Inside you take off the suit and the airlock recharges it.</p>
+      <Trabajar sala={sala} yo={yo} procId={`entrada:${yo.id}`} motivo />
     </Seccion>
   )
 }
@@ -563,7 +540,7 @@ function CampoSolar({ sala, yo }: P) {
         {desplegado ? (
           <>
             <p className="mini">{sala.cargamento.paneles} array(s) of 50 m². Each one gives up to {C.PANEL_KW} kW at noon under a clear sky. Because of how they were aimed, they use {Math.round((sala.efectos?.solar ?? 1) * 100)}% of the light. Built-up dust takes away {polvo}%.</p>
-            <button className="small primary" disabled={polvo < 3} onClick={() => api.accion('limpiar')}>Clean the panels</button>
+            <Trabajar sala={sala} yo={yo} procId="limpiar" motivo />
             <p className="mini muted">Anyone can clean them. Dust settles again every sol, and much faster in a storm.</p>
           </>
         ) : (
@@ -578,14 +555,8 @@ function Muestreo({ sala, yo, id }: P & { id: string }) {
   const tomada = sala.muestreos.includes(id)
   return (
     <Seccion titulo="Sample Site">
-      <p className="mini">Untouched rock and soil. You are carrying {yo.muestras} of 3 possible samples before you must return to the lab.</p>
-      {tomada ? (
-        <span className="mini ok">The sample from this site has already been taken.</span>
-      ) : puede(sala, yo, ['cientifico']) ? (
-        <button className="primary" disabled={yo.muestras >= 3} onClick={() => api.accion('muestra', { sitio: id })}>Collect sample</button>
-      ) : (
-        <Reservado a={['cientifico']} />
-      )}
+      <p className="mini">Untouched rock and soil. You are carrying {yo.muestras} of {MAX_MUESTRAS} possible samples before you must return to the lab.</p>
+      {tomada ? <span className="mini ok">The sample from this site has already been taken.</span> : <Trabajar sala={sala} yo={yo} procId={`muestra:${id}`} motivo />}
     </Seccion>
   )
 }
@@ -653,7 +624,7 @@ function contenido(id: string, p: P): ReactNode {
     case 'esclusa':
       return <Esclusa {...p} />
     case 'esclusaExt':
-      return <EsclusaExterior />
+      return <EsclusaExterior {...p} />
     case 'campoSolar':
       return <CampoSolar {...p} />
     case 'plantaExt':
@@ -834,7 +805,9 @@ export function PanelEstacion({ sala, yo }: P) {
       {impedido && !principal && <div className="help">{impedido}</div>}
       {remoto && !principal && <div className="help ok">You are viewing this from the Base Dashboard. Here you can check and propose decisions. To repair, install, treat or grow plants, go to {e.nombre}.</div>}
       <div className="cuerpo">
-        <Remoto.Provider value={remoto && !principal}>{principal ? <Principal sala={sala} yo={yo} /> : contenido(id, { sala, yo })}</Remoto.Provider>
+        <Remoto.Provider value={remoto && !principal}>
+          <Aqui.Provider value={id}>{principal ? <Principal sala={sala} yo={yo} /> : contenido(id, { sala, yo })}</Aqui.Provider>
+        </Remoto.Provider>
       </div>
     </div>
   )

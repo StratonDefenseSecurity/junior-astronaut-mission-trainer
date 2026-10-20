@@ -1,43 +1,24 @@
 // Telemetría de vuelo: ascenso, crucero Tierra–Marte y descenso.
-// Son perfiles aproximados con órdenes de magnitud reales, no una integración orbital.
+// El ascenso sigue el de Artemis I y el descenso el de Perseverance; el crucero es un perfil
+// aproximado con órdenes de magnitud reales, no una integración orbital.
 import { C, distanciaTierraAlLlegar } from '../../shared/ciencia.js'
+import { ASCENSO, altitudAscenso, etapaAscenso, gAscenso, propelenteCentral, velocidadAscenso } from '../../shared/ascenso.js'
 import { EDL, estadoEDL } from '../../shared/edl.js'
 import { TRANSITO_INICIO_S, type RoomState } from '../../shared/types.js'
 
-const mezcla = (a: number, b: number, x: number) => a + (b - a) * Math.min(1, Math.max(0, x))
-
-/** Ascenso hasta la órbita en unos 8 minutos y medio. */
+/**
+ * Ascenso: el perfil real de Artemis I (shared/ascenso.ts), con su altitud, su velocidad respecto
+ * de la Tierra, la aceleración que se siente y el nombre de cada etapa. El combustible en pantalla
+ * es el de la etapa central hasta que se separa; después, el de la etapa superior (ICPS), aún llena.
+ */
 export function telemetriaAscenso(room: RoomState) {
   const v = room.vuelo
   const t = room.t
-  if (t < 0) {
-    Object.assign(v, { altitud: 0, velocidad: 0, g: 1, etapa: 'Countdown' })
-    return
-  }
-  if (t < 150) {
-    const x = t / 150
-    v.etapa = t > 60 && t < 85 ? 'Max Q (maximum dynamic pressure)' : 'First stage'
-    v.g = 1.2 + 2.3 * Math.pow(x, 1.4)
-    v.velocidad = 2.4 * Math.pow(x, 1.7)
-    v.altitud = 65 * Math.pow(x, 2)
-    room.rec.propelente = Math.round(100 - 100 * x)
-  } else if (t < 160) {
-    v.etapa = 'Stage separation'
-    v.g = 0.1
-    v.velocidad = 2.4
-    v.altitud = mezcla(65, 78, (t - 150) / 10)
-    room.rec.propelente = 100
-  } else {
-    const x = (t - 160) / (TRANSITO_INICIO_S - 160)
-    v.etapa = 'Second stage'
-    v.g = 0.8 + 2.6 * Math.pow(x, 1.2)
-    v.velocidad = mezcla(2.4, 7.8, Math.pow(x, 1.15))
-    v.altitud = mezcla(78, 200, Math.pow(x, 0.7))
-    room.rec.propelente = Math.round(100 - 88 * x)
-  }
-  v.velocidad = Math.round(v.velocidad * 100) / 100
-  v.altitud = Math.round(v.altitud * 10) / 10
-  v.g = Math.round(v.g * 100) / 100
+  v.etapa = etapaAscenso(t)
+  v.altitud = Math.round(altitudAscenso(t) * 10) / 10
+  v.velocidad = Math.round(velocidadAscenso(t) * 100) / 100
+  v.g = Math.round(gAscenso(t) * 100) / 100
+  room.rec.propelente = t >= ASCENSO.separacionCentral ? 100 : Math.round(100 * propelenteCentral(t))
 }
 
 /** Crucero: distancias y retardo de las comunicaciones. */

@@ -14,12 +14,13 @@ import {
   HUMEDAD_IDEAL,
   HUMEDAD_POR_ML,
   LUZ_HUERTO,
-  PROC_BY_ID,
   activos,
   cultivoDe,
   disponible,
   evaluarPaso,
+  enCurso,
   factorPanel,
+  procPorId,
   secas,
   siguienteAplicable,
   valorDeExperto,
@@ -28,8 +29,9 @@ import {
 import { ROLE_BY_ID, TAREAS_ENSAMBLAJE, type CultivoId, type EstadoProcedimiento, type Player, type Role, type RoomState, type SistemaId, type Zona } from '../shared/types.js'
 import { jugador, limitar, log, puedeActuar, sis, tripulacion } from './base.js'
 import { completarTarea } from './game.js'
-import { azar } from './reloj.js'
+import { ahora, azar } from './reloj.js'
 import { refrescar } from './sim/paso.js'
+import { alHacerPasoTrabajo, alTerminarTrabajo, antesDePasoTrabajo, prepararTrabajo } from './trabajos.js'
 
 export interface Pendiente {
   procId: string
@@ -41,6 +43,14 @@ export interface Pendiente {
   estacion: string
   /** Segundos reales que lleva hacerlo con calma. */
   segundos: number
+  /** Trabajo que se empieza a mano cuando hace falta (reparar, curar, salir...), no una tarea anunciada. */
+  aDemanda?: boolean
+  /** Solo lo hace este jugador (su traje, sus muestras). */
+  jugador?: string
+  /** Ya tiene algún paso hecho. */
+  enCurso?: boolean
+  /** Quién hizo el primer paso, si está a medias. */
+  por?: string
 }
 
 const r2 = (v: number) => Math.round(v * 100) / 100
@@ -49,6 +59,7 @@ const RUMBO: Record<string, string> = { norte: 'north', sur: 'south', este: 'eas
 
 /** Por qué no se puede hacer ahora un procedimiento. */
 function noDisponible(room: RoomState, p: Procedimiento): string {
+  if (p.aDemanda) return p.motivo?.(room) ?? 'That is not needed right now.'
   if (p.tarea) {
     const t = TAREAS_ENSAMBLAJE.find((x) => x.id === p.tarea)!
     if (room.fase !== 'ensamblaje') return 'We are not building the base right now.'
@@ -70,7 +81,8 @@ function prepararPaso(room: RoomState, p: Procedimiento, i: number) {
   const d = (e.datos ??= {})
   if (d.semilla !== undefined) return
   d.semilla = Math.floor(azar(room) * 1000)
-  if (p.id === 'revisionInt') {
+  if (p.aDemanda) prepararTrabajo(room, p, i)
+  else if (p.id === 'revisionInt') {
     // Un sello mal preparado deja más posibilidades de fuga (modelo del juego).
     const sello = e.calidad[0] ?? 1
     const prob = limitar(0.3 + (1 - sello) * 1.5, 0, 0.9)
@@ -83,6 +95,7 @@ function prepararPaso(room: RoomState, p: Procedimiento, i: number) {
 
 /** Lo que pasa justo al hacer un paso. Devuelve true si el procedimiento vuelve a empezar. */
 function alHacerPaso(room: RoomState, p: Procedimiento, i: number, j: Player, valor: number | string | null): boolean {
+  if (p.aDemanda) return alHacerPasoTrabajo(room, p, i, j, valor)
   const e = room.procedimientos![p.id]
   const id = p.pasos[i].id
   // Cada error de orden al energizar o arrancar equipos les hace daño.
@@ -120,6 +133,7 @@ function alTerminar(room: RoomState, p: Procedimiento, j: Player) {
   const v = e.valores ?? []
   const ef = (room.efectos ??= {})
   const h = room.huerto
+  if (p.aDemanda) alTerminarTrabajo(room, p, j)
   switch (p.id) {
     case 'paneles': {
       ef.solar = factorPanel(room.sitio, String(v[0]), Number(v[3]))
@@ -253,13 +267,14 @@ function alTerminar(room: RoomState, p: Procedimiento, j: Player) {
 }
 
 export function pasoProcedimiento(room: RoomState, jugadorId: string, procId: string, paso: number, valor: unknown): string | null {
-  const p = PROC_BY_ID[procId]
+  const p = procPorId(procId, room)
   if (!p) return 'Unknown procedure.'
   const j = jugador(room, jugadorId)
   if (!j || !j.rol) return 'Player not found.'
+  if (p.jugador && p.jugador !== j.id) return `Only ${jugador(room, p.jugador)?.nombre ?? 'that crew member'} can do this.`
   if (!disponible(room, p)) return noDisponible(room, p)
   const procs = (room.procedimientos ??= {})
-  if (procs[procId]?.terminado) delete procs[procId]
+  if (procs[procId]?.terminado || (p.sigue && procs[procId] && !p.sigue(room))) delete procs[procId]
   const actual = siguienteAplicable(room, p, procs[procId]?.paso ?? 0)
   if (!Number.isInteger(paso) || paso !== actual) return paso < actual ? 'That step is already done.' : `First you have to: ${p.pasos[actual] ? enFrase(p.pasos[actual].titulo) : 'do the previous step'}.`
   const def = p.pasos[actual]
@@ -267,6 +282,10 @@ export function pasoProcedimiento(room: RoomState, jugadorId: string, procId: st
   if (j.enRefugio) return 'You are in the Storm Shelter. You cannot work until you leave.'
   if (!puedeActuar(room, j, def.roles)) return `This step is done by: ${def.roles.map((r) => ROLE_BY_ID[r].nombre).join(' or ')}.`
   if (j.zona !== def.zona) return def.zona === 'exterior' ? 'You have to suit up and go outside to do it.' : 'This is done inside the habitat.'
+  if (p.aDemanda) {
+    const impide = antesDePasoTrabajo(room, p, actual, j)
+    if (impide) return impide
+  }
 
   const e: EstadoProcedimiento = (procs[procId] ??= { paso: 0, calidad: [], por: [], valores: [], inicio: room.t, terminado: false })
   prepararPaso(room, p, actual)
@@ -287,8 +306,11 @@ export function pasoProcedimiento(room: RoomState, jugadorId: string, procId: st
   e.por[actual] = j.id
   valores[actual] = ev.valor
   e.paso = actual + 1
+  // Cuándo se hizo el último paso: mientras alguien trabaja, el tiempo no corre tan rápido.
+  ;(e.datos ??= {}).ultimo = ahora()
   j.aportes = (j.aportes ?? 0) + 1
-  j.vit.fatiga = limitar(j.vit.fatiga + (def.zona === 'exterior' ? 1.5 : 0.5), 0, 100)
+  // Los trabajos largos (muestras, reparaciones) suman su cansancio al terminar; cada paso, poco.
+  j.vit.fatiga = limitar(j.vit.fatiga + (def.zona === 'exterior' ? (p.aDemanda ? 0.6 : 1.5) : p.aDemanda ? 0.2 : 0.5), 0, 100)
   if (ev.calidad < 0.7) log(room, `${p.titulo}, ${enFrase(def.titulo)}: ${ev.mensaje}`, 'alerta')
 
   if (!alHacerPaso(room, p, actual, j, ev.valor)) {
@@ -303,11 +325,21 @@ export function pasoProcedimiento(room: RoomState, jugadorId: string, procId: st
 export function procedimientosPendientes(room: RoomState): Pendiente[] {
   return activos(room).map(({ proc, paso }) => {
     const def = proc.pasos[paso]
-    return { procId: proc.id, paso, roles: def.roles, zona: def.zona, estacion: def.estacion, segundos: def.segundos }
+    const e = room.procedimientos?.[proc.id]
+    return {
+      procId: proc.id,
+      paso,
+      roles: def.roles,
+      zona: def.zona,
+      estacion: def.estacion,
+      segundos: def.segundos,
+      ...(proc.aDemanda ? { aDemanda: true, enCurso: enCurso(room, proc.id), por: e?.por.find(Boolean) } : {}),
+      ...(proc.jugador ? { jugador: proc.jugador } : {}),
+    }
   })
 }
 
 export function valorExperto(room: RoomState, procId: string, paso: number): unknown {
-  const p = PROC_BY_ID[procId]
+  const p = procPorId(procId, room)
   return p ? valorDeExperto(room, p, paso) : null
 }

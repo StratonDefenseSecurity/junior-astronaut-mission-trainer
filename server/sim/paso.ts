@@ -15,9 +15,10 @@ import {
   type RoomState,
   type SistemaId,
 } from '../../shared/types.js'
+import { procPorId } from '../../shared/procedimientos.js'
 import { hacia, hayEmergencia, limitar, log, rendimiento, sis, tripulacion } from '../base.js'
 import { DOLENCIAS, UMBRAL_AVERIA, despacharCola, lanzarEmergencia } from '../emergencies.js'
-import { azar, movidos } from '../reloj.js'
+import { ahora, azar, movidos } from '../reloj.js'
 import { actualizarAmbiente, enSuperficie, eventosSolaresPendientes, fraccionSolar, registroDelSol, sorteoTormentaPolvo, tasaDeDosis } from './ambiente.js'
 import { pasoTripulante } from './fisiologia.js'
 import { pasoHuerto } from './huerto.js'
@@ -37,17 +38,38 @@ const CARGA_BASE_KW = 1.2
 const ogaMaximo = (room: RoomState) => Math.min(C.OGA_KG_DIA, room.efectos?.ogaKgDia ?? C.OGA_KG_DIA)
 const KG_AIRE_CABINA = 180
 
+/** Hasta este segundo tras el despegue, el lanzamiento va en tiempo real: se ve dejar la torre. */
+const DESPEGUE_TIEMPO_REAL_S = 15
+
 const enMicrogravedad = (room: RoomState) => room.fase === 'transito' || (room.fase === 'llegada' && room.subfase !== 'descenso')
+
+/** Escala máxima mientras alguien está en mitad de un trabajo por pasos. */
+export const ESCALA_TRABAJO = 600
+/** Cuánto se sigue contando como «trabajando» desde el último paso, ms reales. */
+const TRABAJO_MS = 60_000
+
+function trabajando(room: RoomState): boolean {
+  for (const [id, e] of Object.entries(room.procedimientos ?? {})) {
+    if (e.terminado || e.paso <= 0 || ahora() - (e.datos?.ultimo ?? -Infinity) > TRABAJO_MS) continue
+    if (procPorId(id)?.aDemanda) return true
+  }
+  return false
+}
 
 /** Escala real a la que corre la misión ahora (la del comandante, limitada por la situación). */
 export function escalaEfectiva(room: RoomState): number {
   if (room.fase === 'lobby' || room.fase === 'contexto' || room.fase === 'fin') return 0
-  if (room.fase === 'lanzamiento') return room.t < 0 ? 1 : 10
+  // La cuenta regresiva y los primeros segundos del despegue van en tiempo real, como se viven;
+  // el resto del ascenso, a ×10.
+  if (room.fase === 'lanzamiento') return room.t < DESPEGUE_TIEMPO_REAL_S ? 1 : 10
   if (room.fase === 'llegada' && room.subfase === 'descenso') return 10
   let e = Math.min(room.escalaDeseada, ESCALA_MAXIMA[room.fase])
   if (hayEmergencia(room)) e = Math.min(e, ESCALA_ALERTA)
   // Con alguien fuera, el tiempo no puede correr tan rápido que el traje se agote en segundos.
   if (room.jugadores.some((j) => j.rol && j.zona === 'exterior')) e = Math.min(e, 60)
+  // Mientras alguien hace un trabajo paso a paso (reparar, curar, ponerse el traje), el tiempo va
+  // como mucho a ×600: si no, un viaje entero pasaría mientras se cambia una pieza.
+  if (trabajando(room)) e = Math.min(e, ESCALA_TRABAJO)
   return Math.max(1, e)
 }
 
@@ -66,7 +88,7 @@ function entrarTransito(room: RoomState) {
   room.tFase = room.t
   room.escalaDeseada = 3600
   room.rec.propelente = 100
-  log(room, `Orbit reached in 8 and a half minutes, using ${(room.energia.usada ?? 0).toFixed(1)} kWh of power. Engine burn toward Mars: ${room.mision.diasTransito} days of travel ahead.`, 'ok')
+  log(room, `Orbit reached: the core stage engines cut off 8 min 20 s after liftoff, as on Artemis I, using ${(room.energia.usada ?? 0).toFixed(1)} kWh of power. Engine burn toward Mars: ${room.mision.diasTransito} days of travel ahead.`, 'ok')
 }
 
 function entrarOrbita(room: RoomState) {
@@ -144,6 +166,9 @@ function actividadDe(room: RoomState, j: Player, alerta: boolean): Actividad {
 function rescatar(room: RoomState, j: Player, motivo: string) {
   j.zona = 'nave'
   j.manual = null
+  // La tripulación lo mete por la esclusa: el procedimiento de entrada que tuviera a medias ya no sigue.
+  delete j.trajeFuga
+  if (room.procedimientos) delete room.procedimientos[`entrada:${j.id}`]
   j.vit.salud = limitar(j.vit.salud - 20, 0, 100)
   j.vit.spo2 = Math.min(j.vit.spo2, 84)
   j.incapacitado = Math.max(j.incapacitado, 2 * 3600)
@@ -243,6 +268,8 @@ function soporteVital(room: RoomState, dt: number, crew: Player[], superficie: b
 
   crew.forEach((j, i) => {
     const quedan = crew.length - i
+    // Un traje que salió con una fuga sin arreglar pierde oxígeno de más.
+    if (j.zona === 'exterior' && j.trajeFuga) j.trajeO2 = Math.max(0, j.trajeO2 - (j.trajeFuga * dt) / 3600)
     const cons = pasoTripulante(j, {
       dt,
       g,

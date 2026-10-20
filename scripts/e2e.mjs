@@ -75,6 +75,7 @@ comprobar((await llamar('crear', { modo: 'comandante' })).status === 401, 'sin s
 const A = a.d.token
 const B = b.d.token
 const idA = a.d.usuario.id
+const idB = b.d.usuario.id
 const creada = await llamar('crear', { modo: 'comandante' }, A)
 const codigo = creada.d.sala?.codigo
 comprobar(creada.status === 200 && /^[A-Z0-9]{6}$/.test(codigo ?? ''), `sala creada ${codigo} (${creada.ms} ms)`, JSON.stringify(creada.d).slice(0, 200))
@@ -103,6 +104,39 @@ const paso = async (quien, op, datos, msg, esperado = 200) => {
   if (r.d.sala) sala = r.d.sala
   comprobar(r.status === esperado, `${msg} (${r.ms} ms)`, JSON.stringify(r.d).slice(0, 220))
   return r
+}
+/**
+ * Valores de experto de los trabajos por pasos (shared/procedimientos.ts), paso a paso. Una
+ * función recibe los datos que preparó el servidor para leer el instrumento.
+ */
+const EXPERTO = {
+  salida: [{ orden: ['lcvg', 'inferior', 'superior', 'gorro', 'casco', 'guantes'], errores: 0 }, (d) => (d.fuga ? 'falla' : 'pasa'), 'isle', 8, 6, 'radio'],
+  entrada: ['cepillar', 6, { orden: ['guantes', 'casco', 'gorro', 'superior', 'inferior', 'lcvg'], errores: 0 }],
+  reparar: ['bloqueo', { orden: ['valvulas', 'conectores', 'pernos', 'extraer'], errores: 0 }, 8, { orden: ['fluidos', 'datos', 'energia', 'bloqueo'], errores: 0 }, (d) => (d.fallo ? 'falla' : 'pasa')],
+  muestra: [6, 'capas', 6, 'escanear', 8, { orden: ['revisar', 'foto', 'sellar', 'etiqueta'], errores: 0 }],
+  analizar: ['tamizar', 'ambos', 8, 'pasa'],
+}
+/** Hace entero un trabajo por pasos como lo haría un experto, siguiendo el paso que toca. */
+const trabajo = async (quien, procId, msg) => {
+  const lista = EXPERTO[procId.split(':')[0]]
+  for (let k = 0; k < 20; k++) {
+    const e = sala.procedimientos?.[procId]
+    const n = e && !e.terminado ? e.paso : 0
+    const v = lista[n]
+    const valor = typeof v === 'function' ? v(e?.datos ?? {}) : v
+    const r = await llamar('procedimiento', { codigo, v: sala.version, proc: procId, paso: n, valor }, quien)
+    if (r.d.sala) sala = r.d.sala
+    if (r.status !== 200) {
+      comprobar(false, `${msg} (paso ${n})`, JSON.stringify(r.d).slice(0, 220))
+      return false
+    }
+    if (!sala.procedimientos?.[procId]) {
+      comprobar(true, `${msg} (${k + 1} pasos)`)
+      return true
+    }
+  }
+  comprobar(false, `${msg}: no terminó`)
+  return false
 }
 const estado = async (quien, extra = {}) => {
   const r = await llamar('estado', { codigo, v: sala.version, h: '', ...extra }, quien)
@@ -170,7 +204,7 @@ for (let i = 0; i < 90 && sala.fase === 'lanzamiento'; i++) {
 }
 comprobar(sala.fase === 'transito', `órbita y rumbo a Marte (${sala.vuelo.etapa})`)
 comprobar(sala.energia.usada > 0.3 && sala.registro.some((l) => /Orbit reached.*kWh/.test(l.texto)), `el lanzamiento registra la energía usada: ${sala.energia.usada} kWh`)
-comprobar(gMax > 2.5 && pulsoMax > 95, `el cuerpo siente el despegue: ${gMax} g, pulso ${Math.round(pulsoMax)} lpm`)
+comprobar(gMax > 1.4 && pulsoMax > 85, `el cuerpo siente el despegue: ${gMax} g, pulso ${Math.round(pulsoMax)} lpm`)
 const c = sala.cabina
 comprobar(c.ppO2 > 20 && c.ppO2 < 22 && c.ppCO2 > 0.05 && c.ppCO2 < 0.6, `aire de cabina normal: ${c.ppO2.toFixed(1)} kPa O2, ${(c.ppCO2 * 7.5).toFixed(1)} mmHg CO2`)
 await paso(B, 'escala', { valor: 86400 }, 'solo el comandante cambia la escala', 400)
@@ -200,7 +234,7 @@ if (!corto) {
     for (const s of sala.sistemas) {
       // Los repuestos se guardan para el soporte vital: el huerto no se repara en el viaje.
       if (s.instalado && s.integridad < 50 && sala.rec.repuestos >= 2 && s.id !== 'huerto' && !(sala.tAterrizaje > 0 && (s.id === 'energia' || s.id === 'isru'))) {
-        await llamar('accion', { codigo, v: sala.version, id: 'reparar', payload: { sistema: s.id } }, B)
+        await trabajo(B, `reparar:${s.id}`, `B cambia la unidad gastada de ${s.id} paso a paso`)
       }
     }
   }
@@ -256,9 +290,14 @@ if (!corto) {
   const proc = (quien, id, n, valor, msg, esperado = 200) => paso(quien, 'procedimiento', { proc: id, paso: n, valor }, msg, esperado)
   // Si la esclusa llegó dañada (aterrizaje duro o una avería del viaje), sistemas la repara antes de salir.
   const esclusa = sala.sistemas.find((x) => x.id === 'esclusa')
-  if (esclusa.integridad <= 15) await paso(B, 'accion', { id: 'reparar', payload: { sistema: 'esclusa' } }, `B repara la esclusa (${Math.round(esclusa.integridad)}%, ${sala.rec.repuestos} kits)`)
+  if (esclusa.integridad <= 15) await trabajo(B, 'reparar:esclusa', `B repara la esclusa (${Math.round(esclusa.integridad)}%, ${sala.rec.repuestos} kits)`)
   await proc(A, 'paneles', 0, 'norte', 'el paso exterior exige salir', 400)
-  await paso(A, 'zona', { zona: 'exterior' }, 'A sale con el traje')
+  await paso(A, 'zona', { zona: 'exterior' }, 'la esclusa no se cruza de un salto', 400)
+  await paso(A, 'accion', { id: 'reparar', payload: { sistema: 'oga' } }, 'reparar de un clic ya no existe', 400)
+  await proc(A, `salida:${idA}`, 0, { orden: ['inferior', 'lcvg', 'superior', 'gorro', 'casco', 'guantes'], errores: 0 }, 'el traje no se pone en cualquier orden', 400)
+  await proc(B, `salida:${idA}`, 0, { orden: ['lcvg', 'inferior', 'superior', 'gorro', 'casco', 'guantes'], errores: 0 }, 'nadie se pone el traje de otro', 400)
+  await trabajo(A, `salida:${idA}`, 'A se pone el traje, revisa fugas, prerrespira y sale')
+  comprobar(sala.jugadores[0].zona === 'exterior' && sala.registro.some((l) => /went outside/.test(l.texto)), 'A está fuera tras la esclusa')
   await proc(A, 'paneles', 1, { orden: ['no', 'se', 'ne', 'so'], errores: 0 }, 'no se salta el orden de los pasos', 400)
   await proc(A, 'paneles', 0, 'norte', 'A orienta los paneles hacia el ecuador, al norte')
   await proc(A, 'paneles', 1, { orden: ['no', 'ne', 'so', 'se'], errores: 0 }, 'apretar dos esquinas del mismo lado se rechaza', 400)
@@ -271,7 +310,8 @@ if (!corto) {
   await proc(A, 'carga', 1, 8, 'A baja la carga despacio')
   if (sala.cargamento.reactor > 0) await proc(A, 'carga', 2, 'enterrado', 'A deja el reactor a 1 km, enterrado')
   comprobar(sala.ensamblaje.hechas.carga && sala.ensamblaje.paso === 2, sala.cargamento.reactor > 0 ? 'carga descargada y reactor enterrado' : 'sin reactor, el paso de dónde dejarlo se salta solo y el montaje avanza')
-  await paso(A, 'zona', { zona: 'nave' }, 'A vuelve al hábitat')
+  await trabajo(A, `entrada:${idA}`, 'A se quita el polvo, represuriza y se quita el traje')
+  comprobar(sala.jugadores[0].zona === 'nave', 'A vuelve al hábitat')
   await proc(B, 'energia', 0, 'caliente', 'conectar en caliente se rechaza y se explica', 400)
   await proc(B, 'energia', 0, 'bloqueo', 'B bloquea y etiqueta el interruptor')
   await proc(B, 'energia', 1, { orden: ['fuente', 'primario', 'baterias', 'convertidor', 'cargas'], errores: 0 }, 'B energiza de la fuente hacia las cargas')
@@ -290,7 +330,7 @@ if (!corto) {
   } else await proc(B, 'revisionInt', 2, 'falla', 'sin fuga, dar la prueba por mala se rechaza', 400)
   await proc(B, 'revisionInt', 2, 'pasa', 'B da la esclusa por estanca')
   comprobar(sala.cabina.fuga === 0, 'la esclusa queda sin fugas')
-  await paso(B, 'zona', { zona: 'exterior' }, 'B sale a inspeccionar')
+  await trabajo(B, `salida:${idB}`, 'B sale a inspeccionar con el traje')
   await proc(B, 'revisionExt', 0, 6, 'B fotografía el casco')
   await proc(B, 'revisionExt', 1, sala.procedimientos.revisionExt.datos?.dano ? 'falla' : 'pasa', 'B mide las marcas del casco y decide')
   comprobar(sala.fase === 'base', 'la base entra en operación')
@@ -299,16 +339,18 @@ if (!corto) {
   const jB = sala.jugadores[1]
   comprobar(jB.actividad === 'eva' && jB.trajeO2 < 0.55, `fuera, el traje gasta oxígeno (${Math.round((jB.trajeO2 / 0.55) * 100)}%) y la escala baja a ×${sala.escala}`)
   comprobar(sala.escala <= 60, 'con alguien fuera el tiempo no corre a más de ×60')
-  await paso(B, 'accion', { id: 'muestra', payload: { sitio: 'muestra1' } }, 'B recoge una muestra (no hay científico: puede cualquiera)')
-  await paso(B, 'zona', { zona: 'nave' }, 'B vuelve al hábitat')
-  await paso(B, 'accion', { id: 'analizar' }, 'B analiza la muestra')
+  await paso(B, 'accion', { id: 'muestra', payload: { sitio: 'muestra1' } }, 'la muestra de un clic ya no existe', 400)
+  await trabajo(B, 'muestra:muestra1', 'B toma una muestra como Perseverance (no hay científico: puede cualquiera)')
+  comprobar(sala.jugadores[1].muestras === 1 && sala.muestreos.includes('muestra1'), 'B carga la muestra sellada')
+  await trabajo(B, `entrada:${idB}`, 'B vuelve al hábitat por la esclusa')
+  await trabajo(B, `analizar:${idB}`, 'B tamiza, analiza y lee la muestra en el laboratorio')
   comprobar(sala.mision.muestrasAnalizadas === 1, 'la muestra cuenta para el objetivo')
   await paso(B, 'accion', { id: 'racionComida', payload: { nivel: 'ahorro' } }, 'sistemas no decide las raciones si hay comandante', 400)
   await paso(A, 'accion', { id: 'racionComida', payload: { nivel: 'ahorro' } }, 'el comandante propone ración de ahorro')
   comprobar(sala.ajustes.racionComida === 'ahorro', 'en modo comandante su propuesta queda aprobada')
   await paso(A, 'accion', { id: 'refugio', payload: { horas: 6 } }, 'el comandante ordena refugio 6 horas')
   comprobar(sala.jugadores.every((x) => x.enRefugio), 'toda la tripulación entra al refugio')
-  await paso(B, 'accion', { id: 'reparar', payload: { sistema: 'cdra' } }, 'en el refugio no se puede trabajar', 400)
+  await proc(B, `salida:${idB}`, 0, { orden: ['lcvg', 'inferior', 'superior', 'gorro', 'casco', 'guantes'], errores: 0 }, 'en el refugio no se puede trabajar', 400)
   await paso(A, 'accion', { id: 'refugio', payload: { salir: true } }, 'desde el refugio el comandante sí puede levantar la orden')
   comprobar(sala.jugadores.every((x) => !x.enRefugio), 'la tripulación sale del refugio')
   const clima = await llamar('bot', { codigo, v: sala.version, texto: 'what is the weather outside?' }, A)

@@ -21,7 +21,6 @@ import {
   ajustarCargamento,
   aplicarPreset,
   avanzar,
-  cambiarZona,
   crearSala,
   elegirAlternativa,
   elegirEscenario,
@@ -79,6 +78,26 @@ const fallo = (status: number, error: string, extra: Record<string, unknown> = {
   status,
   json: JSON.stringify({ error, ...extra }),
 })
+
+/** Trabajos que ya no se hacen de un clic: van paso a paso con su procedimiento (shared/procedimientos.ts). */
+const POR_PASOS: Record<string, string> = {
+  reparar: 'Repairs are done step by step at the equipment: open its station and start the procedure.',
+  sellar: 'The leak is sealed step by step at Life Support.',
+  lioh: 'Cartridges are swapped step by step at Life Support.',
+  limpiar: 'The panels are cleaned step by step at the Solar Arrays.',
+  muestra: 'Samples are collected step by step at each sample site.',
+  analizar: 'Samples are analyzed step by step at the Lab & Garden.',
+  tratar: 'Treatments are given step by step in the Medical Bay.',
+}
+
+/** Cruzar la esclusa sin el procedimiento ya no se puede. */
+function zonaDirecta(room: RoomState, id: string, zona: Zona): string | null {
+  const j = room.jugadores.find((x) => x.id === id)
+  if (!j || !j.rol) return 'Player not found.'
+  if (zona !== 'nave' && zona !== 'exterior') return 'Invalid zone.'
+  if (j.zona === zona) return null
+  return zona === 'exterior' ? 'Suit up step by step at the Airlock before you go outside.' : 'Come back in step by step through the Airlock.'
+}
 
 // ---------- Cuentas ----------
 
@@ -508,15 +527,19 @@ async function despachar(c: Record<string, unknown>, autorizacion: string | unde
     case 'ubicacion':
       return m((room) => proponerUbicacion(room, yo, texto(c.sitioId, 20)))
     case 'procedimiento':
-      return m((room) => pasoProcedimiento(room, yo, texto(c.proc, 20), Number(c.paso), c.valor))
+      return m((room) => pasoProcedimiento(room, yo, texto(c.proc, 80), Number(c.paso), c.valor))
     case 'zona':
-      return m((room) => cambiarZona(room, yo, texto(c.zona, 10) as Zona))
+      // Nadie cruza la esclusa de un salto: salir y entrar son procedimientos por pasos.
+      return m((room) => (zonaDirecta(room, yo, texto(c.zona, 10) as Zona)))
     case 'actividad':
       return m((room) => fijarActividad(room, yo, c.actividad ? (texto(c.actividad, 12) as Actividad) : null))
     case 'refugio':
       return m((room) => usarRefugio(room, yo, Boolean(c.entrar)))
-    case 'accion':
-      return m((room) => accion(room, yo, texto(c.id, 20), objeto(c.payload)))
+    case 'accion': {
+      const id = texto(c.id, 20)
+      if (POR_PASOS[id]) return fallo(400, POR_PASOS[id])
+      return m((room) => accion(room, yo, id, objeto(c.payload)))
+    }
     case 'votar':
       return m((room) => votar(room, yo, texto(c.id, 40), Boolean(c.aprueba)))
     case 'emergencia':

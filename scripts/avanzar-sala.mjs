@@ -7,6 +7,7 @@ if (!url || !codigo || !uA || !uB || !clave) {
   process.exit(1)
 }
 const base = url.replace(/\/$/, '')
+const { cruzar } = await import('./eva.mjs')
 async function llamar(op, datos = {}, token) {
   const r = await fetch(`${base}/api/juego`, {
     method: 'POST',
@@ -71,15 +72,16 @@ for (let i = 0; i < 900; i++) {
   }
   if (sala.fase === 'transito') {
     if (sala.escalaDeseada !== 86400) await accion(A, 'escala', { valor: 86400 })
-    for (const s of sala.sistemas) if (s.instalado && s.integridad < 50 && sala.rec.repuestos >= 2) await accion(A, 'accion', { id: 'reparar', payload: { sistema: s.id } })
+    // Las reparaciones ya son procedimientos por pasos: las averías se resuelven como emergencias.
   }
   if (sala.fase === 'llegada' && sala.subfase === 'orbita' && !sala.propuestas.some((p) => p.estado === 'pendiente')) await accion(A, 'ubicacion', { sitioId: { hieloUtopia: 'utopia', vidaJezero: 'jezero' }[sala.escenario] ?? 'gale' })
   if (sala.fase === 'ensamblaje' && meta === 'base') {
     for (const [tarea, fuera] of [['paneles', true], ['carga', true], ['energia', false], ['soporte', false], ['revisionInt', false], ['revisionExt', true]]) {
       if (sala.ensamblaje.hechas[tarea]) continue
-      if (fuera) await accion(A, 'zona', { zona: 'exterior' })
+      const idA = sesionA.usuario?.id
+      if (fuera) console.log(`   (salir: ${(await cruzar(base, codigo, A, idA, 'exterior')) ?? 'ok'})`)
       await accion(A, 'tarea', { tarea })
-      if (fuera) await accion(A, 'zona', { zona: 'nave' })
+      if (fuera) console.log(`   (entrar: ${(await cruzar(base, codigo, A, idA, 'nave')) ?? 'ok'})`)
     }
   }
   await esperar(1000)

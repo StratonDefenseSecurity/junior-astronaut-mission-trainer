@@ -1,5 +1,5 @@
 // Plano del hábitat y de la base: dónde está cada estación y por dónde se puede caminar.
-import { activos } from '@shared/procedimientos'
+import { activos, enCurso } from '@shared/procedimientos'
 import { TAREAS_ENSAMBLAJE, type Player, type Role, type RoomState, type SistemaId, type Zona } from '@shared/types'
 
 export interface Estacion {
@@ -160,6 +160,8 @@ export function estacionesDestacadas(sala: RoomState, yo: Player | null): string
   // Pasos de procedimiento que le tocan: el montaje del huerto y su cuidado (regar, ralear, cosechar...).
   for (const a of activos(sala)) {
     const paso = a.proc.pasos[a.paso]
+    // Los trabajos a demanda (reparar, curar, salir...) solo se señalan si están a medias.
+    if (a.proc.aDemanda && (!enCurso(sala, a.proc.id) || (a.proc.jugador && a.proc.jugador !== yo.id))) continue
     if (!a.proc.tarea && puede(sala, yo, paso.roles)) ids.add(paso.estacion)
   }
   if (puede(sala, yo, ['sistemas'])) {

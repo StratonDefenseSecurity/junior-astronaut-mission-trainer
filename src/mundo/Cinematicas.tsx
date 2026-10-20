@@ -1,10 +1,12 @@
 // Escenas que no se caminan: el lanzamiento y el descenso a Marte.
 // Siguen la telemetría real de la sala (altitud, etapa, aceleración). El Sol ilumina desde su
 // dirección real para la fecha y el lugar, con un destello en la cámara cuando se ve.
-// El descenso reproduce, momento a momento, el de Perseverance (shared/edl.ts).
+// El ascenso reproduce el de Artemis I (shared/ascenso.ts) con el SLS y la plataforma 39B
+// (SLS.tsx); el descenso, momento a momento, el de Perseverance (shared/edl.ts).
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
+import { ASCENSO, altitudAscenso, distanciaAscenso, RUMBO_ASCENSO } from '@shared/ascenso'
 import { calorEDL, EDL, estadoEDL, trayectoriaEDL } from '@shared/edl'
 import { escenarioDe, fechaDeMision } from '@shared/escenarios'
 import { DESCENSO_S, type RoomState } from '@shared/types'
@@ -13,9 +15,10 @@ import { orientacionSuperficie, vectorHelio } from './cielo/astro'
 import { SITIOS_MARTE } from './cieloMarte'
 import { Destello, type Oclusor } from './Destello'
 import { direccionSolEscena, Marte, Tierra } from './planetas'
+import { CUBIERTA_M, PlataformaLC39B, posicionCohete, U, VehiculoSLS } from './SLS'
 
-/** Cabo Cañaveral (Florida): el sitio de lanzamiento que se supone para la misión. */
-const CABO_CANAVERAL = { lat: 28.39, lon: -80.6 }
+/** Complejo de lanzamiento 39B del Centro Espacial Kennedy (Florida), de donde salió Artemis I. */
+const LC39B = { lat: 28.627, lon: -80.621 }
 /** Radio de la Tierra en el lanzamiento (unidades de la escena): 1 unidad = 3.19 km. */
 const R_PLANETA = 2000
 /**
@@ -51,15 +54,6 @@ function solLocal(cuerpo: 'tierra' | 'marte', fecha: Date, q: THREE.Quaternion) 
 function CieloDespegue({ fecha, orientacion, brillo }: { fecha: Date; orientacion: THREE.Quaternion; brillo: number }) {
   const observador = useMemo(() => vectorHelio('Tierra', fecha), [fecha])
   return <Cielo fecha={fecha} observador={observador} orientacion={orientacion} brillo={brillo} ocultarCuerpos={['Tierra']} />
-}
-
-/** La Tierra real con Cabo Cañaveral justo debajo de la plataforma. */
-function TierraDebajo({ fecha, orientacion }: { fecha: Date; orientacion: THREE.Quaternion }) {
-  return (
-    <group position={[0, -R_PLANETA, 0]} quaternion={orientacion}>
-      <Tierra radio={R_PLANETA} fecha={fecha} detalle="alto" etiquetas={false} />
-    </group>
-  )
 }
 
 function MarteDebajo({ fecha, orientacion }: { fecha: Date; orientacion: THREE.Quaternion }) {
@@ -110,115 +104,187 @@ function Llama({ fuerza, radio = 0.5, largo = 4, conLuz = true }: { fuerza: () =
 }
 
 /**
- * Altura (unidades de la escena) a la que queda el suelo bajo el cohete. Arriba es la escala real
- * del globo (1 unidad = 3.19 km) y abajo se estira un poco para ver alejarse la plataforma.
+ * Altura (unidades de la escena) a la que queda el suelo bajo el cohete cuando la cámara lo
+ * acompaña. Arriba es la escala real del globo (1 unidad = 3.19 km) y abajo se estira un poco.
  */
 const bajadaTierra = (altKm: number) => altKm / 3.19 + 25 * (1 - Math.exp(-altKm / 5))
+const R_TIERRA_KM = 6371
+
+/** Hasta aquí se mira desde tierra, como las cámaras de seguimiento; después se acompaña al cohete. */
+const T_ACOMPANA = 45
+
+/**
+ * Encuadres de la cámara que acompaña: [desde t, distancia, elevación (rad), giro alrededor del
+ * cohete (rad, 0 = de costado), altura del punto mirado sobre la cubierta (m)]. Cada uno mira un
+ * evento real: la separación de los propulsores, la del carenado y la torre, y la de la etapa central.
+ */
+const ENCUADRES: ReadonlyArray<readonly [number, number, number, number, number]> = [
+  [T_ACOMPANA, 52, -0.12, 0.45, 45],
+  [ASCENSO.separacionSRB - 14, 58, 0.1, 0.08, 32],
+  [ASCENSO.separacionSRB + 40, 44, 0.22, 0.5, 60],
+  [ASCENSO.carenado - 8, 19, 0.16, 0.7, 86],
+  [ASCENSO.torreEscape + 22, 58, 0.5, 0.95, 50],
+  [ASCENSO.meco - 12, 46, 0.45, 0.3, 62],
+  [ASCENSO.separacionCentral + 4, 34, 0.42, 0.45, 76],
+]
+const encuadre = (t: number) => [...ENCUADRES].reverse().find((e) => t >= e[0]) ?? ENCUADRES[0]
+
+const EJE_Y = new THREE.Vector3(0, 1, 0)
+const EJE_Z = new THREE.Vector3(0, 0, 1)
+const tmpQ = new THREE.Quaternion()
+const tmpQ2 = new THREE.Quaternion()
+const tmpV = new THREE.Vector3()
+const tmpH = new THREE.Vector3()
 
 export function Lanzamiento({ sala }: { sala: RoomState }) {
   const tiempo = useTiempoSuave(sala)
-  const mundo = useRef<THREE.Group>(null)
-  const primera = useRef<THREE.Group>(null)
+  const tierra = useRef<THREE.Group>(null)
+  const plataforma = useRef<THREE.Group>(null)
+  const cohete = useRef<THREE.Group>(null)
+  const luzSol = useRef<THREE.DirectionalLight>(null)
   // Por encima de unos 40 km el cielo ya es negro y se empiezan a ver las estrellas.
   const brilloCielo = Math.min(0.75, Math.max(0, (sala.vuelo.altitud - 35) / 60))
-  const cielo = useRef(new THREE.Color('#6aa5e8'))
+  const cielo = useRef(new THREE.Color('#2f62b0'))
   const negro = useMemo(() => new THREE.Color('#02040a'), [])
-  const azul = useMemo(() => new THREE.Color('#6aa5e8'), [])
+  const azul = useMemo(() => new THREE.Color('#2f62b0'), [])
   const noche = useMemo(() => new THREE.Color('#0b1424'), [])
   const fecha = useMemo(() => fechaDeMision(escenarioDe(sala.escenario), 0), [sala.escenario])
-  const orientacion = useMemo(() => orientacionSuperficie('Tierra', fecha, CABO_CANAVERAL.lat, CABO_CANAVERAL.lon), [fecha])
+  const orientacion = useMemo(() => orientacionSuperficie('Tierra', fecha, LC39B.lat, LC39B.lon), [fecha])
   const sol = useMemo(() => solLocal('tierra', fecha, orientacion), [fecha, orientacion])
-  // Luz del día en la plataforma según la altura del Sol: el despegue puede ser de noche.
+  const solEscena = useRef(sol.clone())
+  // Luz del día en la plataforma según la altura del Sol: el despegue puede ser de noche, como el
+  // de Artemis I.
   const dia = THREE.MathUtils.smoothstep(sol.y, -0.1, 0.12)
   const centroTierra = useRef(new THREE.Vector3(0, -R_PLANETA, 0))
   const oclusores = useMemo<Oclusor[]>(() => [{ centro: centroTierra.current, radio: R_PLANETA }], [])
-  useExposicion(1.05)
-
-  useFrame(({ camera, scene, clock }) => {
-    const t = tiempo()
-    // Altitud aproximada (km) a partir del tiempo, igual que la telemetría del servidor.
-    const alt = t < 0 ? 0 : t < 150 ? 65 * Math.pow(t / 150, 2) : t < 160 ? 65 + (t - 150) * 1.3 : 78 + 122 * Math.pow(Math.min(1, (t - 160) / 350), 0.7)
-    const baja = bajadaTierra(alt)
-    if (mundo.current) mundo.current.position.y = -baja
-    centroTierra.current.set(0, -R_PLANETA - baja, 0)
-    if (primera.current) {
-      const sep = Math.max(0, t - 150)
-      primera.current.position.y = -sep * sep * 0.35
-      primera.current.rotation.z = sep * 0.04
-      primera.current.visible = sep < 30
+  // Rumbo real: el eje +X de la plataforma y del cohete apunta hacia donde vuela (este-noreste).
+  const marco = useMemo(() => {
+    const r = (RUMBO_ASCENSO * Math.PI) / 180
+    const avance = new THREE.Vector3(Math.sin(r), 0, -Math.cos(r))
+    return {
+      avance,
+      costado: EJE_Y.clone().cross(avance).normalize(),
+      giroTierra: avance.clone().cross(EJE_Y).normalize(),
+      guinada: new THREE.Quaternion().setFromAxisAngle(EJE_Y, Math.atan2(-avance.z, avance.x)),
     }
+  }, [])
+  const camara = useRef({ R: 50, e: 0, az: 0, ty: 40, listo: false })
+  const desdeTierra = sala.t < T_ACOMPANA
+  const objetivo = useMemo(() => new THREE.Vector3(), [])
+  useExposicion(1.05)
+  const camaraEscena = useThree((s) => s.camera) as THREE.PerspectiveCamera
+  useEffect(() => {
+    const antes = { fov: camaraEscena.fov, far: camaraEscena.far }
+    camaraEscena.far = Math.max(antes.far, 4000)
+    camaraEscena.updateProjectionMatrix()
+    return () => {
+      camaraEscena.fov = antes.fov
+      camaraEscena.far = antes.far
+      camaraEscena.updateProjectionMatrix()
+    }
+  }, [camaraEscena])
+
+  useFrame(({ camera, scene, clock }, delta) => {
+    const cam = camera as THREE.PerspectiveCamera
+    const t = tiempo()
+    const tv = Math.max(0, t)
+    const alt = altitudAscenso(tv)
+    const p = posicionCohete(t)
+    const acompana = t >= T_ACOMPANA
+    // El cohete sube en vertical y se va tumbando hacia el rumbo.
+    const qCohete = tmpQ.copy(marco.guinada).multiply(tmpQ2.setFromAxisAngle(EJE_Z, -p.inclinacion))
+    const ti = tierra.current
+    const co = cohete.current
+    if (ti && co) {
+      if (!acompana) {
+        // Toma desde tierra: el mundo queda quieto y el cohete se aleja.
+        ti.position.set(0, -R_PLANETA, 0)
+        ti.quaternion.identity()
+        co.position.set(p.x * U, p.y * U, 0).applyQuaternion(marco.guinada)
+        co.position.y += CUBIERTA_M * U
+      } else {
+        // La cámara acompaña: el cohete queda en el centro, la Tierra baja y gira hacia atrás
+        // tanto como la distancia recorrida sobre el suelo.
+        ti.position.set(0, -R_PLANETA - CUBIERTA_M * U - bajadaTierra(alt), 0)
+        ti.quaternion.setFromAxisAngle(marco.giroTierra, distanciaAscenso(tv) / R_TIERRA_KM)
+        co.position.set(0, 0, 0)
+      }
+      co.quaternion.copy(qCohete)
+      centroTierra.current.copy(ti.position)
+      solEscena.current.copy(sol).applyQuaternion(ti.quaternion)
+    }
+    if (plataforma.current) plataforma.current.visible = !acompana
+    if (luzSol.current) luzSol.current.position.copy(solEscena.current).multiplyScalar(100)
+
     // Cielo azul de día (negro de noche) que se apaga al subir.
     cielo.current.copy(noche).lerp(azul, dia).lerp(negro, Math.min(1, alt / 70))
     scene.background = cielo.current
-    const giro = clock.elapsedTime * 0.12
-    const dist = t < 0 ? 26 : 30 - Math.min(12, alt * 0.12)
-    const temblor = t > 0 && t < 510 ? (Math.random() - 0.5) * 0.12 * Math.min(1, sala.vuelo.g / 3) : 0
-    camera.position.set(Math.cos(giro) * dist + temblor, 6 + Math.min(10, alt * 0.1) + temblor, Math.sin(giro) * dist)
-    camera.lookAt(0, 7, 0)
-  })
 
-  const empuje1 = () => {
-    const t = tiempo()
-    return t >= 0 && t < 150 ? 1 : 0
-  }
-  const empuje2 = () => {
-    const t = tiempo()
-    return t >= 160 && t < 510 ? 0.75 : 0
-  }
+    const temblor = t > -6.4 && t < ASCENSO.meco ? (Math.random() - 0.5) * 0.1 * Math.min(1, sala.vuelo.g / 2.5) : 0
+    const centro = tmpV.set(0, 40 * U, 0).applyQuaternion(qCohete)
+    if (co) centro.add(co.position)
+    if (t < 0) {
+      // Cuenta regresiva: vuelta lenta alrededor de la plataforma, desde el suroeste.
+      const a = 2.0 + (t + 12) * 0.025
+      const r = 80 - (t + 12) * 0.5
+      cam.position.set(Math.cos(a) * r, 5 + CUBIERTA_M * U, Math.sin(a) * r).applyQuaternion(marco.guinada)
+      cam.fov = 50
+      cam.lookAt(centro.x, centro.y - 2, centro.z)
+    } else if (!acompana) {
+      // Cámara de seguimiento a ~400 m al oeste: sigue al cohete y cierra el zoom a medida que se
+      // aleja, como las cámaras de largo alcance.
+      cam.position.set(-330 * U, 2 * U, 200 * U).applyQuaternion(marco.guinada)
+      const d = cam.position.distanceTo(centro)
+      cam.fov = THREE.MathUtils.clamp((2 * Math.atan2(30 + 0.012 * d, d) * 180) / Math.PI, 4, 50)
+      cam.lookAt(centro.x + temblor * 0.3, centro.y - 6 + temblor * 0.3, centro.z)
+      camara.current.listo = false
+    } else {
+      const [, R, e, az, ty] = encuadre(t)
+      const c = camara.current
+      if (!c.listo) Object.assign(c, { R, e, az, ty, listo: true })
+      const k = 1 - Math.exp(-Math.min(0.1, delta) * 1.1)
+      c.R += (R - c.R) * k
+      c.e += (e - c.e) * k
+      c.az += (az + 0.08 * Math.sin(clock.elapsedTime * 0.07) - c.az) * k
+      c.ty += (ty - c.ty) * k
+      objetivo.set(0, c.ty * U, 0).applyQuaternion(qCohete)
+      tmpH.copy(marco.costado).multiplyScalar(Math.cos(c.az)).addScaledVector(marco.avance, -Math.sin(c.az))
+      cam.position.copy(objetivo).addScaledVector(tmpH, Math.cos(c.e) * c.R).addScaledVector(EJE_Y, Math.sin(c.e) * c.R)
+      // Nunca por debajo del suelo.
+      const suelo = -CUBIERTA_M * U - bajadaTierra(alt) + 3
+      if (cam.position.y < suelo) cam.position.y = suelo
+      cam.position.x += temblor
+      cam.position.y += temblor
+      cam.fov = 50
+      cam.lookAt(objetivo)
+    }
+    // El panel de telemetría tapa la parte baja de la pantalla: se baja un poco la mirada para que
+    // el cohete quede en la mitad de arriba.
+    cam.rotateX((-cam.fov * Math.PI * 0.17) / 180)
+    cam.updateProjectionMatrix()
+  })
 
   return (
     <group>
       {/* el Sol en su dirección real; abajo, la luz azulada que devuelve la Tierra */}
-      <directionalLight position={sol.clone().multiplyScalar(100).toArray()} intensity={2.6 * Math.max(0.05, THREE.MathUtils.smoothstep(sol.y, -0.08, 0.05))} color="#fff4e6" />
+      <directionalLight ref={luzSol} position={sol.clone().multiplyScalar(100).toArray()} intensity={2.6 * Math.max(0.05, THREE.MathUtils.smoothstep(sol.y, -0.08, 0.05))} color="#fff4e6" />
       <hemisphereLight args={['#9cc4ff', '#2a4a7a', 0.25 + 0.35 * dia]} />
-      <ambientLight intensity={0.08} />
+      <ambientLight intensity={0.1} />
       <CieloDespegue fecha={fecha} orientacion={orientacion} brillo={brilloCielo} />
-      <Destello direccion={() => sol} oclusores={() => oclusores} encima />
-      {/* la Tierra y la plataforma quedan abajo a medida que sube el cohete */}
-      <group ref={mundo}>
-        <TierraDebajo fecha={fecha} orientacion={orientacion} />
-        <mesh position={[0, 0.2, 0]}>
-          <cylinderGeometry args={[9, 11, 0.6, 32]} />
-          <meshStandardMaterial color="#56606e" roughness={0.8} />
-        </mesh>
-        <mesh position={[5.5, 8, 0]}>
-          <boxGeometry args={[1.2, 16, 1.2]} />
-          <meshStandardMaterial color="#8d2a2a" roughness={0.7} />
-        </mesh>
-        <mesh position={[3.4, 12, 0]}>
-          <boxGeometry args={[3.2, 0.3, 0.4]} />
-          <meshStandardMaterial color="#8d2a2a" />
-        </mesh>
-      </group>
-      {/* cohete */}
-      <group position={[0, 0.5, 0]}>
-        <group ref={primera}>
-          <mesh position={[0, 4.5, 0]}>
-            <cylinderGeometry args={[1.2, 1.25, 9, 28]} />
-            <meshStandardMaterial color="#e8ecf3" metalness={0.3} roughness={0.4} />
-          </mesh>
-          {[0, 1, 2, 3].map((i) => (
-            <mesh key={i} position={[Math.cos((i * Math.PI) / 2) * 1.5, 0.9, Math.sin((i * Math.PI) / 2) * 1.5]} rotation={[0, -(i * Math.PI) / 2, 0]}>
-              <boxGeometry args={[1, 1.8, 0.14]} />
-              <meshStandardMaterial color="#9aa5b5" />
-            </mesh>
-          ))}
-          <Llama fuerza={empuje1} radio={1.1} largo={9} />
+      <Destello direccion={() => solEscena.current} oclusores={() => oclusores} encima />
+      {/* la Tierra real, con la plataforma 39B arriba; baja y gira hacia atrás mientras se sube */}
+      <group ref={tierra} position={[0, -R_PLANETA, 0]}>
+        <group quaternion={orientacion}>
+          {/* desde el suelo el halo de la atmósfera, pensado para verse desde el espacio, tiñe todo el cielo */}
+          <Tierra radio={R_PLANETA} fecha={fecha} detalle="alto" etiquetas={false} atmosfera={!desdeTierra} />
         </group>
-        <mesh position={[0, 11.2, 0]}>
-          <cylinderGeometry args={[1.15, 1.2, 4.4, 28]} />
-          <meshStandardMaterial color="#f4f6f9" metalness={0.3} roughness={0.4} />
-        </mesh>
-        <mesh position={[0, 9.2, 0]}>
-          <cylinderGeometry args={[1.22, 1.22, 0.5, 28]} />
-          <meshStandardMaterial color="#c2410c" />
-        </mesh>
-        <mesh position={[0, 14.6, 0]}>
-          <coneGeometry args={[1.15, 2.6, 28]} />
-          <meshStandardMaterial color="#c2410c" />
-        </mesh>
-        <group position={[0, 9, 0]}>
-          <Llama fuerza={empuje2} radio={0.7} largo={5} />
+        <group ref={plataforma} position={[0, R_PLANETA + CUBIERTA_M * U, 0]} quaternion={marco.guinada} scale={U}>
+          <PlataformaLC39B tiempo={tiempo} noche={1 - dia} />
+        </group>
+      </group>
+      <group ref={cohete} position={[0, CUBIERTA_M * U, 0]} quaternion={marco.guinada}>
+        <group scale={U}>
+          <VehiculoSLS tiempo={tiempo} noche={1 - dia} />
         </group>
       </group>
     </group>

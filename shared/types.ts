@@ -391,6 +391,10 @@ export interface Player {
   hogar: string | null
   /** Muestras que carga sin analizar. */
   muestras: number
+  /** Cada muestra que carga: el sitio, la roca y su valor científico (0 a 1) según cómo se tomó. */
+  muestrasTomadas?: { sitio: string; roca: string; valor: number }[]
+  /** kg de O2 por hora que pierde de más el traje por una fuga que no se reparó antes de salir. */
+  trajeFuga?: number
   /** Tripulante controlado por el servidor (modo de un jugador). */
   bot?: boolean
   /** Estación donde está trabajando ahora (los bots caminan hasta ella). */
@@ -775,8 +779,12 @@ export function etiquetaTiempo(e: { t: number; fase: Phase }, tAterrizaje: numbe
   return `Day ${Math.floor(Math.max(0, e.t) / 86400) + 1}`
 }
 
-/** Segundo de misión en que la nave alcanza la órbita y sale hacia Marte. */
-export const TRANSITO_INICIO_S = 510
+/**
+ * Segundo de misión en que la nave sale hacia Marte. El ascenso es el de Artemis I
+ * (shared/ascenso.ts): corte de motores a T+500 s y separación de la etapa central a T+512 s; los
+ * segundos que siguen dejan ver la etapa alejarse antes del crucero.
+ */
+export const TRANSITO_INICIO_S = 560
 /** Duración de la entrada, el descenso y el aterrizaje ("siete minutos de terror"). */
 export const DESCENSO_S = 420
 /** Cuenta regresiva antes del despegue. */

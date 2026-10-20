@@ -1,6 +1,7 @@
 // Une el estado de la misión con el motor de sonido: el ambiente de cada escena, la alarma de
 // las emergencias, los tonos de radio de las transmisiones, la esclusa y el ejercicio.
 import { useEffect, useRef } from 'react'
+import { ASCENSO, empujeRS25, empujeSRB } from '@shared/ascenso'
 import { calorEDL, EDL } from '@shared/edl'
 import type { Player, RoomState } from '@shared/types'
 import { sonido } from '../sonido'
@@ -25,10 +26,12 @@ export function useSonidoJuego(sala: RoomState, yo: Player) {
   const parametros =
     tipo === 'lanzamiento'
       ? {
-          empuje: t >= 0 && t < 150 ? 1 : t >= 160 && t < 510 ? 0.75 : 0,
+          // Momentos reales de Artemis I (shared/ascenso.ts): los RS-25 arrancan a T-6.36 s, los
+          // propulsores dan más del 75 % del empuje hasta separarse y los RS-25 se apagan en el MECO.
+          empuje: Math.round(Math.min(1, 0.78 * empujeSRB(t) + 0.32 * empujeRS25(t)) * 100) / 100,
           altitudKm: sala.vuelo.altitud,
-          // Máxima presión dinámica hacia el minuto y cuarto.
-          presionDinamica: Math.exp(-Math.pow((t - 72) / 22, 2)),
+          // Máxima presión dinámica a T+1:10.
+          presionDinamica: Math.round(Math.exp(-Math.pow((t - ASCENSO.maxQ) / 18, 2)) * 100) / 100,
         }
       : tipo === 'descenso'
         ? {
@@ -49,11 +52,20 @@ export function useSonidoJuego(sala: RoomState, yo: Player) {
   }, [tipo, JSON.stringify(parametros)])
   useEffect(() => () => sonido.ambiente('ninguno'), [])
 
-  // ---- Separación de etapas ----
-  const separada = sala.fase === 'lanzamiento' && t >= 150
+  // ---- Separaciones, en los momentos reales de Artemis I ----
+  // 0 antes de soltar nada, 1 propulsores, 2 carenado, 3 torre de escape, 4 etapa central.
+  const separaciones =
+    sala.fase !== 'lanzamiento' ? 0
+    : t >= ASCENSO.separacionCentral ? 4
+    : t >= ASCENSO.torreEscape ? 3
+    : t >= ASCENSO.carenado ? 2
+    : t >= ASCENSO.separacionSRB ? 1
+    : 0
+  const antes = useRef(separaciones)
   useEffect(() => {
-    if (separada) sonido.evento('separacion')
-  }, [separada])
+    if (separaciones > antes.current) sonido.evento('separacion', { volumen: separaciones === 1 || separaciones === 4 ? 1 : 0.45 })
+    antes.current = separaciones
+  }, [separaciones])
 
   // ---- Alarma mientras haya una emergencia activa ----
   const emergencia = sala.emergencias.find((e) => e.estado === 'activa')?.id ?? null

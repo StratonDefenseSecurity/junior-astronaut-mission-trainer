@@ -99,5 +99,5 @@ export const pctTraje = (kg: number) => Math.round((kg / C.TRAJE_O2_KG) * 100)
 export function diasRestantes(sala: RoomState): number {
   const estancia = (sala.mision.solesObjetivo * C.SOL_S) / 86400
   if (enMarte(sala)) return Math.max(0, estancia - (sala.t - sala.tAterrizaje) / 86400)
-  return Math.max(0, sala.mision.diasTransito - Math.max(0, sala.t - 510) / 86400) + estancia
+  return Math.max(0, sala.mision.diasTransito - Math.max(0, sala.t - TRANSITO_INICIO_S) / 86400) + estancia
 }

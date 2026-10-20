@@ -4,9 +4,13 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   activos,
+  disponible,
+  enCurso,
   evaluarPaso,
+  pasoActual,
   prefijoValido,
   procDeTarea,
+  procPorId,
   textoDe,
   type Lectura,
   type Paso,
@@ -18,8 +22,9 @@ import {
   type Procedimiento,
 } from '@shared/procedimientos'
 import { ROLE_BY_ID, TAREAS_ENSAMBLAJE, type Player, type RoomState } from '@shared/types'
-import { puede } from '../mundo/mapa'
+import { ESTACION_BY_ID, puede } from '../mundo/mapa'
 import { api } from '../red'
+import { useStore } from '../store'
 import { Barra } from './comun'
 
 interface Aviso { tipo: 'ok' | 'warn' | 'bad'; texto: string }
@@ -217,7 +222,7 @@ function Grafica({ l, visibles }: { l: Lectura; visibles: number }) {
       ) : (
         puntos.map((p, i) => (
           <g key={i}>
-            <rect x={m.i + i * anchoBarra + 4} y={y(p.y)} width={anchoBarra - 8} height={H - m.b - y(p.y)} fill={p.y > l.limite ? 'var(--bad)' : 'var(--accent)'} opacity={0.85} />
+            <rect x={m.i + i * anchoBarra + 4} y={y(p.y)} width={anchoBarra - 8} height={H - m.b - y(p.y)} fill={l.resaltar !== undefined ? (String(p.x) === l.resaltar ? 'var(--warn)' : 'var(--accent)') : p.y > l.limite ? 'var(--bad)' : 'var(--accent)'} opacity={0.85} />
             <text x={m.i + i * anchoBarra + anchoBarra / 2} y={H - 8} textAnchor="middle" className="eje">{String(p.x)}</text>
           </g>
         ))
@@ -248,8 +253,8 @@ function Comprobar({ sala, paso, enviar, activo }: { sala: RoomState; paso: Paso
       <Grafica l={l} visibles={visibles} />
       <p className="mini">{l.pregunta}</p>
       <div className="row" style={{ gap: 6 }}>
-        <button className="ok" disabled={!activo || !completa} onClick={() => void enviar('pasa')}>Pass</button>
-        <button className="danger" disabled={!activo || !completa} onClick={() => void enviar('falla')}>Fail</button>
+        <button className="ok" disabled={!activo || !completa} onClick={() => void enviar('pasa')}>{l.botones?.[0] ?? 'Pass'}</button>
+        <button className="danger" disabled={!activo || !completa} onClick={() => void enviar('falla')}>{l.botones?.[1] ?? 'Fail'}</button>
         {!completa && <span className="mini muted">Recording…</span>}
       </div>
     </div>
@@ -285,6 +290,7 @@ const TIPO: Record<Paso['tipo'], string> = {
 function Tarjeta({ sala, yo, proc, paso, remoto, alTerminar }: { sala: RoomState; yo: Player; proc: Procedimiento; paso: number; remoto: boolean; alTerminar: (a: Aviso) => void }) {
   const [aviso, setAviso] = useState<Aviso | null>(null)
   const [ocupado, setOcupado] = useState(false)
+  const abrir = useStore((s) => s.abrirEstacion)
   const e = sala.procedimientos?.[proc.id]
   const def = proc.pasos[paso]
   const tarea = proc.tarea ? TAREAS_ENSAMBLAJE.find((t) => t.id === proc.tarea) : null
@@ -308,13 +314,19 @@ function Tarjeta({ sala, yo, proc, paso, remoto, alTerminar }: { sala: RoomState
     else {
       const a: Aviso = { tipo: ev.calidad >= 0.8 ? 'ok' : ev.calidad >= 0.5 ? 'warn' : 'bad', texto: ev.mensaje }
       setAviso(a)
-      if (paso === proc.pasos.length - 1) alTerminar({ ...a, texto: `${proc.titulo}: done. ${ev.mensaje}` })
+      // Una comprobación que falla manda atrás a repetir pasos: no termina el procedimiento.
+      if (paso === proc.pasos.length - 1 && ev.valor !== 'falla') alTerminar({ ...a, texto: `${proc.titulo}: done. ${ev.mensaje}` })
+      // Al cruzar la esclusa cambia la escena: se abre la estación del paso siguiente, o se cierra.
+      if (def.cambiaZona) {
+        const siguiente = proc.pasos[paso + 1]
+        abrir(siguiente && siguiente.zona === def.cambiaZona ? siguiente.estacion : null)
+      }
     }
   }
 
   return (
     <div className="tarea proc">
-      <strong>{tarea ? `Base Assembly · step ${tarea.paso}` : proc.recurrente ? 'Garden care' : 'Procedure'}</strong>
+      <strong>{tarea ? `Base Assembly · step ${tarea.paso}` : proc.aDemanda ? 'Procedure' : proc.recurrente ? 'Garden care' : 'Procedure'}</strong>
       <p>{proc.titulo}</p>
       <details className="proc-real">
         <summary>How it is done in real life</summary>
@@ -351,15 +363,59 @@ function Tarjeta({ sala, yo, proc, paso, remoto, alTerminar }: { sala: RoomState
           <span className="mini muted">Done by: {def.roles.map((r) => ROLE_BY_ID[r].nombre).join(' or ')}</span>
         )}
         {aviso && <p className={`mini ${aviso.tipo}`}>{aviso.texto}</p>}
+        {proc.aDemanda && <p className="mini muted">While someone works through a procedure, time runs no faster than ×600.</p>}
       </div>
     </div>
   )
 }
 
+/**
+ * Un trabajo que se empieza a mano (reparar, curar, salir...): primero una línea con el botón de
+ * empezar y, al empezarlo o si ya está a medias, la tarjeta con sus pasos.
+ */
+export function Trabajo({ sala, yo, procId, estacion, remoto, motivo = false }: { sala: RoomState; yo: Player; procId: string; estacion: string; remoto: boolean; motivo?: boolean }) {
+  const [abierto, setAbierto] = useState(false)
+  const [ultimo, setUltimo] = useState<Aviso | null>(null)
+  const proc = procPorId(procId, sala)
+  if (!proc || (proc.jugador && proc.jugador !== yo.id)) return null
+  const paso = pasoActual(sala, proc)
+  if (!disponible(sala, proc) || paso >= proc.pasos.length) {
+    if (ultimo) return <p className={`mini ${ultimo.tipo}`}>{ultimo.texto}</p>
+    return motivo && proc.motivo ? <p className="mini muted">{proc.motivo(sala)}</p> : null
+  }
+  const def = proc.pasos[paso]
+  const mio = puede(sala, yo, def.roles)
+  if (!enCurso(sala, proc.id) && !abierto) {
+    return (
+      <div className="tarea proc">
+        <div className="row" style={{ gap: 6 }}>
+          <strong className="grow">{proc.titulo}</strong>
+          {mio ? (
+            <button className="small primary" onClick={() => setAbierto(true)}>Start</button>
+          ) : (
+            <span className="mini muted">Done by: {def.roles.map((r) => ROLE_BY_ID[r].nombre).join(' or ')}</span>
+          )}
+        </div>
+        {proc.resumen && <p className="mini muted">{proc.resumen} {proc.pasos.length} steps.</p>}
+        {ultimo && <p className={`mini ${ultimo.tipo}`}>{ultimo.texto}</p>}
+      </div>
+    )
+  }
+  if (def.estacion !== estacion && !remoto) {
+    return <p className="mini warn">{proc.titulo}: the next step is at {ESTACION_BY_ID[def.estacion]?.nombre ?? 'another station'}.</p>
+  }
+  const terminar = (a: Aviso) => {
+    setUltimo(a)
+    setAbierto(false)
+  }
+  return <Tarjeta sala={sala} yo={yo} proc={proc} paso={paso} remoto={remoto} alTerminar={terminar} />
+}
+
 /** Los procedimientos que tocan en esta estación, y las tareas de montaje ya hechas aquí. */
 export function Procedimientos({ sala, yo, estacion, remoto }: { sala: RoomState; yo: Player; estacion: string; remoto: boolean }) {
   const [ultimo, setUltimo] = useState<Aviso | null>(null)
-  const aqui = activos(sala).filter((a) => a.proc.pasos[a.paso].estacion === estacion)
+  // Los trabajos a demanda (reparar, curar...) los muestra cada panel junto a lo que arreglan.
+  const aqui = activos(sala).filter((a) => !a.proc.aDemanda && a.proc.pasos[a.paso].estacion === estacion)
   const hechas = sala.fase === 'ensamblaje' ? TAREAS_ENSAMBLAJE.filter((t) => t.estacion === estacion && sala.ensamblaje.hechas[t.id]) : []
   return (
     <>

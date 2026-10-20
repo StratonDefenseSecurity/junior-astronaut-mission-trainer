@@ -3,13 +3,13 @@
 // Sirve para comprobar la lógica y el equilibrio del juego.
 import { C, REMS_RESUMEN } from '../shared/ciencia.js'
 import { CLIMA_MARTE } from '../server/datos/climaMarte.js'
-import { formatoMET, masaTotal, type Role, type RoomState } from '../shared/types.js'
+import { formatoMET, masaTotal, type Player, type Role, type RoomState, type Zona } from '../shared/types.js'
+import { CONDICIONES, DCS, disponible, evaluarPaso, pasoActual, procPorId, type PasoElegir } from '../shared/procedimientos.js'
 import { tripulacion } from '../server/base.js'
 import {
   accion,
   aplicarPreset,
   avanzar,
-  cambiarZona,
   crearSala,
   elegirAlternativa,
   elegirEscenario,
@@ -147,20 +147,61 @@ function atenderEmergencias() {
   for (const p of room.propuestas.filter((x) => x.estado === 'pendiente')) votar(room, cmd.id, p.id, true)
 }
 
+/** Pasos de los trabajos (salir, reparar, curar, muestras...) hechos, por familia. */
+const trabajos: Record<string, number> = {}
+const listo = (j: Player) => j.incapacitado <= 0 && !j.enRefugio
+
+/**
+ * Hace entero, paso a paso y como un experto, un trabajo por pasos: cruza la esclusa con su
+ * procedimiento si el paso es en la otra zona. Devuelve el error si no se pudo hacer.
+ */
+function hacer(j: Player, procId: string): string | null {
+  for (let guarda = 0; guarda < 40; guarda++) {
+    const p = procPorId(procId, room)
+    if (!p) return `no existe ${procId}`
+    if (!disponible(room, p)) return guarda > 0 ? null : `${procId} no está disponible: ${p.motivo?.(room) ?? ''}`
+    const i = pasoActual(room, p)
+    const def = p.pasos[i]
+    const cruce = procId.startsWith('salida:') || procId.startsWith('entrada:')
+    if (!cruce && j.zona !== def.zona) {
+      const e = zona(j, def.zona)
+      if (e) return e
+    }
+    const valor = valorExperto(room, procId, i)
+    const ev = evaluarPaso(room, p, i, valor)
+    const error = pasoProcedimiento(room, j.id, procId, i, valor)
+    if (error) return `${procId} paso ${i}: ${error}`
+    calidades.push(ev.ok ? ev.calidad : -1)
+    const familia = procId.split(':')[0]
+    trabajos[familia] = (trabajos[familia] ?? 0) + 1
+    const e = room.procedimientos?.[procId]
+    if (!e || e.terminado) return null
+  }
+  return `${procId} no terminó`
+}
+
+/** Sale o entra por la esclusa con el procedimiento de ponerse o quitarse el traje. */
+function zona(j: Player, z: Zona): string | null {
+  if (j.zona === z) return null
+  const e = hacer(j, `${z === 'exterior' ? 'salida' : 'entrada'}:${j.id}`)
+  return e ?? (j.zona === z ? null : `${j.nombre} no cruzó la esclusa`)
+}
+
 function mantenimiento() {
   if (!buena) return
   const s = de('sistemas')
-  const superficie = room.tAterrizaje > 0
-  for (const x of room.sistemas) {
-    if (!x.instalado || x.integridad >= 55 || room.rec.repuestos < 2) continue
-    const exterior = superficie && (x.id === 'energia' || x.id === 'isru')
-    if (exterior && cambiarZona(room, s.id, 'exterior') !== null) continue
-    accion(room, s.id, 'reparar', { sistema: x.id })
-    if (exterior) cambiarZona(room, s.id, 'nave')
+  if (listo(s)) {
+    for (const x of room.sistemas) {
+      if (!x.instalado || x.integridad >= 55 || room.rec.repuestos < 2) continue
+      hacer(s, `reparar:${x.id}`)
+    }
+    if (room.cabina.fuga > 0 && room.rec.repuestos > 0) hacer(s, 'sellar')
+    const cdra = room.sistemas.find((x) => x.id === 'cdra')!
+    if (!cdra.operativo && room.cabina.ppCO2 > C.PPCO2_LIMITE_KPA && room.rec.lioh > 0 && room.rec.liohActivo < 1) hacer(s, 'lioh')
+    if (s.zona === 'exterior') zona(s, 'nave')
   }
-  if (room.cabina.fuga > 0) accion(room, s.id, 'sellar', {})
   const m = de('medico')
-  for (const j of tripulacion(room)) if ((j.dolencia || j.vit.salud < 60) && room.rec.botiquines > 0) accion(room, m.id, 'tratar', { jugadorId: j.id })
+  if (listo(m)) for (const j of tripulacion(room)) if ((j.dolencia || j.vit.salud < 60) && room.rec.botiquines > 0 && j.zona === 'nave') hacer(m, `tratar:${j.id}`)
   for (const p of room.propuestas.filter((x) => x.estado === 'pendiente')) votar(room, cmd.id, p.id, true)
 }
 
@@ -168,13 +209,15 @@ function base() {
   if (!buena) return
   const cie = de('cientifico')
   const m = room.mision
-  if (room.fase === 'base' && m.muestrasAnalizadas + cie.muestras < m.muestrasObjetivo && room.ambiente.hora > 9 && room.ambiente.hora < 15 && cie.vit.fatiga < 60) {
-    if (cambiarZona(room, cie.id, 'exterior') === null) {
-      for (let k = 1; k <= 8 && cie.muestras < 3; k++) accion(room, cie.id, 'muestra', { sitio: `muestra${k}` })
-      cambiarZona(room, cie.id, 'nave')
+  if (room.fase === 'base' && listo(cie) && m.muestrasAnalizadas + cie.muestras < m.muestrasObjetivo && room.ambiente.hora > 9 && room.ambiente.hora < 15 && cie.vit.fatiga < 60) {
+    if (zona(cie, 'exterior') === null) {
+      for (let k = 1; k <= 8 && cie.muestras < 3; k++) if (!room.muestreos.includes(`muestra${k}`)) sinError(hacer(cie, `muestra:muestra${k}`), 'muestra')
+      sinError(zona(cie, 'nave'), 'volver con las muestras')
     }
   }
-  if (cie.muestras > 0) accion(room, cie.id, 'analizar', {})
+  if (cie.muestras > 0 && listo(cie)) {
+    sinError(hacer(cie, `analizar:${cie.id}`), 'analizar')
+  }
   // Tras una tormenta, vuelve a encender lo que se apagó para ahorrar.
   if (!room.ambiente.tormentaPolvo && room.energia.bateria > room.energia.capacidad * 0.5) {
     for (const id of ['isru', 'huerto'] as const) {
@@ -187,9 +230,9 @@ function base() {
   }
   if (room.energia.polvo > 0.08 && room.ambiente.hora > 9 && room.ambiente.hora < 16) {
     const p = de('piloto')
-    if (cambiarZona(room, p.id, 'exterior') === null) {
-      accion(room, p.id, 'limpiar', {})
-      cambiarZona(room, p.id, 'nave')
+    if (listo(p) && zona(p, 'exterior') === null) {
+      sinError(hacer(p, 'limpiar'), 'limpiar')
+      sinError(zona(p, 'nave'), 'volver de limpiar')
     }
   }
 }
@@ -198,22 +241,27 @@ function base() {
 const calidades: number[] = []
 function procedimientos(soloMontaje: boolean) {
   for (let guarda = 0; guarda < 30; guarda++) {
-    const p = procedimientosPendientes(room).find((x) => !soloMontaje || !['huerto', 'regar', 'ralear', 'moho', 'amarillas', 'cosechar'].includes(x.procId))
+    // Los trabajos a demanda (reparar, curar, salir...) los hace cada rol cuando hacen falta.
+    const p = procedimientosPendientes(room).find((x) => !x.aDemanda && (!soloMontaje || !['huerto', 'regar', 'ralear', 'moho', 'amarillas', 'cosechar'].includes(x.procId)))
     if (!p) return
     const quien = room.jugadores.find((j) => j.rol && p.roles.includes(j.rol)) ?? cmd
     // Quien está fuera de servicio o en el refugio espera a poder hacerlo.
     if (quien.incapacitado > 0 || quien.enRefugio) return
-    if (p.zona === 'exterior') sinError(cambiarZona(room, quien.id, 'exterior'), `salir (${p.procId})`)
+    if (p.zona === 'exterior') sinError(zona(quien, 'exterior'), `salir (${p.procId})`)
     sinError(pasoProcedimiento(room, quien.id, p.procId, p.paso, valorExperto(room, p.procId, p.paso)), `procedimiento ${p.procId} paso ${p.paso}`)
     const e = room.procedimientos?.[p.procId]
     if (e) calidades.push(e.calidad[p.paso] ?? 1)
-    if (p.zona === 'exterior') cambiarZona(room, quien.id, 'nave')
+    if (quien.zona === 'exterior') sinError(zona(quien, 'nave'), `entrar (${p.procId})`)
   }
 }
+
+/** Copia de la sala al empezar la base, para probar los trabajos y sus consecuencias aparte. */
+let copia: RoomState | null = null
 
 while (!room.resultado && segundos < 6 * 3600) {
   tic()
   segundos += 1
+  if (room.fase === 'base' && !copia) copia = structuredClone(room)
   if (room.fase !== faseAnterior) {
     resumen(`→ ${room.fase}`)
     faseAnterior = room.fase
@@ -244,14 +292,133 @@ while (!room.resultado && segundos < 6 * 3600) {
 
 resumen('FIN')
 exigir(room.resultado, 'la misión debe terminar')
+exigir(copia, 'la base llegó a funcionar')
+probarTrabajos(copia!)
 console.log(`\n${room.resultado!.titulo}: ${room.resultado!.motivo}`)
 console.log(`Tiempo real de juego a máxima escala: ${Math.round(segundos / 60)} min. Emergencias:`, JSON.stringify(cuenta))
 console.log(`Equipos: ${room.sistemas.filter((s) => s.instalado).map((s) => `${s.id} ${Math.round(s.integridad)}`).join(', ')}`)
 exigir(calidades.every((q) => q === 1), `los valores de experto dan calidad 1: ${calidades.filter((q) => q !== 1).join(', ')}`)
 const plantas = room.huerto.almohadillas ?? []
-console.log(`Procedimientos: ${calidades.length} pasos hechos como un experto · efectos ${JSON.stringify(room.efectos ?? {})}`)
+console.log(`Procedimientos: ${calidades.length} pasos hechos como un experto · trabajos ${JSON.stringify(trabajos)} · efectos ${JSON.stringify(room.efectos ?? {})}`)
+exigir((trabajos.salida ?? 0) > 0 && (trabajos.entrada ?? 0) > 0 && (trabajos.muestra ?? 0) > 0 && (trabajos.analizar ?? 0) > 0, 'salir, entrar, tomar y analizar muestras se hacen por pasos')
 console.log(`Huerto: ${room.huerto.establecido ? `sí, ${room.huerto.cultivo}, ${room.huerto.cosechas} cosechas, ${room.huerto.comidaFresca ?? 0} kg frescos, ${plantas.filter((a) => !a.muerta).length}/${plantas.length} plantas vivas` : 'no'} · muestras ${room.mision.muestrasAnalizadas}/${room.mision.muestrasObjetivo} · límite de dosis ${C.LIMITE_CARRERA_MSV} mSv`)
 console.log('Últimos registros:')
 for (const l of room.registro.slice(-12)) console.log(`   ${l.tipo === 'alerta' ? '!' : ' '} ${l.texto}`)
 console.log('\nAsistente:', responderBot(room, cmd, '¿cómo vamos?').slice(0, 200))
 console.log('SIMULACIÓN TERMINADA')
+
+/**
+ * Prueba los trabajos por pasos sobre una copia de la sala, sin tocar la misión: que como experto
+ * salgan bien, y que las malas decisiones tengan su consecuencia.
+ * `elegir` cambia el valor de algunos pasos (por su id); `datos` fuerza la lectura que preparó el servidor.
+ */
+function probarTrabajos(r: RoomState) {
+  // Si el rol no viaja, lo hace cualquiera (como en el juego).
+  const quien = (rol: Role) => r.jugadores.find((j) => j.rol === rol) ?? r.jugadores[0]
+  const pasos = (j: Player, procId: string, elegir: Record<string, unknown> = {}, datos: Record<string, Record<string, number>> = {}): string | null => {
+    for (let guarda = 0; guarda < 40; guarda++) {
+      const p = procPorId(procId, r)
+      if (!p) return `no existe ${procId}`
+      if (!disponible(r, p)) return guarda > 0 ? null : `${procId} no está disponible: ${p.motivo?.(r) ?? ''}`
+      const i = pasoActual(r, p)
+      const def = p.pasos[i]
+      const cruce = procId.startsWith('salida:') || procId.startsWith('entrada:')
+      if (!cruce && j.zona !== def.zona) {
+        const e = pasos(j, `${def.zona === 'exterior' ? 'salida' : 'entrada'}:${j.id}`)
+        if (e) return e
+      }
+      const forzar = datos[def.id]
+      if (forzar) {
+        Object.assign((r.procedimientos![procId].datos ??= {}), forzar)
+        delete datos[def.id] // solo la primera vez
+      }
+      const valor = def.id in elegir ? elegir[def.id] : valorExperto(r, procId, i)
+      const error = pasoProcedimiento(r, j.id, procId, i, valor)
+      if (error) return `${procId} paso ${def.id}: ${error}`
+      const e = r.procedimientos?.[procId]
+      if (!e || e.terminado) return null
+    }
+    return `${procId} no terminó`
+  }
+  const ok = (e: string | null, msg: string) => exigir(e === null, `${msg}: ${e}`)
+  const sis = quien('sistemas')
+  const med = quien('medico')
+  const cie = quien('cientifico')
+  for (const j of r.jugadores) {
+    j.incapacitado = 0
+    j.enRefugio = false
+    j.vit.fatiga = 10
+    j.trajeO2 = C.TRAJE_O2_KG
+    j.trajeBateria = 1
+  }
+  r.refugioHasta = 0
+  r.rec.repuestos = 20
+  r.rec.botiquines = 20
+  r.rec.lioh = 3
+  r.energia.bateria = r.energia.capacidad
+
+  // Sellar una fuga: se encuentra, se parcha y la presión aguanta.
+  r.cabina.fuga = 1.5
+  ok(pasos(sis, 'sellar'), 'sellar')
+  exigir(r.cabina.fuga === 0, 'la fuga queda sellada')
+  // Cartucho de LiOH.
+  const activo = r.rec.liohActivo
+  ok(pasos(sis, 'lioh'), 'lioh')
+  exigir(r.rec.lioh === 2 && r.rec.liohActivo > activo + 2, 'el cartucho nuevo absorbe CO2')
+  // Reparar cambiando la unidad.
+  const wrs = r.sistemas.find((x) => x.id === 'wrs')!
+  wrs.integridad = 40
+  ok(pasos(sis, 'reparar:wrs'), 'reparar')
+  exigir(wrs.integridad === 85, `la reparación devuelve el reciclador al 85%: ${wrs.integridad}`)
+  // Curar cada dolencia con su diagnóstico y su tratamiento.
+  const paciente = quien('piloto')
+  for (const c of CONDICIONES) {
+    paciente.dolencia = c.dolencia
+    paciente.vit.salud = 70
+    ok(pasos(med, `tratar:${paciente.id}`), `tratar ${c.id}`)
+    exigir(!paciente.dolencia && paciente.vit.salud > 70, `${c.id} curado`)
+  }
+  // Un tratamiento equivocado gasta el botiquín y no cura.
+  paciente.dolencia = 'a skin rash'
+  const kits = r.rec.botiquines
+  const mal = (procPorId(`tratar:${paciente.id}`, r)!.pasos[4] as PasoElegir).opciones(r).find((o) => o.id !== 'piel')!.id
+  ok(pasos(med, `tratar:${paciente.id}`, { tratamiento: mal }), 'tratar mal')
+  exigir(paciente.dolencia === 'a skin rash' && r.rec.botiquines === kits - 1, 'un tratamiento equivocado no cura y gasta el botiquín')
+  paciente.dolencia = null
+  // Saltarse la prerrespiración: riesgo de enfermedad por descompresión.
+  let bends = 0
+  for (const j of r.jugadores.filter((x) => x.rol !== 'medico')) {
+    ok(pasos(j, `salida:${j.id}`, { protocolo: 'nada' }), `salir sin prerrespirar (${j.nombre})`)
+    if (j.dolencia === DCS || r.emergencias.some((e) => e.datos.dolencia === DCS && e.datos.jugadorId === j.id) || r.cola.some((c) => c.datos.dolencia === DCS && c.datos.jugadorId === j.id)) bends += 1
+    ok(pasos(j, `entrada:${j.id}`), `volver a entrar (${j.nombre})`)
+  }
+  exigir(bends > 0, 'salir sin prerrespirar da la enfermedad por descompresión a alguien')
+  // Dar por buena una fuga del traje: el traje pierde oxígeno de más fuera.
+  ok(pasos(sis, `salida:${sis.id}`, {}, { fugas: { fuga: 1 } }), 'salir tras encontrar una fuga')
+  exigir(sis.zona === 'exterior' && !sis.trajeFuga && r.registro.some((l) => /found a leak in the suit/.test(l.texto)), 'con la fuga a la vista se revisa el traje, se repite la prueba y se sale bien')
+  ok(pasos(sis, `entrada:${sis.id}`), 'volver tras la fuga')
+  ok(pasos(sis, `salida:${sis.id}`, { fugas: 'pasa' }, { fugas: { fuga: 1 } }), 'salir ignorando la fuga')
+  exigir(sis.zona === 'exterior' && (sis.trajeFuga ?? 0) > 0, 'ignorar la fuga del traje la deja perdiendo oxígeno')
+  // Meter el polvo en el hábitat tapa los filtros.
+  const cdra = r.sistemas.find((x) => x.id === 'cdra')!
+  const antes = cdra.integridad
+  ok(pasos(sis, `entrada:${sis.id}`, { polvo: 'dentro' }), 'entrar con polvo')
+  exigir(cdra.integridad < antes && !sis.trajeFuga, 'el polvo dentro desgasta el depurador y la fuga del traje se repara al entrar')
+  // Limpiar con un cepillo duro raya los paneles.
+  r.energia.polvo = 0.3
+  const solar = r.efectos?.solar ?? 1
+  ok(pasos(quien('piloto'), 'limpiar', { herramienta: 'duro' }), 'limpiar con cepillo duro')
+  exigir((r.efectos?.solar ?? 1) < solar && r.energia.polvo < 0.3, 'el cepillo duro limpia pero raya los paneles')
+  ok(pasos(quien('piloto'), `entrada:${quien('piloto').id}`), 'piloto vuelve')
+  // Una roca mala no cuenta y el sitio se puede volver a muestrear; una buena sí cuenta.
+  const libres = ['muestra1', 'muestra2', 'muestra3', 'muestra4', 'muestra5', 'muestra6', 'muestra7', 'muestra8'].filter((x) => !r.muestreos.includes(x))
+  exigir(libres.length >= 2, 'quedan sitios para probar las muestras')
+  cie.muestras = 0
+  cie.muestrasTomadas = []
+  const analizadas = r.mision.muestrasAnalizadas
+  ok(pasos(cie, `muestra:${libres[0]}`, { roca: 'polvo' }), 'muestra de una roca polvorienta')
+  ok(pasos(cie, `muestra:${libres[1]}`), 'muestra de una roca en capas')
+  ok(pasos(cie, `analizar:${cie.id}`), 'analizar')
+  exigir(r.mision.muestrasAnalizadas === analizadas + 1 && !r.muestreos.includes(libres[0]) && r.muestreos.includes(libres[1]), 'la muestra mala no cuenta y su sitio queda libre')
+  console.log('Trabajos probados: sellar, LiOH, reparar, curar las 9 condiciones, prerrespiración, fuga del traje, polvo, paneles rayados y valor de las muestras.')
+}

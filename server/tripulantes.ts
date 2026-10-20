@@ -10,6 +10,7 @@
 import { C } from '../shared/ciencia.js'
 import { CIUDADES, escenarioDe } from '../shared/escenarios.js'
 import { analizarCarga } from '../shared/plan.js'
+import { disponible, estacionSistema, pasoActual, procPorId } from '../shared/procedimientos.js'
 import {
   PEINADOS,
   ROLE_BY_ID,
@@ -40,7 +41,6 @@ import {
   accion,
   ajustarCargamento,
   aplicarPreset,
-  cambiarZona,
   elegirAlternativa,
   elegirRol,
   fijarActividad,
@@ -668,6 +668,7 @@ function pedidos(room: RoomState, bots: Player[]) {
 function tareasDeLaPersona(room: RoomState, persona: Player): { clave: string; titulo: string; estacion: string }[] {
   const lista: { clave: string; titulo: string; estacion: string }[] = []
   for (const p of pendientes(room)) {
+    if (p.aDemanda) continue
     if (titularDe(room, p.roles)?.id === persona.id) lista.push({ clave: `${p.procId}:${p.paso}`, titulo: 'the next step of the procedure', estacion: p.estacion })
   }
   if (usarTareasSimples(room)) {
@@ -684,19 +685,26 @@ type Plan = { que: string; etapas: EtapaBot[] }
 
 const etapa = (estacion: string, segundos: number, hacer: Record<string, unknown> | null = null): EtapaBot => ({ estacion, zona: ESTACIONES[estacion].zona, segundos, hacer })
 
-function estacionDe(room: RoomState, id: SistemaId): string {
-  switch (id) {
-    case 'energia':
-      return enSuperficie(room) ? 'plantaExt' : 'energia'
-    case 'isru':
-      return 'isruExt'
-    case 'esclusa':
-      return 'esclusa'
-    case 'huerto':
-      return 'laboratorio'
-    default:
-      return 'soporte'
-  }
+const estacionDe = (room: RoomState, id: SistemaId) => estacionSistema(room, id).estacion
+
+/**
+ * Una etapa que hace el paso que toca de un procedimiento por pasos. Al terminarlo, el bot sigue
+ * con el siguiente paso en su estación (ver avanzarTrabajo), como haría una persona.
+ */
+function etapaProc(room: RoomState, procId: string): EtapaBot | null {
+  const p = procPorId(procId, room)
+  if (!p) return null
+  const def = p.pasos[pasoActual(room, p)]
+  if (!def || !ESTACIONES[def.estacion]) return null
+  return { estacion: def.estacion, zona: def.zona, segundos: Math.max(1, def.segundos), hacer: { op: 'proc', procId, seguir: true } }
+}
+
+/** El paso siguiente de un procedimiento que sigue a medias, o null si ya terminó. */
+function siguePendiente(room: RoomState, procId: string): EtapaBot | null {
+  const p = procPorId(procId, room)
+  const e = room.procedimientos?.[procId]
+  if (!p || !e || e.terminado || !disponible(room, p)) return null
+  return etapaProc(room, procId)
 }
 
 function puedeSalir(room: RoomState, j: Player): boolean {
@@ -718,15 +726,18 @@ function ruta(room: RoomState, j: Player, pasos: EtapaBot[], volver = true): Eta
   let zona = j.zona
   for (const p of pasos) {
     if (p.zona !== zona) {
-      if (p.zona === 'exterior') {
-        if (!puedeSalir(room, j)) return null
-        res.push(etapa('esclusa', 2, { op: 'zona', zona: 'exterior' }))
-      } else res.push(etapa('esclusaExt', 2, { op: 'zona', zona: 'nave' }))
+      // Se cruza la esclusa con su procedimiento: ponerse el traje y salir, o entrar y quitárselo.
+      const cruce = p.zona === 'exterior' ? (puedeSalir(room, j) ? etapaProc(room, `salida:${j.id}`) : null) : etapaProc(room, `entrada:${j.id}`)
+      if (!cruce) return null
+      res.push(cruce)
       zona = p.zona
     }
     res.push(p)
   }
-  if (zona === 'exterior' && volver) res.push(etapa('esclusaExt', 2, { op: 'zona', zona: 'nave' }))
+  if (zona === 'exterior' && volver) {
+    const cruce = etapaProc(room, `entrada:${j.id}`)
+    if (cruce) res.push(cruce)
+  }
   return res
 }
 
@@ -763,7 +774,10 @@ function trabajar(room: RoomState, j: Player, m: MemoriaBot) {
   if (m.trabajo) return avanzarTrabajo(room, j, m)
   if (ahora() < m.libre) return
   let plan = decidir(room, j, m)
-  if (!plan && j.zona === 'exterior') plan = { que: 'volver', etapas: [etapa('esclusaExt', 1, { op: 'zona', zona: 'nave' })] }
+  if (!plan && j.zona === 'exterior') {
+    const cruce = etapaProc(room, `entrada:${j.id}`)
+    if (cruce) plan = { que: 'volver', etapas: [cruce] }
+  }
   if (plan) empezar(room, j, m, plan)
   else {
     j.estacion = null
@@ -782,19 +796,26 @@ function avanzarTrabajo(room: RoomState, j: Player, m: MemoriaBot) {
     return
   }
   if (ahora() < tr.hasta) return
+  const zonaAntes = j.zona
   const error = et.hacer ? ejecutar(room, j, et.hacer) : null
-  const cruzo = !error && et.hacer?.op === 'zona'
+  const cruzo = !error && j.zona !== zonaAntes
   const p = cruzo ? ENTRADA[j.zona] : puntoDe(et.estacion)!
   m.x = p.x
   m.z = p.z
   if (error) {
     m.marcas[`~error:${tr.que}`] = ahora()
-    // Si estaba fuera, al menos vuelve a entrar.
-    const vuelta = tr.etapas.slice(1).filter((e) => e.hacer?.op === 'zona' && e.hacer.zona === 'nave')
-    tr.etapas = j.zona === 'exterior' && vuelta.length ? [vuelta[vuelta.length - 1]] : []
+    // Si estaba fuera, al menos vuelve a entrar (salvo que lo que falló sea justo entrar).
+    const entrando = String(et.hacer?.procId ?? '').startsWith('entrada:')
+    const vuelta = j.zona === 'exterior' && !entrando ? etapaProc(room, `entrada:${j.id}`) : null
+    tr.etapas = vuelta ? [vuelta] : []
   } else {
     if (et.hacer) relatar(room, j, et.hacer)
     tr.etapas.shift()
+    // En un procedimiento por pasos, el paso siguiente va delante de lo demás.
+    if (et.hacer?.op === 'proc' && et.hacer.seguir) {
+      const sig = siguePendiente(room, String(et.hacer.procId))
+      if (sig) tr.etapas.unshift(sig)
+    }
   }
   if (!tr.etapas.length) {
     m.trabajo = null
@@ -809,13 +830,14 @@ function avanzarTrabajo(room: RoomState, j: Player, m: MemoriaBot) {
 /** Hace lo que la etapa pide, con las mismas funciones que usan las personas. */
 function ejecutar(room: RoomState, j: Player, h: Record<string, unknown>): string | null {
   switch (h.op) {
-    case 'zona':
-      return cambiarZona(room, j.id, h.zona as Zona)
     case 'tarea':
       return hacerTarea(room, j.id, String(h.tarea))
     case 'proc': {
       const procId = String(h.procId)
-      const paso = Number(h.paso)
+      const p = procPorId(procId, room)
+      if (!p) return 'Unknown procedure.'
+      // Sin número de paso, el que toque ahora (los trabajos que se encadenan paso a paso).
+      const paso = h.paso === undefined ? pasoActual(room, p) : Number(h.paso)
       return pasoProcedimiento(room, j.id, procId, paso, valorExperto(room, procId, paso))
     }
     case 'ubicacion':
@@ -838,6 +860,7 @@ function relatar(room: RoomState, j: Player, h: Record<string, unknown>) {
     pedirAprobacion(room, j, `landing at ${sitio.nombre}`)
     return
   }
+  if (h.op === 'proc') return relatarTrabajo(room, j, String(h.procId))
   if (h.op !== 'accion') return
   const d = (h.datos as Record<string, unknown>) ?? {}
   switch (h.tipo) {
@@ -876,6 +899,39 @@ function relatar(room: RoomState, j: Player, h: Record<string, unknown>) {
       if (p?.estado === 'pendiente') pedirAprobacion(room, j, minus(p.titulo))
       break
     }
+  }
+}
+
+/** Cuenta un trabajo por pasos cuando lo termina. */
+function relatarTrabajo(room: RoomState, j: Player, procId: string) {
+  const e = room.procedimientos?.[procId]
+  if (e && !e.terminado) return // todavía a medias
+  const k = procId.indexOf(':')
+  const familia = k > 0 ? procId.slice(0, k) : procId
+  const objetivo = k > 0 ? procId.slice(k + 1) : ''
+  switch (familia) {
+    case 'reparar': {
+      const s = sis(room, objetivo as SistemaId)
+      decir(room, j, `I swapped the worn unit of ${elSistema(s.id)}. It is at ${Math.round(s.integridad)}% and we have ${room.rec.repuestos} kits left.`)
+      break
+    }
+    case 'sellar':
+      decir(room, j, 'Leak sealed. The pressure decay check holds.')
+      break
+    case 'lioh':
+      decir(room, j, `I swapped a lithium hydroxide cartridge. ${room.rec.lioh} left.`)
+      break
+    case 'tratar': {
+      const paciente = room.jugadores.find((o) => o.id === objetivo)
+      if (paciente) decir(room, j, paciente.id === j.id ? 'I treated myself in the Medical Bay. I am fine now.' : `I treated ${paciente.nombre}.`)
+      break
+    }
+    case 'analizar':
+      decir(room, j, `Samples analyzed. We have ${room.mision.muestrasAnalizadas} of ${room.mision.muestrasObjetivo}.`)
+      break
+    case 'limpiar':
+      decir(room, j, `Panels clean. Dust is down to ${Math.round(room.energia.polvo * 100)}%.`)
+      break
   }
 }
 
@@ -943,13 +999,23 @@ function decidir(room: RoomState, j: Player, m: MemoriaBot): Plan | null {
     if (irAyudar(room, j.id, persona.id) === null) {
       decir(room, j, j.rol === 'medico' ? 'On my way. I will wait for you in the Medical Bay.' : 'On my way.', undefined, Infinity, true)
       if (j.rol === 'medico' && (persona.dolencia || persona.vit.salud < 60) && room.rec.botiquines > 0) {
-        return plan('tratar', [etapa('enfermeria', 5, { op: 'accion', tipo: 'tratar', datos: { jugadorId: persona.id } })])
+        const p = trabajo(room, plan, `tratar:${persona.id}`)
+        if (p) return p
       }
     }
   }
 
+  // Un trabajo por pasos que dejó a medias (su traje, una reparación...): lo termina primero.
+  for (const p of pendientes(room)) {
+    if (!p.aDemanda || !p.enCurso || (p.jugador ? p.jugador !== j.id : p.por !== j.id)) continue
+    const hecho = trabajo(room, plan, p.procId)
+    if (hecho) return hecho
+  }
+
   // Procedimientos por pasos (montaje, huerto) que le tocan a su rol.
   for (const p of pendientes(room)) {
+    // Los trabajos a demanda los elige cada rol más abajo, cuando hacen falta.
+    if (p.aDemanda) continue
     // Si un bot ya relevó a la persona en un procedimiento, lo termina él.
     if (!ESTACIONES[p.estacion] || !meToca(room, j, m, p.roles, `proc:${p.procId}`)) continue
     const hecho = plan(`proc:${p.procId}:${p.paso}`, [{ estacion: p.estacion, zona: p.zona, segundos: Math.max(1, p.segundos), hacer: { op: 'proc', procId: p.procId, paso: p.paso } }], false)
@@ -980,17 +1046,25 @@ function decidir(room: RoomState, j: Player, m: MemoriaBot): Plan | null {
 }
 
 type Planificar = (que: string, pasos: EtapaBot[], volver?: boolean) => Plan | null
+
+/** Plan para hacer un trabajo por pasos entero, saliendo y entrando por la esclusa si hace falta. */
+function trabajo(room: RoomState, plan: Planificar, procId: string): Plan | null {
+  const p = procPorId(procId, room)
+  if (!p || !disponible(room, p)) return null
+  const et = etapaProc(room, procId)
+  return et ? plan(`proc:${procId}`, [et]) : null
+}
 const hayPendiente = (room: RoomState, tipo: Proposal['tipo'], filtro?: (p: Proposal) => boolean) =>
   room.propuestas.some((p) => p.estado === 'pendiente' && p.tipo === tipo && (!filtro || filtro(p)))
 const emergenciaActiva = (room: RoomState, filtro: (e: Emergency) => boolean) => room.emergencias.some((e) => e.estado === 'activa' && filtro(e))
 
 function sistemas(room: RoomState, j: Player, plan: Planificar): Plan | null {
   if (room.cabina.fuga > 0 && room.rec.repuestos >= 1 && !emergenciaActiva(room, (e) => e.tipo === 'fuga')) {
-    const p = plan('sellar', [etapa('soporte', 5, { op: 'accion', tipo: 'sellar', datos: {} })])
+    const p = trabajo(room, plan, 'sellar')
     if (p) return p
   }
   if (!sis(room, 'cdra').operativo && room.cabina.ppCO2 > C.PPCO2_LIMITE_KPA && room.rec.lioh > 0 && room.rec.liohActivo < 1) {
-    const p = plan('lioh', [etapa('soporte', 3, { op: 'accion', tipo: 'lioh', datos: {} })])
+    const p = trabajo(room, plan, 'lioh')
     if (p) return p
   }
   // Repara antes de que el equipo baje del 50%, el más gastado primero.
@@ -998,7 +1072,7 @@ function sistemas(room: RoomState, j: Player, plan: Planificar): Plan | null {
     .filter((s) => s.instalado && s.integridad < 55 && room.rec.repuestos >= (prescindible(room, s.id) ? 8 : 2) && !emergenciaActiva(room, (e) => e.tipo === 'fallo' && e.datos.sistema === s.id))
     .sort((a, b) => a.integridad - b.integridad)
   for (const s of gastados) {
-    const p = plan(`reparar:${s.id}`, [etapa(estacionDe(room, s.id), 6, { op: 'accion', tipo: 'reparar', datos: { sistema: s.id } })])
+    const p = trabajo(room, plan, `reparar:${s.id}`)
     if (p) return p
   }
   return paseo(room, j, plan)
@@ -1009,7 +1083,7 @@ function medico(room: RoomState, j: Player, m: MemoriaBot, plan: Planificar): Pl
     for (const o of tripulacion(room)) {
       if (!(o.dolencia || o.vit.salud < 60)) continue
       if (emergenciaActiva(room, (e) => e.datos.jugadorId === o.id)) continue
-      const p = plan(`tratar:${o.id}`, [etapa('enfermeria', 5, { op: 'accion', tipo: 'tratar', datos: { jugadorId: o.id } })])
+      const p = trabajo(room, plan, `tratar:${o.id}`)
       if (p) return p
     }
   }
@@ -1033,7 +1107,7 @@ function logistica(room: RoomState, j: Player, plan: Planificar): Plan | null {
   const almacen = (que: string, tipo: string, datos: Record<string, unknown>) => plan(que, [etapa('almacen', 3, { op: 'accion', tipo, datos })])
   // Con el sistemas en manos de la persona, logística cubre los cartuchos si el CO2 se dispara.
   if (!botDeRol(room, 'sistemas') && !sis(room, 'cdra').operativo && room.cabina.ppCO2 > C.PPCO2_LIMITE_KPA && room.rec.lioh > 0 && room.rec.liohActivo < 1) {
-    const p = plan('lioh', [etapa('soporte', 3, { op: 'accion', tipo: 'lioh', datos: {} })])
+    const p = trabajo(room, plan, 'lioh')
     if (p) return p
   }
   if (!escasez && !hayPendiente(room, 'racionComida') && faltan > 1) {
@@ -1074,7 +1148,7 @@ function logistica(room: RoomState, j: Player, plan: Planificar): Plan | null {
 function cientifico(room: RoomState, j: Player, m: MemoriaBot, plan: Planificar): Plan | null {
   const mis = room.mision
   if (j.muestras > 0 && j.zona === 'nave') {
-    const p = plan('analizar', [etapa('laboratorio', 6, { op: 'accion', tipo: 'analizar', datos: {} })])
+    const p = trabajo(room, plan, `analizar:${j.id}`)
     if (p) return p
   }
   // El huerto, si los procedimientos aún no lo llevan.
@@ -1085,21 +1159,23 @@ function cientifico(room: RoomState, j: Player, m: MemoriaBot, plan: Planificar)
   }
   const faltan = mis.muestrasObjetivo - mis.muestrasAnalizadas - j.muestras
   const hora = room.ambiente.hora
-  if (room.fase === 'base' && faltan > 0 && hora > 9 && hora < 15 && j.vit.fatiga < 60 && !room.ambiente.tormentaSolar) {
+  if (room.fase === 'base' && faltan > 0 && hora > 9 && hora < 15 && j.vit.fatiga < 50 && !room.ambiente.tormentaSolar) {
     // Los puntos más cercanos, uno detrás de otro, hasta 3 por salida.
     const libres = Object.keys(ESTACIONES).filter((id) => id.startsWith('muestra') && !room.muestreos.includes(id))
     const ruta: string[] = []
     let x = ESTACIONES.esclusaExt.x
     let z = ESTACIONES.esclusaExt.z
-    while (ruta.length < Math.min(3, faltan) && libres.length) {
+    // Cada muestra son varios pasos fuera: cansado, sale a por menos.
+    while (ruta.length < Math.min(j.vit.fatiga < 30 ? 3 : 2, faltan) && libres.length) {
       libres.sort((a, b) => Math.hypot(ESTACIONES[a].x - x, ESTACIONES[a].z - z) - Math.hypot(ESTACIONES[b].x - x, ESTACIONES[b].z - z))
       const id = libres.shift()!
       ruta.push(id)
       x = ESTACIONES[id].x
       z = ESTACIONES[id].z
     }
-    if (ruta.length) {
-      const p = plan('muestras', [...ruta.map((id) => etapa(id, 5, { op: 'accion', tipo: 'muestra', datos: { sitio: id } })), etapa('laboratorio', 6, { op: 'accion', tipo: 'analizar', datos: {} })])
+    const etapas = [...ruta.map((id) => etapaProc(room, `muestra:${id}`)), etapaProc(room, `analizar:${j.id}`)].filter((x): x is EtapaBot => Boolean(x))
+    if (ruta.length && etapas.length === ruta.length + 1) {
+      const p = plan('muestras', etapas)
       if (p) {
         decir(room, j, `Going out to collect ${ruta.length} ${ruta.length === 1 ? 'sample' : 'samples'}.`)
         return p
@@ -1118,7 +1194,7 @@ function piloto(room: RoomState, j: Player, plan: Planificar): Plan | null {
   }
   const hora = room.ambiente.hora
   if (room.fase === 'base' && room.ensamblaje.hechas.paneles && room.energia.polvo > 0.08 && hora > 9 && hora < 16 && !room.ambiente.tormentaSolar) {
-    const p = plan('limpiar', [etapa('campoSolar', 6, { op: 'accion', tipo: 'limpiar', datos: {} })])
+    const p = trabajo(room, plan, 'limpiar')
     if (p) return p
   }
   void j

@@ -32,6 +32,7 @@ To show it on a basic computer, the **HD** button in the top bar switches to the
 5. **Mars Arrival.** From orbit, the crew chooses the landing site and lives through the descent.
 6. **Reach the Base.** After landing, the Base Dashboard opens with the Base Assembly mission: choose the location, deploy the habitat and equipment, turn on life support and power, and check the facilities. The responsible role does each task by going to the right place, inside or outside, step by step as in real life: press and hold while a panel unrolls, tighten the anchors in a cross pattern, set the tilt for the latitude, power up from the source toward the loads, and read the airlock pressure drop before calling it airtight. How you do it matters: a badly aimed panel produces less, and a leak you let slide keeps losing air.
 7. **Manage Resources.** The Base Dashboard gathers the options from the plan, each with its own screen: track water, oxygen, food and power; decide how to share limited resources; manage production and recycling; maintain the equipment; protect the crew from radiation; and the plant garden, which follows the ISS Veggie system: choose the crop, deploy the chamber, turn on the lights, place the pillows and water them with a syringe. After that you water them when they dry out, thin the seedlings, check the leaves for mold or drooping, and harvest. The commander approves or rejects the others' decisions.
+   The crew's hands-on work is step by step too. Going outside means putting on the suit in order, a suit leak check, a prebreathe plan to avoid the bends and pumping down the airlock; coming back in means brushing off the dust, repressurizing and taking the suit off. A repair is an ISS-style unit swap with lockout and a checkout test. A leak is found, patched and checked by pressure decay. Samples are taken like Perseverance takes them and analyzed like Curiosity does, and the Flight Surgeon examines, diagnoses, can ask Earth with the real signal delay and treats. Bad choices have consequences: a skipped prebreathe can give the bends, an ignored suit leak drains oxygen, and a poor rock does not count for the objective. While someone is in the middle of one of these, time runs no faster than ×600.
 8. **Emergencies.** An alert, finding the problem and options with different consequences. The ones that involve several roles go to the commander or to a vote.
 
 During the cruise there is no gravity: the characters float, push off with inertia, and loose objects float around the module. Each space has its own animation: running on the treadmill or pedaling in the gym, sleeping in a sleeping bag strapped to the wall (on Mars, in a bunk), typing at the consoles and curling up in the Storm Shelter. Through the big window you see the real sky for the date from the ship's real position: Earth moving away with the Moon, Mars growing, the planets and the stars. At night on Mars, Earth shines like a bright star.
@@ -72,7 +73,7 @@ The full list, with links, is in the game (**Sources** button) and in [shared/ci
 - **Constants checked against their source:** oxygen use and CO2, water and food production per person, ISS water recycling, the CO2 limit, the capacity of the ISS scrubber and oxygen generator, radiation during the cruise and on the surface, the career dose limit, Mars data, the EMU suit, the Kilopower reactor.
 - **Real images:** Earth with Blue Marble, the 2016 Black Marble night lights and NASA Earth Observatory clouds; the Moon with the LROC and LOLA maps from NASA's Scientific Visualization Studio; Mars with the Viking color mosaic and the MOLA altimeter relief, from USGS. The credits are in [public/texturas/CREDITOS.md](public/texturas/CREDITOS.md) and are regenerated with `node scripts/texturas-reales.mjs`.
 - **Descent:** entry, parachute, heat shield, terrain navigation and sky crane follow the reconstructed timeline of the Perseverance landing on February 18, 2021.
-- **Procedures:** the assembly and the garden follow real NASA practice: ROSA roll-out panels, the ISS power buses, leak checks by pressure drop, the LSMS crane, the Kilopower reactor and the ISS Veggie and APH experiments.
+- **Procedures:** the assembly and the garden follow real NASA practice: ROSA roll-out panels, the ISS power buses, leak checks by pressure drop, the LSMS crane, the Kilopower reactor and the ISS Veggie and APH experiments. The crew's work does too: ISS prebreathe protocols and NASA's exploration atmosphere, the EMU leak check, Orbital Replacement Unit swaps, the 2018 and 2020 ISS leak repairs, Shuttle and Apollo 13 lithium hydroxide canisters, the InSight panel cleaning, the Perseverance sampling sequence, Curiosity's CheMin and SAM, and NASA's plans for an autonomous Crew Medical Officer.
 - **Game design:** the equations that combine those numbers, the size of the habitat and equipment, the masses of the supplies, the dose of each solar storm, the dust model and the damage thresholds. They are shown to the player as assumptions.
 
 ## Development
@@ -108,7 +109,7 @@ Everything runs on Cloudflare, on the free plan, with no always-on server.
 shared/types.ts       types, roles, supplies, sites, tasks, time scales
 shared/ciencia.ts     real constants, sources and assumptions
 shared/plan.ts        supply options and the Assistant's calculations on the cargo
-shared/procedimientos.ts  step-by-step assembly and garden procedures, with their real explanation
+shared/procedimientos.ts  step-by-step assembly, garden and crew procedures (airlock, repairs, samples, treatments)
 server/cloudflare.ts  Worker and Durable Objects: request routing, WebSocket, storage
 server/api.ts         game operations: accounts, rooms, positions, saving
 shared/escenarios.ts  mission situations, real dates and home cities
@@ -117,6 +118,7 @@ server/game.ts        rules: roles, supplies, proposals, actions, emergencies
 server/emergencies.ts emergency catalog
 server/bot.ts         rule-based Assistant
 server/procedimientos.ts  validates each step and applies its consequences
+server/trabajos.ts    consequences of the crew procedures: airlock, repairs, leaks, samples, treatments
 server/sim/           simulation: step, physiology, environment, flight, garden
 server/datos/         generated NASA data
 server/almacen*.ts    where documents are stored: Durable Object, local files or Vercel Blob

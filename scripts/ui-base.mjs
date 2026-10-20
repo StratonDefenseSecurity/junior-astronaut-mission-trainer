@@ -2,6 +2,7 @@
 // scripts/sala-demo.mjs en el montaje y hace los procedimientos de dentro con la interfaz,
 // caminando hasta cada estación con el teclado.
 import fs from 'node:fs'
+import { cruzar } from './eva.mjs'
 
 export default async function ({ pagina, pulsar, botones, captura, ok, esperar, esperarTexto, textoPagina, mantenerTecla }) {
   const demo = JSON.parse(fs.readFileSync('scripts/.sala-demo.json', 'utf8'))
@@ -15,14 +16,16 @@ export default async function ({ pagina, pulsar, botones, captura, ok, esperar, 
     const d = await llamar('procedimiento', { proc, paso: n, valor }, demo.B.token)
     if (d.error) console.log(`  (B ${proc} ${n}: ${d.error})`)
   }
-  await llamar('zona', { zona: 'exterior' }, demo.B.token)
+  const salir = await cruzar(base, demo.codigo, demo.B.token, demo.B.usuario.id, 'exterior')
+  if (salir) console.log(`  (B no pudo salir: ${salir})`)
   await fuera('paneles', 0, 'norte')
   await fuera('paneles', 1, { orden: ['no', 'se', 'ne', 'so'], errores: 0 })
   await fuera('paneles', 2, 6)
   await fuera('paneles', 3, 5)
   await fuera('carga', 0, { orden: ['eslingas', 'guia', 'tensar', 'soltar'], errores: 0 })
   await fuera('carga', 1, 8)
-  await llamar('zona', { zona: 'nave' }, demo.B.token)
+  const entrar = await cruzar(base, demo.codigo, demo.B.token, demo.B.usuario.id, 'nave')
+  if (entrar) console.log(`  (B no pudo entrar: ${entrar})`)
 
   await pagina.evaluate((d) => {
     localStorage.setItem('mt_token', d.A.token)
@@ -165,7 +168,9 @@ export default async function ({ pagina, pulsar, botones, captura, ok, esperar, 
 
   console.log('Exterior')
   if (await irA('Airlock')) {
-    ok(await pulsar('Suit up and go outside'), 'se pone el traje y sale')
+    // Salir es un procedimiento: ponerse el traje, revisar fugas, prerrespirar y vaciar la esclusa.
+    ok(await pulsar('Start', { exacto: true }), 'empieza a ponerse el traje')
+    await procedimiento('salida')
     ok(await esperarTexto(/Outside in the suit|in the suit/i, 10000), 'aparece fuera, con el traje')
     await esperar(4000)
     await captura('exterior')
@@ -175,7 +180,8 @@ export default async function ({ pagina, pulsar, botones, captura, ok, esperar, 
       await pagina.keyboard.press('KeyE')
       await esperar(1200)
       console.log('  botones esclusa fuera:', (await botones()).join(' | '))
-      ok(await pulsar('Go inside'), 'vuelve a entrar al hábitat')
+      ok(await pulsar('Start', { exacto: true }), 'empieza a entrar por la esclusa')
+      await procedimiento('entrada')
       await esperar(2500)
       await captura('de-vuelta')
     } else ok(false, 'encuentra la esclusa desde fuera')
