@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { escenarioDe } from '@shared/escenarios'
 import { PASOS_ENSAMBLAJE, ROLE_BY_ID, TAREAS_ENSAMBLAJE, type Player, type RoomState } from '@shared/types'
-import { ESTACION_BY_ID, estacionesDestacadas, puede } from '../mundo/mapa'
+import { ESTACION_BY_ID, deberesPendientes, estacionesDestacadas, puede } from '../mundo/mapa'
 import { api } from '../red'
 import { useStore } from '../store'
 import { MarcaIA, diasRestantes, diasTexto, enMarte, roles, useAhora } from './comun'
@@ -38,6 +38,7 @@ function consejo(sala: RoomState, yo: Player): string {
 
 export function Mision({ sala, yo }: { sala: RoomState; yo: Player }) {
   const destacadas = estacionesDestacadas(sala, yo)
+  const deberes = deberesPendientes(sala, yo)
   const abrir = useStore((s) => s.abrirEstacion)
   const cinematica = sala.fase === 'lanzamiento' || (sala.fase === 'llegada' && sala.subfase === 'descenso')
   return (
@@ -75,6 +76,20 @@ export function Mision({ sala, yo }: { sala: RoomState; yo: Player }) {
               </div>
             )
           })}
+        </div>
+      )}
+
+      {deberes.length > 0 && (
+        <div>
+          <h3>Your duties</h3>
+          <ul className="lista">
+            {deberes.map((d) => (
+              <li key={d.id}>
+                {d.titulo} <span className="muted">· {ESTACION_BY_ID[d.estacion]?.nombre ?? d.estacion}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="mini muted">Routine work, like on the ISS. Skipping it has a small cost.</p>
         </div>
       )}
 

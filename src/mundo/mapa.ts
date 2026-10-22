@@ -1,5 +1,5 @@
 // Plano del hábitat y de la base: dónde está cada estación y por dónde se puede caminar.
-import { activos, enCurso } from '@shared/procedimientos'
+import { activos, deberPendiente, deberesDeFase, enCurso, procPorId } from '@shared/procedimientos'
 import { TAREAS_ENSAMBLAJE, type Player, type Role, type RoomState, type SistemaId, type Zona } from '@shared/types'
 
 export interface Estacion {
@@ -32,6 +32,11 @@ export const ESTACIONES: Estacion[] = [
   { id: 'esclusa', zona: 'nave', nombre: 'Airlock', x: 8.4, z: 0, radio: 0, sistemas: ['esclusa'] },
   // Mesa común en el centro del módulo: donde la tripulación come y conversa.
   { id: 'comedor', zona: 'nave', nombre: 'Galley Table', x: 0.05, z: 0, radio: 0.62 },
+  // Bastidores estrechos de los deberes de rutina: navegación y comunicaciones junto al puente,
+  // la guantera de ciencia junto al laboratorio y la estiba junto a la esclusa.
+  { id: 'comms', zona: 'nave', nombre: 'Comms & Nav', x: -7.0, z: -2.6, radio: 0 },
+  { id: 'ciencia', zona: 'nave', nombre: 'Science Rack', x: 7.0, z: -2.6, radio: 0 },
+  { id: 'estiba', zona: 'nave', nombre: 'Stowage', x: 7.0, z: 2.6, radio: 0 },
 
   { id: 'esclusaExt', zona: 'exterior', nombre: 'Airlock', x: 10.6, z: 0, radio: 0 },
   { id: 'plantaExt', zona: 'exterior', nombre: 'Power Plant', x: 14.5, z: -8, radio: 1.1, sistemas: ['energia'] },
@@ -171,5 +176,18 @@ export function estacionesDestacadas(sala: RoomState, yo: Player | null): string
     if (sala.sistemas.some((s) => s.id === 'energia' && s.integridad < 50) && sala.tAterrizaje === 0) ids.add('energia')
   }
   if (puede(sala, yo, ['medico']) && sala.jugadores.some((j) => j.rol && (j.dolencia || j.vit.salud < 60))) ids.add('enfermeria')
+  // Deberes de rutina de su rol que tocan ahora.
+  for (const d of deberesPendientes(sala, yo)) ids.add(d.estacion)
   return [...ids]
+}
+
+/** Deberes de rutina que le tocan ahora a este jugador, con su título y su estación. */
+export function deberesPendientes(sala: RoomState, yo: Player | null): { id: string; titulo: string; estacion: string }[] {
+  if (!yo?.rol) return []
+  return deberesDeFase(sala, yo.rol)
+    .filter((d) => deberPendiente(sala, d.id))
+    .map((d) => {
+      const p = procPorId(`deber:${d.id}`, sala)
+      return { id: `deber:${d.id}`, titulo: p?.titulo ?? d.id, estacion: p?.estacion ?? 'puente' }
+    })
 }

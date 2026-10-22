@@ -48,7 +48,7 @@ import {
 import { log } from './base.js'
 import { pasoProcedimiento } from './procedimientos.js'
 import { fijarAhora, fijarMovidos } from './reloj.js'
-import { agregarBots, posicionesBots, type Andar } from './tripulantes.js'
+import { agregarBots, fijarRellenoBots, posicionesBots, type Andar } from './tripulantes.js'
 
 export interface Respuesta {
   status: number
@@ -498,6 +498,8 @@ async function despachar(c: Record<string, unknown>, autorizacion: string | unde
       return m((room) => elegirTraje(room, yo, objeto(c.traje) as Partial<Traje>))
     case 'iniciar':
       return m((room) => iniciarMision(room, yo))
+    case 'rellenarBots':
+      return m((room) => fijarRellenoBots(room, yo, Boolean(c.valor)))
     case 'escenario':
       return m((room) => elegirEscenario(room, yo, texto(c.escenario, 20)))
     case 'hogar':

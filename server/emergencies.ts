@@ -1,6 +1,8 @@
 // Emergencias: alerta → identificación del problema → alternativas con consecuencias distintas.
+// Cada alternativa separa lo que se gana (pro) de lo que cuesta (contra) y lleva una valoración
+// (nota y porqué) que se muestra a quienes decidieron, una vez resuelta.
 import { C } from '../shared/ciencia.js'
-import { SISTEMA_BY_ID, nombreSistema, type Emergency, type EmergencyAlternative, type Role, type RoomState, type SistemaId } from '../shared/types.js'
+import { SISTEMA_BY_ID, nombreSistema, type Emergency, type EmergencyAlternative, type Nota, type Role, type RoomState, type SistemaId } from '../shared/types.js'
 import { hayEmergencia, jugador, limitar, log, rid, sis, tripulacion } from './base.js'
 import { ahora, azar } from './reloj.js'
 import { enSuperficie } from './sim/ambiente.js'
@@ -13,7 +15,12 @@ type Datos = Record<string, unknown>
 interface Definicion {
   roles: (room: RoomState, d: Datos) => Role[]
   titulo: (room: RoomState, d: Datos) => string
+  /** Titular corto para la línea de aviso de quienes no deciden. */
+  corto?: (room: RoomState, d: Datos) => string
+  /** Qué pasó. */
   descripcion: (room: RoomState, d: Datos) => string
+  /** Por qué importa: el riesgo concreto y en cuánto tiempo. */
+  riesgo: (room: RoomState, d: Datos) => string
   fuente?: (room: RoomState, d: Datos) => string | null
   /** La última alternativa es la que se aplica si nadie decide a tiempo. */
   alternativas: (room: RoomState, d: Datos) => EmergencyAlternative[]
@@ -24,71 +31,150 @@ interface Definicion {
   segundos?: number
 }
 
-const reduccionRefugio = (room: RoomState) => Math.round(Math.max(0.07, 0.25 - 0.06 * room.blindaje) * 100)
+/** Alternativa con su ganancia, su coste y su valoración. `consecuencia` junta ambas para bots y propuestas. */
+const op = (id: string, etiqueta: string, pro: string, contra: string, nota: Nota, porque: string): EmergencyAlternative => ({
+  id,
+  etiqueta,
+  consecuencia: `${pro} ${contra}`,
+  pro,
+  contra,
+  nota,
+  porque,
+})
 
-const FALLOS: Record<SistemaId, { problema: string; pasiva: EmergencyAlternative }> = {
+const reduccionRefugio = (room: RoomState) => Math.round(Math.max(0.07, 0.25 - 0.06 * room.blindaje) * 100)
+const kits = (n: number) => `${n} kit${n === 1 ? '' : 's'}`
+
+const FALLOS: Record<SistemaId, { problema: string; riesgo: string; pasiva: (room: RoomState) => EmergencyAlternative }> = {
   cdra: {
-    problema: 'A valve in the CO2 Scrubber got stuck. The CO2 the crew breathes out builds up in the cabin. Without scrubbing, it goes over the 3 mmHg limit in a couple of hours.',
-    pasiva: { id: 'lioh', etiqueta: 'Install lithium hydroxide cartridges', consecuencia: 'Uses 2 cartridges, which absorb 5.4 kg of CO2. The scrubber stays broken.' },
+    problema: 'A valve in the CO2 Scrubber got stuck. The CO2 the crew breathes out is no longer removed.',
+    riesgo: 'CO2 goes over the 3 mmHg limit in about two hours. High CO2 causes headaches and slow thinking.',
+    pasiva: (room) =>
+      op(
+        'lioh',
+        'Install lithium hydroxide cartridges',
+        'Uses no spare parts. 2 cartridges absorb 5.4 kg of CO2.',
+        'The scrubber stays broken and the cartridges run out.',
+        room.rec.lioh > 0 ? 'aceptable' : 'riesgosa',
+        room.rec.lioh > 0 ? 'The cartridges buy time, but the scrubber still needs a repair.' : 'There were no cartridges left, so CO2 keeps rising.',
+      ),
   },
   oga: {
-    problema: 'The electrolysis stack of the Oxygen Generator shut down after an abnormal reading. The air is kept up with the tanks while they last.',
-    pasiva: { id: 'nada', etiqueta: 'Keep using the oxygen tanks', consecuencia: 'Uses no spare parts. The oxygen supply drops 0.84 kg per person per day.' },
+    problema: 'The electrolysis stack of the Oxygen Generator shut down after an abnormal reading.',
+    riesgo: 'No new oxygen is made. The crew lives on the tanks, which drop 0.84 kg per person per day until they run out.',
+    pasiva: () => op('nada', 'Keep using the oxygen tanks', 'Uses no spare parts.', 'The oxygen tanks drop 0.84 kg per person per day.', 'riesgosa', 'The tanks are a reserve. Without the generator they run out.'),
   },
   wrs: {
-    problema: 'The distiller of the Water Recycler failed. Used water builds up and is not recovered.',
-    pasiva: { id: 'nada', etiqueta: 'Leave it off', consecuencia: 'Uses no spare parts. All water used is lost until it is repaired.' },
+    problema: 'The distiller of the Water Recycler failed.',
+    riesgo: 'Used water is no longer recovered. The water reserve drops every day until it is repaired.',
+    pasiva: () => op('nada', 'Leave it off', 'Uses no spare parts.', 'All the water used is lost until it is repaired.', 'riesgosa', 'Water is the hardest supply to replace on a long mission.'),
   },
   termico: {
-    problema: 'A pump in the thermal loop stopped. The cabin temperature will start to drift away from 22 °C.',
-    pasiva: { id: 'nada', etiqueta: 'Leave it off', consecuencia: 'Uses no spare parts. The cabin cools down on Mars or heats up in space.' },
+    problema: 'A pump in the thermal loop stopped.',
+    riesgo: 'The cabin starts to drift away from 22 °C right away. It cools down on Mars and heats up in space.',
+    pasiva: () => op('nada', 'Leave it off', 'Uses no spare parts.', 'The cabin keeps cooling down on Mars or heating up in space.', 'riesgosa', 'A stable temperature keeps the crew and the equipment working.'),
   },
   energia: {
-    problema: 'A regulator in the Power Plant went into safe mode. Generation drops almost to zero and the base runs on its batteries.',
-    pasiva: { id: 'nada', etiqueta: 'Wait', consecuencia: 'Uses no spare parts. When the batteries run out, the equipment shuts down.' },
+    problema: 'A regulator in the Power Plant went into safe mode. Generation drops almost to zero.',
+    riesgo: 'The base runs on its batteries. When they run out, the air, water and heat equipment shut down.',
+    pasiva: () => op('nada', 'Wait', 'Uses no spare parts.', 'When the batteries run out, the equipment shuts down.', 'riesgosa', 'Everything in the base depends on power.'),
   },
   esclusa: {
-    problema: 'The Airlock seal is losing pressure. Nobody can go outside or recharge the suits until it is repaired.',
-    pasiva: { id: 'nada', etiqueta: 'Keep it closed', consecuencia: 'Uses no spare parts. Nobody can go outside.' },
+    problema: 'The Airlock seal is losing pressure.',
+    riesgo: 'Nobody can go outside or recharge the suits until it is repaired.',
+    pasiva: () => op('nada', 'Keep it closed', 'Uses no spare parts.', 'Nobody can go outside until it is repaired.', 'aceptable', 'It is safe for now, but all outside work stops.'),
   },
   huerto: {
-    problema: 'The garden lights went out because of a controller failure. The plants stop growing.',
-    pasiva: { id: 'nada', etiqueta: 'Leave it off', consecuencia: 'Uses no spare parts. The crop stops growing.' },
+    problema: 'A controller failure turned off the garden lights.',
+    riesgo: 'The plants stop growing. The fresh food harvest is delayed until the lights are back.',
+    pasiva: () => op('nada', 'Leave it off', 'Uses no spare parts.', 'The crop stops growing.', 'aceptable', 'The garden is not needed to stay alive today, so saving parts is fair.'),
   },
   isru: {
-    problema: 'The pump of the Ice Extractor jammed. No new water is coming in.',
-    pasiva: { id: 'nada', etiqueta: 'Leave it off', consecuencia: 'Uses no spare parts. No water is drawn from underground.' },
+    problema: 'The pump of the Ice Extractor jammed.',
+    riesgo: 'No new water comes in from underground. The base lives on stored water until it is fixed.',
+    pasiva: () => op('nada', 'Leave it off', 'Uses no spare parts.', 'No water is drawn from underground.', 'aceptable', 'Stored water lasts a while, so saving parts is fair.'),
   },
 }
 
-const ESCASEZ: Record<string, { nombre: string; alternativas: EmergencyAlternative[] }> = {
-  comida: {
-    nombre: 'food',
-    alternativas: [
-      { id: 'ahorro', etiqueta: 'Switch to the saver ration (80%)', consecuencia: 'Food lasts 25% longer. The crew loses body reserves little by little.' },
-      { id: 'estricto', etiqueta: 'Switch to the strict ration (60%)', consecuencia: 'Food lasts 67% longer. After a few weeks health suffers.' },
-      { id: 'nada', etiqueta: 'Keep the ration', consecuencia: 'Nothing changes. Food may run out before the mission ends.' },
-    ],
-  },
-  agua: {
-    nombre: 'water',
-    alternativas: [
-      { id: 'ahorro', etiqueta: 'Save water', consecuencia: 'Hygiene is cut to the minimum. What the crew drinks does not change.' },
-      { id: 'ejercicio', etiqueta: 'Stop exercise', consecuencia: 'The crew sweats and breathes less, so less water and oxygen are used. Muscle and bone are lost.' },
-      { id: 'nada', etiqueta: 'Keep the same use', consecuencia: 'Nothing changes. Water may run out before the mission ends.' },
-    ],
-  },
-  aire: {
-    nombre: 'oxygen',
-    alternativas: [
-      { id: 'oga', etiqueta: 'Turn on the Oxygen Generator', consecuencia: 'It makes oxygen from water: 1.125 kg of water per kg of oxygen.' },
-      { id: 'ejercicio', etiqueta: 'Stop exercise', consecuencia: 'Oxygen use drops by about 25%. Muscle and bone are lost.' },
-      { id: 'nada', etiqueta: 'Keep the same use', consecuencia: 'Nothing changes. Oxygen may run out before the mission ends.' },
-    ],
-  },
+const NOMBRE_ESCASEZ: Record<string, string> = { comida: 'food', agua: 'water', aire: 'oxygen' }
+
+function alternativasEscasez(room: RoomState, d: Datos): EmergencyAlternative[] {
+  const recurso = String(d.recurso)
+  const nombre = NOMBRE_ESCASEZ[recurso]
+  const nada = op('nada', 'Keep the same use', 'Nothing changes.', `The ${nombre} may run out before the mission ends.`, 'riesgosa', `Running out of ${nombre} ends the mission.`)
+  if (recurso === 'comida') {
+    const bastaAhorro = Number(d.dias) * 1.25 >= Number(d.necesarios)
+    return [
+      op(
+        'ahorro',
+        'Switch to the saver ration (80%)',
+        'Food lasts 25% longer.',
+        'The crew slowly loses body reserves.',
+        bastaAhorro ? 'buena' : 'aceptable',
+        bastaAhorro ? 'A small cut is enough to close the gap, with little harm.' : 'It helps, but 25% more is not enough to close the gap.',
+      ),
+      op(
+        'estricto',
+        'Switch to the strict ration (60%)',
+        'Food lasts 67% longer.',
+        'After a few weeks health suffers.',
+        bastaAhorro ? 'aceptable' : 'buena',
+        bastaAhorro ? 'It works, but the saver ration was enough and hurts health less.' : 'Only the strict ration closes the gap.',
+      ),
+      { ...nada, etiqueta: 'Keep the ration' },
+    ]
+  }
+  if (recurso === 'agua') {
+    return [
+      op('ahorro', 'Save water', 'Water use drops.', 'Hygiene is cut to the minimum. Drinking water does not change.', 'buena', 'It saves water without harming health.'),
+      op('ejercicio', 'Stop exercise', 'The crew sweats and breathes less, so less water and oxygen are used.', 'Muscle and bone are lost.', 'aceptable', 'It saves water, but bone and muscle loss is hard to undo.'),
+      nada,
+    ]
+  }
+  const ogaSirve = sis(room, 'oga').integridad > UMBRAL_AVERIA
+  return [
+    op(
+      'oga',
+      'Turn on the Oxygen Generator',
+      'It makes oxygen from water.',
+      'Uses 1.125 kg of water per kg of oxygen.',
+      ogaSirve ? 'buena' : 'riesgosa',
+      ogaSirve ? 'Making oxygen from water is what the generator is for.' : 'The generator was broken, so nothing changes until it is repaired.',
+    ),
+    op('ejercicio', 'Stop exercise', 'Oxygen use drops by about 25%.', 'Muscle and bone are lost.', 'aceptable', 'It saves oxygen, but bone and muscle loss is hard to undo.'),
+    nada,
+  ]
 }
 
 export const DOLENCIAS = ['lower back pain', 'a kidney stone', 'congestion and a headache', 'a hand injury', 'a skin rash', 'insomnia']
+
+function alternativasMedicas(room: RoomState, mareo: boolean): EmergencyAlternative[] {
+  const n = room.rec.botiquines
+  const hay = n > 0
+  return [
+    op(
+      'tratar',
+      mareo ? 'Motion sickness medicine' : 'Treat with a medical kit',
+      mareo ? 'They recover quickly.' : 'They recover and keep working.',
+      `Uses 1 of the ${n} medical ${n === 1 ? 'kit' : 'kits'}.`,
+      !hay ? 'aceptable' : mareo ? 'aceptable' : 'buena',
+      !hay
+        ? 'There were no medical kits, so it ended up as 12 hours of rest.'
+        : mareo
+          ? 'It works, but kits are scarce and space sickness passes on its own.'
+          : 'A kit fixes it now and keeps the crew at full strength.',
+    ),
+    op(
+      'reposo',
+      '12 hours of rest',
+      mareo ? 'Uses no medical kit. The body adapts on its own.' : 'Uses no medical kit.',
+      'They are out of action for 12 hours.',
+      mareo || !hay ? 'buena' : 'aceptable',
+      mareo ? 'The body adapts to weightlessness on its own, so rest saves a kit.' : !hay ? 'With no kits left, rest is the right treatment.' : 'It saves a kit at the cost of half a day of work.',
+    ),
+    op('nada', 'Keep working', 'Nothing is used and they keep working.', 'They lose health and the problem goes on until treated.', 'riesgosa', 'Working while sick costs health and the problem stays.'),
+  ]
+}
 
 export const EMERGENCIAS: Record<string, Definicion> = {
   // Evento real de partículas solares (DONKI).
@@ -101,14 +187,16 @@ export const EMERGENCIAS: Record<string, Definicion> = {
       (enSuperficie(room)
         ? `The atmosphere of Mars stops a good part of it, but outside the habitat the dose rises to about ${Math.round(Number(d.tasa) * 0.15)} mSv per day for ${d.horas} hours.`
         : `In the cabin the dose rises to about ${Math.round(Number(d.tasa) * 0.5)} mSv per day for ${d.horas} hours. The normal level during the cruise is ${C.GCR_CRUCERO_MSV_DIA}.`),
+    riesgo: (_room, d) =>
+      `For the next ${d.horas} hours anyone outside the shelter gets the extra dose. Radiation adds up over a career, and the limit is ${C.LIMITE_CARRERA_MSV} mSv.`,
     fuente: (_room, d) => `NASA DONKI, event ${d.id}`,
     alOcurrir: (room, d) => {
       room.ambiente.tormentaSolar = { id: String(d.id), fecha: String(d.fecha), tasa: Number(d.tasa), hasta: room.t + Number(d.horas) * 3600 }
     },
     alternativas: (room, d) => [
-      { id: 'refugio', etiqueta: 'Whole crew to the Storm Shelter', consecuencia: `The storm dose drops to ${reduccionRefugio(room)}%. Nobody works or repairs anything for ${d.horas} hours.` },
-      { id: 'parcial', etiqueta: 'Shelter, except the Systems Engineer', consecuencia: 'The Systems Engineer stays at their station and gets the cabin dose. The rest take cover.' },
-      { id: 'seguir', etiqueta: 'Keep working', consecuencia: 'Everything keeps running. The whole crew gets the cabin dose.' },
+      op('refugio', 'Whole crew to the Storm Shelter', `The storm dose drops to ${reduccionRefugio(room)}%.`, `Nobody works or repairs anything for ${d.horas} hours.`, 'buena', 'Radiation is the main long-term risk, and the shelter is built for this.'),
+      op('parcial', 'Shelter, except the Systems Engineer', 'The rest take cover and the equipment stays watched.', 'The Systems Engineer gets the full cabin dose.', 'aceptable', 'One person takes the dose so the base is not left alone.'),
+      op('seguir', 'Keep working', 'Everything keeps running.', 'The whole crew gets the cabin dose.', 'riesgosa', 'The whole crew took radiation that the shelter would have stopped.'),
     ],
     aplicar: (room, _d, alt) => {
       const hasta = room.ambiente.tormentaSolar?.hasta ?? room.t
@@ -127,17 +215,29 @@ export const EMERGENCIAS: Record<string, Definicion> = {
   fallo: {
     roles: (_room, d) => (d.sistema === 'wrs' ? ['sistemas', 'logistica'] : ['sistemas']),
     titulo: (_room, d) => `Failure: ${nombreSistema(d.sistema as SistemaId)}`,
+    corto: (_room, d) => `${nombreSistema(d.sistema as SistemaId)} failure`,
     descripcion: (room, d) => `${FALLOS[d.sistema as SistemaId].problema} ${room.rec.repuestos} spare part kits left.`,
+    riesgo: (_room, d) => FALLOS[d.sistema as SistemaId].riesgo,
     alOcurrir: (room, d) => {
       const s = sis(room, d.sistema as SistemaId)
       s.integridad = Math.min(s.integridad, 10)
       s.operativo = false
     },
-    alternativas: (_room, d) => [
-      { id: 'reparar', etiqueta: 'Repair with spare parts', consecuencia: 'Uses 2 kits. The equipment goes back to 85%.' },
-      { id: 'reinicio', etiqueta: 'Emergency restart', consecuencia: 'Uses no spare parts. A 50% chance it goes back to 45%. If it fails, it stays useless until repaired.' },
-      FALLOS[d.sistema as SistemaId].pasiva,
-    ],
+    alternativas: (room, d) => {
+      const hay = room.rec.repuestos >= 2
+      return [
+        op('reparar', 'Repair with spare parts', 'The equipment goes back to 85%.', `Uses 2 of the ${kits(room.rec.repuestos)}.`, hay ? 'buena' : 'riesgosa', hay ? 'A repair with parts is the sure fix.' : 'There were fewer than 2 kits, so the repair could not be done.'),
+        op(
+          'reinicio',
+          'Emergency restart',
+          'Uses no spare parts. A 50% chance it goes back to 45%.',
+          'If it fails, it stays useless until repaired.',
+          hay ? 'aceptable' : 'buena',
+          hay ? 'It saves parts, but it is a coin toss.' : 'With fewer than 2 kits, a restart was the best chance to get it back.',
+        ),
+        FALLOS[d.sistema as SistemaId].pasiva(room),
+      ]
+    },
     aplicar: (room, d, alt) => {
       const s = sis(room, d.sistema as SistemaId)
       const nombre = SISTEMA_BY_ID[s.id].nombre
@@ -171,15 +271,26 @@ export const EMERGENCIAS: Record<string, Definicion> = {
   fuga: {
     roles: () => ['sistemas', 'comandante'],
     titulo: () => 'Pressure leak',
-    descripcion: () => 'A small impact punched a hole in the hull. The cabin loses 1.5 kg of air per hour and oxygen is topped up from the reserves.',
+    descripcion: () => 'A small impact punched a hole in the hull. The cabin loses 1.5 kg of air per hour.',
+    riesgo: () => 'Oxygen is topped up from the reserves, so every hour of leak eats into them. The leak does not stop on its own.',
     alOcurrir: (room) => {
       room.cabina.fuga = 1.5
     },
-    alternativas: () => [
-      { id: 'sellar', etiqueta: 'Seal it with a repair kit', consecuencia: 'Uses 1 kit. The leak stops.' },
-      { id: 'aislar', etiqueta: 'Close off the damaged section', consecuencia: 'The leak stops without using spare parts, but 6% of the water and food stored there is lost.' },
-      { id: 'nada', etiqueta: 'Make up for it with the reserves', consecuencia: 'The leak goes on until the Systems Engineer seals it. Air is lost every hour.' },
-    ],
+    alternativas: (room) => {
+      const hay = room.rec.repuestos >= 1
+      return [
+        op('sellar', 'Seal it with a repair kit', 'The leak stops.', `Uses 1 of the ${kits(room.rec.repuestos)}.`, hay ? 'buena' : 'riesgosa', hay ? 'One kit for a lasting fix is a good trade.' : 'There were no kits, so nothing was sealed.'),
+        op(
+          'aislar',
+          'Close off the damaged section',
+          'The leak stops without using spare parts.',
+          '6% of the water and food stored there is lost.',
+          hay ? 'aceptable' : 'buena',
+          hay ? 'It works, but it costs supplies that a kit would have saved.' : 'With no kits, closing the section was the only way to stop the leak.',
+        ),
+        op('nada', 'Make up for it with the reserves', 'Uses nothing now.', 'Air is lost every hour until the Systems Engineer seals it.', 'riesgosa', 'The leak keeps draining the air reserves.'),
+      ]
+    },
     aplicar: (room, _d, alt) => {
       if (alt === 'sellar') {
         if (room.rec.repuestos < 1) return 'There were no spare parts left. The leak goes on.'
@@ -203,11 +314,32 @@ export const EMERGENCIAS: Record<string, Definicion> = {
     descripcion: (room, d) =>
       `A dust storm is coming. The sky opacity rises to ${d.tau} and solar power drops to ${Math.round(Math.exp(-0.35 * (Number(d.tau) - 0.5)) * 100)}% for about ${d.soles} sols. Dust also settles on the panels.` +
       (room.cargamento.reactor > 0 ? ' The reactor is not affected.' : ''),
-    alternativas: () => [
-      { id: 'ahorro', etiqueta: 'Power saving mode', consecuencia: 'The garden and the Ice Extractor are turned off. Power is kept for air and heat.' },
-      { id: 'limpiar', etiqueta: 'Keep everything on and clean the panels', consecuencia: 'Nothing is turned off. Someone has to go out and clean the panels every sol, with poor visibility.' },
-      { id: 'nada', etiqueta: 'Carry on as usual', consecuencia: 'Nothing changes. If the batteries run out, the equipment shuts down on its own.' },
-    ],
+    riesgo: (room, d) =>
+      room.cargamento.reactor > 0
+        ? `For about ${d.soles} sols the panels make less power. The reactor keeps the base running, so the risk is low.`
+        : `For about ${d.soles} sols the batteries drain faster. If they run out, the air and heat equipment shut down.`,
+    alternativas: (room) => {
+      const reactor = room.cargamento.reactor > 0
+      return [
+        op(
+          'ahorro',
+          'Power saving mode',
+          'Power is kept for air and heat.',
+          'The garden and the Ice Extractor are turned off.',
+          reactor ? 'aceptable' : 'buena',
+          reactor ? 'Safe, but the reactor already covered the base.' : 'Life support comes first when power is short.',
+        ),
+        op('limpiar', 'Keep everything on and clean the panels', 'Nothing is turned off.', 'Someone has to go out every sol to clean the panels, with poor visibility.', 'aceptable', 'It keeps everything on, but adds risky outside work.'),
+        op(
+          'nada',
+          'Carry on as usual',
+          'Nothing changes.',
+          'If the batteries run out, the equipment shuts down on its own.',
+          reactor ? 'aceptable' : 'riesgosa',
+          reactor ? 'The reactor is not affected, so the base can ride it out.' : 'Without a plan, the base can lose power for days.',
+        ),
+      ]
+    },
     aplicar: (room, _d, alt) => {
       if (alt === 'ahorro') {
         sis(room, 'huerto').activo = false
@@ -222,7 +354,9 @@ export const EMERGENCIAS: Record<string, Definicion> = {
   medico: {
     roles: () => ['medico'],
     titulo: (_room, d) => `Medical problem: ${d.dolencia}`,
+    corto: (_room, d) => `Medical problem for ${d.nombre}`,
     descripcion: (room, d) => `${d.nombre} has ${d.dolencia}. ${room.rec.botiquines} medical kits left.`,
+    riesgo: (_room, d) => `Untreated, it lasts about 8 days and ${d.nombre} loses health while working.`,
     alOcurrir: (room, d) => {
       const j = jugador(room, String(d.jugadorId))
       if (j) {
@@ -230,11 +364,7 @@ export const EMERGENCIAS: Record<string, Definicion> = {
         j.dolenciaHasta = room.t + 8 * 86400
       }
     },
-    alternativas: () => [
-      { id: 'tratar', etiqueta: 'Treat with a medical kit', consecuencia: 'Uses 1 medical kit. They recover and keep working.' },
-      { id: 'reposo', etiqueta: '12 hours of rest', consecuencia: 'Uses no medical kit. They are out of action for half a day.' },
-      { id: 'nada', etiqueta: 'Keep working', consecuencia: 'They lose health and the problem goes on until the Flight Surgeon treats it.' },
-    ],
+    alternativas: (room) => alternativasMedicas(room, false),
     aplicar: (room, d, alt) => {
       const j = jugador(room, String(d.jugadorId))
       if (!j) return 'No patient.'
@@ -262,7 +392,9 @@ export const EMERGENCIAS: Record<string, Definicion> = {
   mareo: {
     roles: () => ['medico'],
     titulo: () => 'Space sickness',
+    corto: (_room, d) => `Space sickness for ${d.nombre}`,
     descripcion: (_room, d) => `${d.nombre} feels sick and disoriented. This happens to more than half of astronauts in their first days without gravity.`,
+    riesgo: (_room, d) => `It usually lasts 2 to 3 days. Until it is treated, ${d.nombre} loses health.`,
     alOcurrir: (room, d) => {
       const j = jugador(room, String(d.jugadorId))
       if (j) {
@@ -270,23 +402,20 @@ export const EMERGENCIAS: Record<string, Definicion> = {
         j.dolenciaHasta = room.t + 3 * 86400
       }
     },
-    alternativas: () => [
-      { id: 'tratar', etiqueta: 'Motion sickness medicine', consecuencia: 'Uses 1 medical kit. They recover quickly.' },
-      { id: 'reposo', etiqueta: '12 hours of rest', consecuencia: 'Uses no medical kit. The body adapts on its own, but they are out of action.' },
-      { id: 'nada', etiqueta: 'Keep working', consecuencia: 'They lose health and the sickness goes on until treated.' },
-    ],
+    alternativas: (room) => alternativasMedicas(room, true),
     aplicar: (room, d, alt) => EMERGENCIAS.medico.aplicar(room, { ...d, dolencia: 'space sickness' }, alt),
   },
 
   escasez: {
     roles: () => ['logistica', 'comandante'],
     titulo: (_room, d) => {
-      const nombre = ESCASEZ[String(d.recurso)].nombre
+      const nombre = NOMBRE_ESCASEZ[String(d.recurso)]
       return `${nombre.charAt(0).toUpperCase() + nombre.slice(1)} shortage`
     },
-    descripcion: (_room, d) =>
-      `At the current rate, the ${ESCASEZ[String(d.recurso)].nombre} supply lasts ${d.dias} days and the mission needs ${d.necesarios}.`,
-    alternativas: (_room, d) => ESCASEZ[String(d.recurso)].alternativas,
+    descripcion: (_room, d) => `At the current rate, the ${NOMBRE_ESCASEZ[String(d.recurso)]} supply lasts ${d.dias} days and the mission needs ${d.necesarios}.`,
+    riesgo: (_room, d) =>
+      `If nothing changes, the ${NOMBRE_ESCASEZ[String(d.recurso)]} runs out about ${Math.max(1, Number(d.necesarios) - Number(d.dias))} days before the mission ends.`,
+    alternativas: alternativasEscasez,
     aplicar: (room, d, alt) => {
       if (alt === 'ahorro' && d.recurso === 'comida') {
         room.ajustes.racionComida = 'ahorro'
@@ -318,10 +447,11 @@ export const EMERGENCIAS: Record<string, Definicion> = {
     titulo: () => 'Trajectory correction',
     descripcion: (room) =>
       `Navigation shows a drift from the entry point at Mars. Propellant margin: ${Math.round(room.rec.propelente)}%. A signal to Earth takes ${Math.round(room.vuelo.retardo / 60)} minutes, so the decision is up to the crew.`,
-    alternativas: () => [
-      { id: 'ahora', etiqueta: 'Correct now', consecuencia: 'Uses 3% of propellant. The sooner you correct, the less it costs.' },
-      { id: 'tarde', etiqueta: 'Correct on approach', consecuencia: 'Uses 9% of propellant later on.' },
-      { id: 'nada', etiqueta: 'Do not correct', consecuencia: 'Uses no propellant. The landing will be off target and harder on the equipment.' },
+    riesgo: () => 'A small drift grows with distance. Fixing it later costs three times more propellant, and not fixing it means an off-target landing.',
+    alternativas: (room) => [
+      op('ahora', 'Correct now', 'The cheapest fix. The trajectory is back on track.', `Uses 3% of the ${Math.round(room.rec.propelente)}% propellant left.`, 'buena', 'Early corrections cost the least. Real missions fix drift as soon as they see it.'),
+      op('tarde', 'Correct on approach', 'Keeps the propellant for now.', 'Uses 9% of propellant later on.', 'aceptable', 'It works, but it costs three times more than correcting now.'),
+      op('nada', 'Do not correct', 'Uses no propellant.', 'The landing will be off target and harder on the equipment.', 'riesgosa', 'An off-target landing puts the equipment and the crew at risk.'),
     ],
     aplicar: (room, _d, alt) => {
       if (alt === 'ahora') {
@@ -345,7 +475,10 @@ function crear(room: RoomState, tipo: string, datos: Datos) {
     id: rid(room),
     tipo,
     titulo: def.titulo(room, datos),
+    corto: def.corto?.(room, datos) ?? def.titulo(room, datos),
     descripcion: def.descripcion(room, datos),
+    riesgo: def.riesgo(room, datos),
+    afectado: typeof datos.jugadorId === 'string' ? datos.jugadorId : null,
     fuente: def.fuente?.(room, datos) ?? null,
     rolesResponsables: roles,
     alternativas: def.alternativas(room, datos),
@@ -355,6 +488,7 @@ function crear(room: RoomState, tipo: string, datos: Datos) {
     estado: 'activa',
     elegida: null,
     resultado: null,
+    veredicto: null,
   }
   room.emergencias.unshift(em)
   if (room.emergencias.length > 8) room.emergencias.length = 8

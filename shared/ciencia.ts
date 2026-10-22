@@ -602,10 +602,48 @@ export const FUENTES: Fuente[] = [
     fuente: 'Mayo Clinic, "Heart rate: What\'s normal?".',
     url: 'https://www.mayoclinic.org/healthy-lifestyle/fitness/expert-answers/heart-rate/faq-20057979',
   },
+  {
+    tema: 'Daily Planning Conference',
+    dato: 'ISS crews start and end each day with a Daily Planning Conference with the flight control teams to go over the plan, the changes and any questions.',
+    fuente: 'ESA, Outpost 42 blog, "The astronaut daily schedule".',
+    url: 'https://outpost42.esa.int/blog/the-astronaut-daily-schedule/',
+  },
+  {
+    tema: 'Spacecraft navigation',
+    dato: 'Star trackers image the star field to find the orientation of a spacecraft. Deep space position comes mainly from Deep Space Network radio tracking (two-way Doppler and range), and Orion can also navigate with a camera that measures the size and angle of the Moon and Earth.',
+    fuente: 'NASA, Orion optical navigation papers (NTRS 20180004519) and DSN radiometric tracking overview.',
+    url: 'https://ntrs.nasa.gov/citations/20180004519',
+  },
+  {
+    tema: 'Crew medical checks on the ISS',
+    dato: 'Each ISS crew member has a weekly private medical conference with a flight surgeon over a private audio and video link. Crew members also examine each other in periodic health status exams.',
+    fuente: 'NASA, "Houston We Have a Podcast: Mission Control Crew Health Consoles", and NASA technical report NTRS 20080010877.',
+    url: 'https://www.nasa.gov/podcasts/houston-we-have-a-podcast/mission-control-crew-health-consoles',
+  },
+  {
+    tema: 'Inventory on the ISS',
+    dato: 'Every item on the ISS has a barcode and is tracked in the Inventory Management System. Crew time is budgeted at 20 minutes a day for it, and auditing a cargo bag by hand takes about 20 minutes.',
+    fuente: 'NASA, RFID for ISS inventory, NTRS 20100020164.',
+    url: 'https://ntrs.nasa.gov/api/citations/20100020164/downloads/20100020164.pdf',
+  },
+  {
+    tema: 'Air filters on the ISS',
+    dato: 'Without gravity, particles do not settle. ISS crews vacuum the inlets of the bacteria filters every week, and fan screens and grilles are cleaned in the weekly housekeeping.',
+    fuente: 'NASA technical paper on ISS bacteria filter elements, NTRS 20170006617.',
+    url: 'https://ntrs.nasa.gov/api/citations/20170006617/downloads/20170006617.pdf',
+  },
+  {
+    tema: 'Spacesuit glove inspection',
+    dato: 'After a cut in a glove from the STS-116 spacewalks was found on the ground in 2007, NASA had spacewalkers check their gloves several times during each spacewalk and inspect them inside before and after.',
+    fuente: 'NASA, "Glove Inspection Technology Lends a Helping Hand to Future Spacewalks".',
+    url: 'https://www.nasa.gov/missions/station/glove-inspection-technology-lends-a-helping-hand-to-future-spacewalks',
+  },
 ]
 
 /** Lo que el juego simplifica o inventa para poder jugarse. Se muestra junto a las fuentes. */
 export const SUPUESTOS: string[] = [
+  'Routine duties follow ISS practice, but how often they come (every 2 to 4 mission days, and never more than once every 2.5 real minutes) and what they give or cost are game values: 4 fatigue points from the planning conference, 0.2% or 1% of propellant for a drift, 1.5 kg of food found or expired, 5% less radiation while sleeping behind the stowage, +2% for the CO2 Scrubber, 50% more wear or illness risk when skipped, and 10% more chance of a suit leak.',
+  'The course drift, glove wear, inventory gaps and filter pressure drops shown in the routine duties are game readings, not real data. The 60% glove wear limit and the 180 Pa filter limit are game values.',
   'The missions in the Mission Briefing are training situations. The premises and the messages from Mission Control or from home are fiction. The data that comes with them is real.',
   'Solar storms are replayed from the 2024 records even in missions from other years, more or less often depending on the solar cycle phase that the game estimates.',
   'Sounds are generated in the browser. Their levels and tones are game choices inspired by real measurements.',

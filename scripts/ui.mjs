@@ -1,6 +1,7 @@
 // Prueba de la interfaz con un navegador real (Edge o Chrome sin ventana): juega como una persona,
 // pulsa los botones de cada pantalla, toma capturas y anota cualquier error de la página.
 //   node scripts/ui.mjs [url] [carpeta de capturas]
+// Tamaño de la ventana: UI_ANCHO y UI_ALTO (por defecto 1600×900). Recorrido: UI_PASOS.
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -9,6 +10,8 @@ import puppeteer from 'puppeteer-core'
 const [url = 'http://localhost:3064', carpeta = 'ui-capturas'] = process.argv.slice(2)
 const NAVEGADORES = ['C:/Program Files/Google/Chrome/Application/chrome.exe', 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe']
 fs.mkdirSync(carpeta, { recursive: true })
+const ANCHO = Number(process.env.UI_ANCHO) || 1600
+const ALTO = Number(process.env.UI_ALTO) || 900
 
 const errores = []
 let fallos = 0
@@ -17,8 +20,8 @@ const navegador = await puppeteer.launch({
   headless: true,
   // Perfil propio y temporal: no toca el del usuario aunque el navegador esté abierto.
   userDataDir: fs.mkdtempSync(path.join(os.tmpdir(), 'mt-ui-')),
-  args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--window-size=1600,900', '--autoplay-policy=no-user-gesture-required'],
-  defaultViewport: { width: 1600, height: 900 },
+  args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', `--window-size=${ANCHO},${ALTO}`, '--autoplay-policy=no-user-gesture-required'],
+  defaultViewport: { width: ANCHO, height: ALTO },
 })
 const pagina = await navegador.newPage()
 pagina.on('pageerror', (e) => errores.push(`error de página: ${e.message}`))

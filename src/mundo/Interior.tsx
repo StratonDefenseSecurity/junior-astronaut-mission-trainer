@@ -15,6 +15,9 @@ import { ESTACION_BY_ID, INTERIOR, PUNTOS } from './mapa'
 import { Ventana } from './Ventana'
 
 const L = INTERIOR.x1 - INTERIOR.x0
+/** Estaciones de los deberes de rutina, con bastidores más estrechos. */
+const ESTRECHOS = ['comms', 'ciencia', 'estiba']
+const ANCHO_ESTRECHO = 1.3
 const A = INTERIOR.z1 - INTERIOR.z0
 const H = INTERIOR.alto
 /** Altura a la que empieza el chaflán entre pared y techo. */
@@ -127,33 +130,35 @@ interface PuestoProps {
   cerca: string | null
   destacadas: string[]
   color: string
+  /** Ancho del bastidor, en metros (los de los deberes son más estrechos). */
+  ancho?: number
   children?: ReactNode
 }
 
 /** Bastidor de equipos contra la pared, con su rótulo y su marca en el suelo. */
-function Puesto({ id, cerca, destacadas, color, children }: PuestoProps) {
+function Puesto({ id, cerca, destacadas, color, ancho = 2.5, children }: PuestoProps) {
   const e = ESTACION_BY_ID[id]
   const lado = Math.sign(e.z) // -1 pared norte, +1 pared sur
   return (
     <group position={[e.x, 0, e.z]}>
       <group rotation={[0, lado > 0 ? Math.PI : 0, 0]}>
         {/* bastidor con tapa frontal y juntas */}
-        <RoundedBox args={[2.5, 2.3, 0.5]} radius={0.04} smoothness={2} position={[0, 1.15, -0.28]} castShadow receiveShadow>
+        <RoundedBox args={[ancho, 2.3, 0.5]} radius={0.04} smoothness={2} position={[0, 1.15, -0.28]} castShadow receiveShadow>
           <meshStandardMaterial color="#d3d0c6" roughness={0.75} metalness={0.05} />
         </RoundedBox>
-        {[-1.24, 1.24].map((x) => (
+        {[-ancho / 2 + 0.01, ancho / 2 - 0.01].map((x) => (
           <mesh key={x} position={[x, 1.15, 0.0]} material={MAT.junta}>
             <boxGeometry args={[0.04, 2.3, 0.04]} />
           </mesh>
         ))}
         {/* franja de color de la estación, iluminada */}
         <mesh position={[0, 2.38, -0.2]}>
-          <boxGeometry args={[2.5, 0.12, 0.56]} />
+          <boxGeometry args={[ancho, 0.12, 0.56]} />
           <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.45} />
         </mesh>
         {/* pasamanos sobre el bastidor */}
         <mesh position={[0, 2.1, 0.06]} rotation={[0, 0, Math.PI / 2]} material={MAT.pasamanos}>
-          <cylinderGeometry args={[0.022, 0.022, 1.6, 8]} />
+          <cylinderGeometry args={[0.022, 0.022, ancho * 0.64, 8]} />
         </mesh>
         {children}
       </group>
@@ -387,6 +392,66 @@ function Estaciones({ sala, cerca, destacadas, micro }: { sala: RoomState; cerca
         <Pantalla x={0} y={1.75} ancho={0.7} alto={0.3} color={tono(Boolean(sala.ambiente.tormentaSolar), false)} />
       </Puesto>
 
+      <Puesto id="comms" color="#38bdf8" ancho={ANCHO_ESTRECHO} {...comun}>
+        {/* consola de comunicaciones y navegación: dos pantallas, auriculares y el reloj de la señal */}
+        <Pantalla x={0} y={1.62} ancho={0.95} alto={0.42} color="#38bdf8" />
+        <Pantalla x={-0.25} y={1.08} ancho={0.42} alto={0.3} color="#3ddc97" intensidad={0.6} />
+        <Pantalla x={0.3} y={1.08} ancho={0.36} alto={0.3} color="#f5b942" intensidad={0.6} />
+        <mesh position={[0.38, 0.55, 0.1]} rotation={[0, 0, Math.PI / 2]} material={MAT.oscuro}>
+          <torusGeometry args={[0.1, 0.022, 8, 18, Math.PI]} />
+        </mesh>
+        {Array.from({ length: 6 }, (_, i) => (
+          <mesh key={i} position={[-0.42 + i * 0.1, 0.62, 0.04]} material={i % 2 ? MAT.panelGris : MAT.cableNaranja}>
+            <boxGeometry args={[0.06, 0.06, 0.04]} />
+          </mesh>
+        ))}
+        <Portatil x={-0.2} y={0.78} />
+      </Puesto>
+
+      <Puesto id="ciencia" color="#c084fc" ancho={ANCHO_ESTRECHO} {...comun}>
+        {/* guantera sellada con sus dos puertos para los brazos y los dosímetros en su panel */}
+        <mesh position={[0, 1.0, 0.12]} material={MAT.cristal}>
+          <boxGeometry args={[1.0, 0.6, 0.5]} />
+        </mesh>
+        <mesh position={[0, 0.68, 0.12]} material={MAT.panelGris}>
+          <boxGeometry args={[1.05, 0.06, 0.52]} />
+        </mesh>
+        {[-0.22, 0.22].map((x) => (
+          <mesh key={x} position={[x, 1.0, 0.38]} material={MAT.oscuro}>
+            <torusGeometry args={[0.09, 0.018, 8, 18]} />
+          </mesh>
+        ))}
+        <Pantalla x={0} y={1.75} ancho={0.8} alto={0.32} color="#c084fc" intensidad={0.7} />
+        {Array.from({ length: 4 }, (_, i) => (
+          <mesh key={`d${i}`} position={[-0.36 + i * 0.24, 0.42, 0.04]}>
+            <boxGeometry args={[0.12, 0.16, 0.05]} />
+            <meshStandardMaterial color="#facc15" roughness={0.5} />
+          </mesh>
+        ))}
+      </Puesto>
+
+      <Puesto id="estiba" color="#9ccc65" ancho={ANCHO_ESTRECHO} {...comun}>
+        {/* bolsas de carga con su código de barras, sujetas con cinchas */}
+        {Array.from({ length: 6 }, (_, i) => (
+          <group key={i}>
+            <Bolsa p={[-0.3 + (i % 2) * 0.6, 0.32 + Math.floor(i / 2) * 0.62, 0.12]} t={[0.52, 0.52, 0.4]} />
+            <mesh position={[-0.3 + (i % 2) * 0.6, 0.32 + Math.floor(i / 2) * 0.62, 0.325]}>
+              <planeGeometry args={[0.2, 0.08]} />
+              <meshBasicMaterial color="#111827" />
+            </mesh>
+          </group>
+        ))}
+        {[0.62, 1.24].map((y) => (
+          <mesh key={y} position={[0, y, 0.34]} material={MAT.cable}>
+            <boxGeometry args={[1.25, 0.035, 0.01]} />
+          </mesh>
+        ))}
+        {/* lector de códigos de barras colgado de su cable */}
+        <mesh position={[0.5, 2.0, 0.08]} material={MAT.oscuro}>
+          <boxGeometry args={[0.08, 0.2, 0.06]} />
+        </mesh>
+      </Puesto>
+
       <Gimnasio micro={micro} />
       <Dormitorio micro={micro} />
       <Mesa cerca={cerca} destacadas={destacadas} />
@@ -597,10 +662,18 @@ function Esclusa({ sala, cerca, destacadas }: { sala: RoomState; cerca: string |
 function Casco() {
   const tramos = useMemo(() => {
     // Huecos de pared entre estaciones, que se cubren con bastidores genéricos.
-    const ocupados = [-4.6, -1.5, 1.6, 4.7]
-    const lista: number[] = []
-    for (let x = INTERIOR.x0 + 0.9; x < INTERIOR.x1 - 0.6; x += 0.62) if (!ocupados.some((o) => Math.abs(o - x) < 1.6)) lista.push(x)
-    return lista
+    // Los bastidores de las estaciones de cada pared, con su mitad de ancho.
+    const ocupados = (s: number) => [
+      ...[-4.6, -1.5, 1.6, 4.7].map((x) => ({ x, medio: 1.25 })),
+      ...ESTRECHOS.filter((id) => Math.sign(ESTACION_BY_ID[id].z) === s).map((id) => ({ x: ESTACION_BY_ID[id].x, medio: ANCHO_ESTRECHO / 2 })),
+    ]
+    const lista = (s: number) => {
+      const o = ocupados(s)
+      const xs: number[] = []
+      for (let x = INTERIOR.x0 + 0.9; x < INTERIOR.x1 - 0.6; x += 0.62) if (!o.some((e) => Math.abs(e.x - x) < e.medio + 0.35)) xs.push(x)
+      return xs
+    }
+    return { [-1]: lista(-1), [1]: lista(1) } as Record<number, number[]>
   }, [])
   return (
     <group>
@@ -625,7 +698,7 @@ function Casco() {
       ))}
       {/* bastidores genéricos en los huecos */}
       {[-1, 1].map((s) =>
-        tramos.map((x) => (
+        tramos[s].map((x) => (
           <group key={`${s}${x}`} position={[x, 0, s * (A / 2 - 0.12)]}>
             <mesh position={[0, 1.15, 0]} material={MAT.panel}>
               <boxGeometry args={[0.58, 2.2, 0.16]} />

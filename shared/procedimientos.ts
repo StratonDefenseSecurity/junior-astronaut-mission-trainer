@@ -1834,6 +1834,443 @@ function tratar(pid: string, room?: RoomState): Procedimiento {
   })
 }
 
+// ---------- Deberes de rutina de cada rol ----------
+// Lo que una tripulación hace todos los días aunque no pase nada: la conferencia de planificación,
+// la navegación, el control médico, el inventario, los experimentos y la limpieza de filtros, como
+// en la Estación Espacial. Tocan cada pocos días de misión (y nunca más a menudo que DEBER_CADA_MS
+// de tiempo real), se hacen paso a paso con instancias `deber:<id>` y sus consecuencias están en
+// server/deberes.ts.
+
+export interface InfoDeber {
+  id: string
+  rol: Role
+  /** Fases de la misión en que toca. */
+  fases: RoomState['fase'][]
+  /** Cada cuántos días de misión vuelve a tocar, y días que hay para hacerlo. */
+  cadaDias: number
+  plazoDias: number
+  /** Lo que gana la tripulación y lo que pasa si se salta, para mostrarlo. */
+  beneficio: string
+  penalizacion: string
+}
+
+/** Tiempo real mínimo entre dos veces del mismo deber, para que a ×86 400 no aparezca a cada momento. */
+export const DEBER_CADA_MS = 150_000
+/** Tiempo real mínimo para hacerlo antes de que se dé por saltado. */
+export const DEBER_PLAZO_MS = 120_000
+
+export const DEBERES: InfoDeber[] = [
+  { id: 'planificacion', rol: 'comandante', fases: ['transito', 'base'], cadaDias: 2, plazoDias: 2, beneficio: 'A clear plan leaves time to rest: everyone gets a little less tired.', penalizacion: 'Without a plan, tasks overlap and everyone gets a little more tired.' },
+  { id: 'navegacion', rol: 'piloto', fases: ['transito'], cadaDias: 3, plazoDias: 3, beneficio: 'A drift found early is fixed with a tiny burn.', penalizacion: 'An unnoticed drift grows, and fixing it later costs 1% of the propellant.' },
+  { id: 'trajes', rol: 'piloto', fases: ['base'], cadaDias: 3, plazoDias: 3, beneficio: 'Checked suits are less likely to leak outside.', penalizacion: 'Unchecked suits are more likely to leak on the next walk outside.' },
+  { id: 'chequeo', rol: 'medico', fases: ['transito', 'base'], cadaDias: 4, plazoDias: 3, beneficio: 'Small problems are caught early and the crew stays healthier.', penalizacion: 'Illnesses become more likely and go unnoticed longer, so they start worse.' },
+  { id: 'inventario', rol: 'logistica', fases: ['transito', 'base'], cadaDias: 3, plazoDias: 3, beneficio: 'Misplaced food is found and the oldest food is eaten first.', penalizacion: 'Some food passes its shelf life in a forgotten bag.' },
+  { id: 'experimento', rol: 'cientifico', fases: ['transito', 'base'], cadaDias: 3, plazoDias: 3, beneficio: 'The dosimeter map shows where to sleep: the crew gets a bit less radiation.', penalizacion: 'The radiation data has a gap and the crew loses the lower dose.' },
+  { id: 'filtros', rol: 'sistemas', fases: ['transito', 'base'], cadaDias: 4, plazoDias: 3, beneficio: 'Clean filters ease the load on the CO2 Scrubber and Thermal Control.', penalizacion: 'Clogged filters make the CO2 Scrubber and Thermal Control wear out faster.' },
+]
+export const DEBER_BY_ID = Object.fromEntries(DEBERES.map((d) => [d.id, d])) as Record<string, InfoDeber>
+/** ¿Toca ahora este deber? */
+export const deberPendiente = (room: RoomState, id: string) => Boolean(room.deberes?.[id]?.pendiente)
+/** ¿Se saltó el último y sigue sin hacerse? */
+export const deberAtrasado = (room: RoomState, id: string) => Boolean(room.deberes?.[id]?.atrasado)
+/** Deberes que existen en esta fase de la misión para un rol (o para todos). */
+export const deberesDeFase = (room: RoomState, rol?: Role | null) =>
+  DEBERES.filter((d) => d.fases.includes(room.fase) && (!rol || d.rol === rol) && room.jugadores.some((j) => j.rol === d.rol))
+
+const minutosSenal = (r: RoomState) => Math.max(1, Math.round((r.vuelo?.retardo ?? 0) / 60))
+const datosDeber = (r: RoomState, id: string) => datosDe(r, `deber:${id}`)
+
+function crearDeber(d: InfoDeber, p: Omit<Procedimiento, 'id' | 'roles' | 'zona' | 'aDemanda' | 'recurrente' | 'puedeEmpezar' | 'motivo' | 'pasos'> & { pasos: PasoLocal[] }): Procedimiento {
+  return proc({
+    ...p,
+    id: `deber:${d.id}`,
+    objetivo: d.id,
+    roles: [d.rol],
+    zona: 'nave',
+    aDemanda: true,
+    recurrente: true,
+    puedeEmpezar: (r) => deberPendiente(r, d.id) && d.fases.includes(r.fase),
+    motivo: () => 'Nothing due now. Routine duties come back every few days.',
+  })
+}
+
+const PROC_DEBER: Record<string, Procedimiento> = {
+  planificacion: crearDeber(DEBER_BY_ID.planificacion, {
+    titulo: 'Daily Planning Conference',
+    estacion: 'comms',
+    resumen: 'Agree on the plan for the day with Mission Control, despite the signal delay.',
+    intro:
+      'On the ISS the crew starts and ends each day with a Daily Planning Conference: a call with the control centers to go over the plan, the changes and any questions. Near Mars a signal takes minutes to reach Earth, so a live conversation does not work. The plan goes out as a message and the answers come back later.',
+    pasos: [
+      {
+        id: 'formato',
+        tipo: 'elegir',
+        titulo: 'Choose how to talk',
+        instruccion: (r) => `A signal takes ${minutosSenal(r)} minutes to reach Earth and the same to come back. How do you hold the conference?`,
+        porque: 'Every question and answer waits for the round trip of the signal. Near Mars a round trip can take more than 40 minutes.',
+        segundos: 8,
+        opciones: (r) => [
+          { id: 'mensaje', texto: 'Send the plan and all the questions in one message, then read the reply', calidad: 1, consecuencia: 'Mission Control answers everything in one reply. Nobody waits on the line.' },
+          { id: 'vivo', texto: 'Call live and ask one question at a time', calidad: 0.4, consecuencia: `Each answer takes ${2 * minutosSenal(r)} minutes to come back. The crew loses the morning waiting.` },
+          { id: 'solos', texto: 'Skip Mission Control and plan alone', calidad: 0.6, consecuencia: 'It saves time, but the ground teams cannot warn you about what they see in the data.' },
+        ],
+      },
+      {
+        id: 'orden',
+        tipo: 'secuencia',
+        titulo: 'Go over the day',
+        instruccion: 'Run the conference. Tap the steps in the order you do them.',
+        porque: 'The overnight messages may change the plan, so they come first. The plan goes back to Earth only after the crew has checked it.',
+        segundos: 10,
+        elementos: [
+          { id: 'enviar', nombre: 'Send the confirmed plan to Mission Control' },
+          { id: 'leer', nombre: 'Read the messages that came in overnight' },
+          { id: 'tareas', nombre: 'Assign the tasks and check that none overlap' },
+          { id: 'revisar', nombre: 'Review the timeline for today' },
+        ],
+        ordenes: [['leer', 'revisar', 'tareas', 'enviar']],
+        error: 'Read the overnight messages first, then review the timeline, assign the tasks and send the plan last.',
+      },
+      { id: 'transmitir', tipo: 'mantener', titulo: 'Transmit the plan', instruccion: 'Hold while the plan goes out through the antenna.', porque: 'The link to Earth is slow. The message has to go out whole.', segundos: 4, boton: 'Hold to transmit' },
+    ],
+  }),
+
+  navegacion: crearDeber(DEBER_BY_ID.navegacion, {
+    titulo: 'Navigation fix',
+    estacion: 'comms',
+    resumen: 'Check where the ship points and whether it is still on course.',
+    intro:
+      'A star tracker photographs the stars and compares them with a catalog to know where the ship points. Position and speed come mostly from radio tracking by the Deep Space Network on Earth, and Orion can also fix its position with a camera that measures the Moon and Earth. A drift found early costs very little propellant to fix.',
+    pasos: [
+      {
+        id: 'actitud',
+        tipo: 'elegir',
+        titulo: 'Find the attitude',
+        instruccion: 'First the ship needs to know where it points. Which sensor do you use?',
+        porque: 'Gyroscopes drift a little all the time. A star fix resets them.',
+        segundos: 8,
+        opciones: () => [
+          { id: 'estrellas', texto: 'The star tracker', calidad: 1, consecuencia: 'It matches the stars it sees with its catalog and gives a precise attitude.' },
+          { id: 'sol', texto: 'The sun sensor', calidad: 0.5, consecuencia: 'It finds the Sun, but one direction is not enough to know the full attitude.' },
+          { id: 'giroscopios', texto: 'The gyroscopes alone', calidad: 0.3, consecuencia: 'Without a star fix, their small error keeps growing.' },
+        ],
+      },
+      {
+        id: 'rumbo',
+        tipo: 'comprobar',
+        titulo: 'Check the course',
+        instruccion: 'Compare the tracking data with the planned path.',
+        porque: 'A small error in speed grows into a big miss at Mars. The earlier it is fixed, the smaller the burn.',
+        segundos: 10,
+        lectura: (r) => {
+          const d = datosDeber(r, 'navegacion')
+          const deriva = (d.deriva ?? 0) > 0
+          const s = d.semilla ?? 1
+          const puntos = Array.from({ length: 8 }, (_, k) => ({ x: 7 - k, y: r1(Math.max(0, (deriva ? 150 + k * 70 : 120) + ruido(s, k) * 40)) }))
+          return {
+            forma: 'linea',
+            titulo: 'Distance from the planned path',
+            unidad: 'km',
+            eje: 'days ago',
+            puntos,
+            limite: 500,
+            limiteTexto: 'Planned corridor',
+            pregunta: 'Is the ship inside the planned corridor?',
+            correcto: deriva ? 'falla' : 'pasa',
+            explicacion: deriva ? 'The distance keeps growing and is leaving the corridor. A tiny trim burn now fixes it.' : 'The ship stays close to the planned path. No burn needed.',
+            botones: ['On course', 'Drifting'],
+          }
+        },
+      },
+    ],
+  }),
+
+  trajes: crearDeber(DEBER_BY_ID.trajes, {
+    titulo: 'Spacesuit checkout',
+    estacion: 'esclusa',
+    resumen: 'Inspect the suits and gloves so they are ready for the next walk outside.',
+    intro:
+      'In 2007 a cut in a spacewalker\'s glove was only found back on Earth. Since then, gloves are checked several times during each spacewalk and inspected inside before and after, with photos sent to the ground.',
+    pasos: [
+      {
+        id: 'inspeccion',
+        tipo: 'elegir',
+        titulo: 'Inspect the gloves',
+        instruccion: 'The gloves take the most wear outside. How do you check them?',
+        porque: 'Mars dust is sharp and wears the outer layer. A small cut is easy to miss.',
+        segundos: 8,
+        opciones: () => [
+          { id: 'luz', texto: 'Under bright light, finger by finger, with photos', calidad: 1, consecuencia: 'Every finger is checked and the photos go to the ground.' },
+          { id: 'rapido', texto: 'A quick look at the palms', calidad: 0.4, consecuencia: 'A cut on a finger can go unnoticed.' },
+          { id: 'nada', texto: 'Skip it. They looked fine last time', calidad: 0.2, consecuencia: 'Wear builds up from one walk to the next.' },
+        ],
+      },
+      {
+        id: 'guante',
+        tipo: 'comprobar',
+        titulo: 'Read the glove wear',
+        instruccion: 'Look at how worn the outer layer is on each finger.',
+        porque: 'A glove past its wear limit is replaced before it goes outside again.',
+        segundos: 10,
+        lectura: (r) => {
+          const d = datosDeber(r, 'trajes')
+          const corte = (d.corte ?? -1) >= 0 ? d.corte! : -1
+          const dedos = ['Thumb', 'Index', 'Middle', 'Ring', 'Little']
+          const s = d.semilla ?? 1
+          return {
+            forma: 'barras',
+            titulo: 'Wear of the outer glove layer',
+            unidad: '%',
+            eje: 'finger',
+            puntos: dedos.map((x, k) => ({ x, y: Math.round(k === corte ? 72 + ruido(s, k) * 8 : 25 + Math.abs(ruido(s, k)) * 20) })),
+            limite: 60,
+            limiteTexto: 'Replace above 60%',
+            pregunta: 'Can these gloves go outside again?',
+            correcto: corte >= 0 ? 'falla' : 'pasa',
+            explicacion: corte >= 0 ? `The ${dedos[corte].toLowerCase()} is past the limit. The glove gets replaced.` : 'Every finger is under the limit. The gloves are fine.',
+            botones: ['Gloves are fine', 'Replace a glove'],
+          }
+        },
+      },
+    ],
+  }),
+
+  chequeo: crearDeber(DEBER_BY_ID.chequeo, {
+    titulo: 'Crew health check',
+    estacion: 'enfermeria',
+    resumen: 'Examine the crew and hold the private medical conferences.',
+    intro:
+      'Every week each ISS astronaut has a private medical conference with a flight surgeon, one at a time, over a private audio and video link. Crew members also examine each other in periodic health checks and send the data to the ground. Problems found early are easier to treat.',
+    pasos: [
+      {
+        id: 'vitales',
+        tipo: 'comprobar',
+        titulo: 'Examine the crew',
+        instruccion: 'Check each crew member: vital signs, sleep, appetite and any pain.',
+        porque: 'Far from Earth, the crew has to notice problems before they become emergencies.',
+        segundos: 10,
+        lectura: (r) => {
+          const crew = r.jugadores.filter((j) => j.rol)
+          const puntos = crew.map((j) => ({ x: j.nombre, y: Math.max(0, Math.round(100 - j.vit.salud)) }))
+          const alguien = puntos.some((p) => p.y > 15)
+          return {
+            forma: 'barras',
+            titulo: 'Symptoms found in the exam',
+            unidad: 'points',
+            eje: 'crew member',
+            puntos,
+            limite: 15,
+            limiteTexto: 'Above 15: give care now',
+            pregunta: 'Does anyone need care?',
+            correcto: alguien ? 'falla' : 'pasa',
+            explicacion: alguien ? 'Someone is above the line. They get care now, before it gets worse.' : 'Everyone is under the line. Nobody needs care now.',
+            botones: ['Everyone is fine', 'Someone needs care'],
+          }
+        },
+      },
+      {
+        id: 'conferencia',
+        tipo: 'elegir',
+        titulo: 'Private medical conferences',
+        instruccion: 'Each crew member talks with the flight surgeon on Earth. How?',
+        porque: 'People only talk openly about sleep, pain or worries when nobody else listens.',
+        segundos: 8,
+        opciones: () => [
+          { id: 'privada', texto: 'One at a time, on a private link', calidad: 1, consecuencia: 'People speak openly. What they say stays private unless it affects the mission.' },
+          { id: 'mesa', texto: 'All together at the galley table', calidad: 0.3, consecuencia: 'Nobody wants to talk about their problems in front of everyone. Small symptoms stay hidden.' },
+          { id: 'saltar', texto: 'Skip them this week', calidad: 0.4, consecuencia: 'Nothing gets noticed until it becomes serious.' },
+        ],
+      },
+    ],
+  }),
+
+  inventario: crearDeber(DEBER_BY_ID.inventario, {
+    titulo: 'Stowage audit',
+    estacion: 'estiba',
+    resumen: 'Audit a cargo bag and keep the food and water count right.',
+    intro:
+      'Every item on the ISS has a barcode, and each move is logged in the Inventory Management System. NASA budgets 20 minutes of crew time a day for it, and auditing a cargo bag by hand takes about 20 minutes. Without it, things get lost in a small space packed with bags.',
+    pasos: [
+      {
+        id: 'auditar',
+        tipo: 'secuencia',
+        titulo: 'Audit a cargo bag',
+        instruccion: 'Tap the steps in the order you do them.',
+        porque: 'The scan tells you what the bag should hold. Only then can you count and log the difference.',
+        segundos: 10,
+        elementos: [
+          { id: 'actualizar', nombre: 'Update the inventory system' },
+          { id: 'escanear', nombre: 'Scan the barcode of the bag' },
+          { id: 'anotar', nombre: 'Note what is missing or misplaced' },
+          { id: 'contar', nombre: 'Count each item against the list' },
+        ],
+        ordenes: [['escanear', 'contar', 'anotar', 'actualizar']],
+        error: 'Scan the bag first, count the items, note the differences and update the system last.',
+      },
+      {
+        id: 'rotar',
+        tipo: 'elegir',
+        titulo: 'Rotate the food',
+        instruccion: 'Which food packages go to the galley first?',
+        porque: 'Food on board has a shelf life. Old packages at the back of a bag expire unnoticed.',
+        segundos: 8,
+        opciones: () => [
+          { id: 'antigua', texto: 'The oldest packages first', calidad: 1, consecuencia: 'Nothing waits long enough to expire.' },
+          { id: 'arriba', texto: 'Whatever is on top', calidad: 0.6, consecuencia: 'Some old packages stay buried and expire.' },
+          { id: 'nueva', texto: 'The newest packages first', calidad: 0.3, consecuencia: 'The old ones stay at the back and pass their date.' },
+        ],
+      },
+      {
+        id: 'cuenta',
+        tipo: 'comprobar',
+        titulo: 'Compare count and log',
+        instruccion: 'Compare what you counted with what the system says.',
+        porque: 'A difference means something was used without logging it or stowed in the wrong bag.',
+        segundos: 10,
+        lectura: (r) => {
+          const d = datosDeber(r, 'inventario')
+          const perdido = (d.perdido ?? 0) > 0
+          const s = d.semilla ?? 1
+          const cosas = ['Food', 'Water', 'Medical kits', 'Spare parts']
+          return {
+            forma: 'barras',
+            titulo: 'Difference between count and log',
+            unidad: 'kg',
+            eje: 'item',
+            puntos: cosas.map((x, k) => ({ x, y: r1(k === 0 && perdido ? 2.4 + ruido(s, k) * 0.3 : Math.abs(ruido(s, k)) * 0.4) })),
+            limite: 1,
+            limiteTexto: 'Search above 1 kg',
+            pregunta: 'Do the count and the log match?',
+            correcto: perdido ? 'falla' : 'pasa',
+            explicacion: perdido ? 'Food is missing from the log. It was stowed in the wrong bag. Search and log it.' : 'Everything matches within 1 kg.',
+            botones: ['They match', 'Something is missing'],
+          }
+        },
+      },
+    ],
+  }),
+
+  experimento: crearDeber(DEBER_BY_ID.experimento, {
+    titulo: 'Radiation experiment',
+    estacion: 'ciencia',
+    resumen: 'Read the dosimeters and run the experiment in the glovebox.',
+    intro:
+      'Curiosity\'s RAD instrument measured about 1.84 mSv a day during the cruise to Mars and 0.64 mSv a day on the surface. On the ISS, crews read dosimeters and handle samples inside a sealed glovebox. Mass between the crew and space lowers the dose, and water and food are good shields because they are rich in hydrogen.',
+    pasos: [
+      {
+        id: 'guantera',
+        tipo: 'secuencia',
+        titulo: 'Use the glovebox',
+        instruccion: 'Tap the steps in the order you do them.',
+        porque: 'The glovebox is kept at a slightly lower pressure, so nothing leaks into the cabin even if it is not perfectly sealed.',
+        segundos: 10,
+        elementos: [
+          { id: 'cerrar', nombre: 'Close the container before taking your hands out' },
+          { id: 'presion', nombre: 'Check the glovebox is sealed and at lower pressure' },
+          { id: 'abrir', nombre: 'Open the dosimeter case inside' },
+          { id: 'manos', nombre: 'Put your hands in the gloves' },
+        ],
+        ordenes: [['presion', 'manos', 'abrir', 'cerrar']],
+        error: 'Check the seal and pressure first, then hands in, open inside, and close everything before taking your hands out.',
+      },
+      {
+        id: 'dosis',
+        tipo: 'comprobar',
+        titulo: 'Read the dose',
+        instruccion: 'Read the daily dose of the last week.',
+        porque: 'A sudden rise means a solar storm. The crew should then stay near the shelter.',
+        segundos: 10,
+        lectura: (r) => {
+          const d = datosDeber(r, 'experimento')
+          const alta = (d.alta ?? 0) > 0
+          const s = d.semilla ?? 1
+          const base = r.tAterrizaje > 0 && r.t >= r.tAterrizaje ? C.GCR_SUPERFICIE_MSV_DIA : C.GCR_CRUCERO_MSV_DIA
+          const puntos = Array.from({ length: 7 }, (_, k) => ({ x: 6 - k, y: r2(base * (1 + ruido(s, k) * 0.06) * (alta && k === 6 ? 4 : 1)) }))
+          return {
+            forma: 'linea',
+            titulo: 'Dose rate in the cabin',
+            unidad: 'mSv/day',
+            eje: 'days ago',
+            puntos,
+            limite: r2(base * 2),
+            limiteTexto: 'Twice the normal rate',
+            pregunta: 'Is the dose normal?',
+            correcto: alta ? 'falla' : 'pasa',
+            explicacion: alta ? 'Today the dose is several times higher. A solar storm is going on. Warn the crew.' : 'The dose is the steady background of cosmic rays.',
+            botones: ['Normal', 'Too high'],
+          }
+        },
+      },
+      {
+        id: 'dormir',
+        tipo: 'elegir',
+        titulo: 'Use the dose map',
+        instruccion: 'The dosimeters show where the dose is lowest. Where do the sleeping bags go?',
+        porque: 'The crew spends a third of the day asleep. Where they sleep matters.',
+        segundos: 8,
+        opciones: () => [
+          { id: 'agua', texto: 'Behind the water and food stowage', calidad: 1, consecuencia: 'The extra mass stops part of the radiation. The dose drops a little.' },
+          { id: 'igual', texto: 'Leave them where they are', calidad: 0.6, consecuencia: 'Nothing changes.' },
+          { id: 'ventana', texto: 'Near the window, for the view', calidad: 0.3, consecuencia: 'There is less mass there. The dose goes up a little.' },
+        ],
+      },
+    ],
+  }),
+
+  filtros: crearDeber(DEBER_BY_ID.filtros, {
+    titulo: 'Air filter cleaning',
+    estacion: 'soporte',
+    resumen: 'Vacuum the air filter inlets and the fan screens.',
+    intro:
+      'Without gravity, dust and lint do not settle. They float until they end up in the air filters. ISS crews vacuum the inlets of the bacteria filters every week and clean fan screens and grilles during the weekly housekeeping. Clogged filters make the fans and the air systems work harder.',
+    pasos: [
+      {
+        id: 'limpiarFiltro',
+        tipo: 'secuencia',
+        titulo: 'Clean a filter',
+        instruccion: 'Tap the steps in the order you do them.',
+        porque: 'With the fan running, the vacuum fights the airflow and dust gets pulled back in.',
+        segundos: 10,
+        elementos: [
+          { id: 'aspirar', nombre: 'Vacuum the lint and dust' },
+          { id: 'reponer', nombre: 'Put the screen back and turn the fan on' },
+          { id: 'apagar', nombre: 'Turn off the fan of that air loop' },
+          { id: 'quitar', nombre: 'Take off the inlet screen' },
+        ],
+        ordenes: [['apagar', 'quitar', 'aspirar', 'reponer']],
+        error: 'Turn off the fan first, take off the screen, vacuum, and put it all back last.',
+      },
+      {
+        id: 'flujo',
+        tipo: 'comprobar',
+        titulo: 'Read the pressure drop',
+        instruccion: 'Read how hard the air pushes through each filter.',
+        porque: 'A big pressure drop means the filter is still clogged and the fan works harder.',
+        segundos: 10,
+        lectura: (r) => {
+          const d = datosDeber(r, 'filtros')
+          const tapado = (d.tapado ?? 0) > 0
+          const s = d.semilla ?? 1
+          const filtros = ['Filter 1', 'Filter 2', 'Filter 3', 'Filter 4']
+          return {
+            forma: 'barras',
+            titulo: 'Pressure drop across each filter',
+            unidad: 'Pa',
+            eje: 'filter',
+            puntos: filtros.map((x, k) => ({ x, y: Math.round(k === 2 && tapado ? 230 + ruido(s, k) * 20 : 110 + ruido(s, k) * 25) })),
+            limite: 180,
+            limiteTexto: 'Clean again above 180 Pa',
+            pregunta: 'Are all the filters clean?',
+            correcto: tapado ? 'falla' : 'pasa',
+            explicacion: tapado ? 'Filter 3 is still clogged. It gets cleaned again.' : 'All filters are under the limit.',
+            botones: ['All clean', 'One is clogged'],
+          }
+        },
+      },
+    ],
+  }),
+}
+
 /** Trabajos sin instancia: hay uno solo de cada uno. */
 export const TRABAJOS: Procedimiento[] = [sellar, lioh, limpiar]
 
@@ -1850,6 +2287,7 @@ const FAMILIAS: Record<string, Familia> = {
   muestra: { objetivos: () => SITIOS_MUESTRA, crear: muestra },
   analizar: { objetivos: conRol, crear: analizar },
   tratar: { objetivos: conRol, crear: tratar },
+  deber: { objetivos: () => DEBERES.map((d) => d.id), crear: (o) => PROC_DEBER[o] },
 }
 
 export const PROC_BY_ID = Object.fromEntries([...PROCEDIMIENTOS, ...TRABAJOS].map((p) => [p.id, p])) as Record<string, Procedimiento>
@@ -1867,6 +2305,7 @@ export function procPorId(id: string, room?: RoomState): Procedimiento | undefin
   if (!familia || !objetivo) return undefined
   if (id.startsWith('reparar:') && !SISTEMA_BY_ID[objetivo as SistemaId]) return undefined
   if (id.startsWith('muestra:') && !SITIOS_MUESTRA.includes(objetivo)) return undefined
+  if (id.startsWith('deber:') && !PROC_DEBER[objetivo]) return undefined
   return familia.crear(objetivo, room)
 }
 

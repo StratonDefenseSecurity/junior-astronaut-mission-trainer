@@ -4,7 +4,7 @@
 import { C, REMS_RESUMEN } from '../shared/ciencia.js'
 import { CLIMA_MARTE } from '../server/datos/climaMarte.js'
 import { formatoMET, masaTotal, type Player, type Role, type RoomState, type Zona } from '../shared/types.js'
-import { CONDICIONES, DCS, disponible, evaluarPaso, pasoActual, procPorId, type PasoElegir } from '../shared/procedimientos.js'
+import { CONDICIONES, DCS, DEBERES, disponible, evaluarPaso, pasoActual, procPorId, type PasoElegir } from '../shared/procedimientos.js'
 import { tripulacion } from '../server/base.js'
 import {
   accion,
@@ -187,6 +187,17 @@ function zona(j: Player, z: Zona): string | null {
   return e ?? (j.zona === z ? null : `${j.nombre} no cruzó la esclusa`)
 }
 
+/** Los deberes de rutina de cada rol, cuando tocan. */
+function deberes() {
+  if (!buena) return
+  for (const d of DEBERES) {
+    if (!room.deberes?.[d.id]?.pendiente) continue
+    const quien = room.jugadores.find((j) => j.rol === d.rol)
+    if (!quien || !listo(quien) || quien.zona !== 'nave') continue
+    sinError(hacer(quien, `deber:${d.id}`), `deber ${d.id}`)
+  }
+}
+
 function mantenimiento() {
   if (!buena) return
   const s = de('sistemas')
@@ -279,6 +290,7 @@ while (!room.resultado && segundos < 6 * 3600) {
   if (segundos % 3 === 0) {
     mantenimiento()
     base()
+    deberes()
   }
   if (room.fase === 'transito' && Math.floor(room.t / 86400) % 50 === 0 && Math.floor(room.t / 86400) !== solImpreso) {
     solImpreso = Math.floor(room.t / 86400)
@@ -291,6 +303,8 @@ while (!room.resultado && segundos < 6 * 3600) {
 }
 
 resumen('FIN')
+console.log(`Deberes de rutina: ${DEBERES.map((d) => `${d.id} ${room.deberes?.[d.id]?.hechos ?? 0}/${room.deberes?.[d.id]?.saltados ?? 0}`).join(', ')} (hechos/saltados)`)
+if (buena) exigir((trabajos.deber ?? 0) > 0, 'la tripulación hizo deberes de rutina')
 exigir(room.resultado, 'la misión debe terminar')
 exigir(copia, 'la base llegó a funcionar')
 probarTrabajos(copia!)

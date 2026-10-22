@@ -25,6 +25,49 @@ export interface Pose {
   /** Altura extra sobre el suelo (al flotar o en la litera de arriba). */
   y?: number
   accion?: Accion
+  /** Rapidez sobre el suelo, en m/s. Decide la mezcla entre andar y correr. */
+  velocidad?: number
+}
+
+// ---------- Marcha ----------
+// Modelo sencillo de la marcha: el pie apoyado barre un arco de ±A radianes alrededor
+// de la cadera (pierna de PIERNA metros) mientras el cuerpo avanza β·L, donde β es la
+// fracción del ciclo que cada pie pasa en el suelo y L la zancada (dos pasos). De ahí
+// sale L = 2·PIERNA·sen(A)/β, y la fase avanza 2π por cada L recorrida: así el pie no
+// patina. Andar: β≈0.6, sin fase de vuelo. Correr: β≈0.38, con vuelo. En Marte (0.38 g)
+// la marcha natural es el trote a saltos de las misiones Apollo: menos pasos por
+// segundo, zancada larga y un vuelo largo entre apoyos.
+
+const PIERNA = 0.9
+/** Rapidez (m/s) a la que empieza y termina la transición de andar a correr. */
+const ANDAR_HASTA = 3.5
+const CORRER_DESDE = 4.4
+
+export interface Marcha {
+  /** 0 andar, 1 correr. */
+  carrera: number
+  /** Amplitud del giro de la cadera, en radianes. */
+  amplitud: number
+  /** Fracción del ciclo con el pie en el suelo. */
+  apoyo: number
+  /** Zancada (dos pasos), en metros. */
+  zancada: number
+}
+
+export function marcha(v: number, gravedad: 'tierra' | 'marte' | 'cero'): Marcha {
+  const carrera = THREE.MathUtils.smoothstep(v, ANDAR_HASTA, CORRER_DESDE)
+  const marte = gravedad === 'marte'
+  const lenta = THREE.MathUtils.clamp(v / 1.6, 0.35, 1)
+  const amplitud = (marte ? THREE.MathUtils.lerp(0.55, 0.7, carrera) : THREE.MathUtils.lerp(0.72, 0.82, carrera)) * lenta
+  const apoyo = marte ? THREE.MathUtils.lerp(0.32, 0.28, carrera) : THREE.MathUtils.lerp(0.6, 0.38, carrera)
+  const zancada = Math.max(0.5, (2 * PIERNA * Math.sin(amplitud)) / apoyo)
+  return { carrera, amplitud, apoyo, zancada }
+}
+
+/** Avanza la fase del ciclo de pasos según lo recorrido, para que los pies no patinen. */
+export function avanzarPaso(paso: number, v: number, dt: number, gravedad: 'tierra' | 'marte' | 'cero'): number {
+  if (v <= 0.01) return paso
+  return paso + (dt * 2 * Math.PI * v) / marcha(v, gravedad).zancada
 }
 
 interface Props {
@@ -146,12 +189,20 @@ export function Astronauta({ traje: trajeEntrada, distintivo, completo, pose, tu
     const accion: Accion = tumbado ? 'tumbado' : (p?.accion ?? (gravedad === 'cero' ? 'flotar' : 'pie'))
     const andar = p?.andando ?? 0
     const fase = p?.paso ?? 0
+    const v = p?.velocidad ?? andar * 3
+    const mar = marcha(v, gravedad)
+    const marte = gravedad === 'marte'
+    // Mezcla del ciclo: 0 andar (péndulo invertido), 1 correr o trotar a saltos (con vuelo).
+    const vuelo = marte ? 1 : mar.carrera
 
     if (p) {
       r.position.set(p.x, p.y ?? 0, p.z)
+      // Girar hacia donde se avanza de forma suave y con un límite de velocidad angular,
+      // sin saltos aunque la dirección cambie de golpe.
       let d = p.giro - r.rotation.y
       d = Math.atan2(Math.sin(d), Math.cos(d))
-      r.rotation.y += d * Math.min(1, dt * 10)
+      const maximo = dt * (marte ? 6 : 9)
+      r.rotation.y += THREE.MathUtils.clamp(d * Math.min(1, dt * 9), -maximo, maximo)
     }
 
     // ---- Postura del cuerpo entero ----
@@ -182,16 +233,23 @@ export function Astronauta({ traje: trajeEntrada, distintivo, completo, pose, tu
       alto = Math.abs(Math.sin(t * 9)) * 0.05
       pitch = 0.1
     } else if (andar > 0.05) {
-      // Andar: en Marte, con un 38% de la gravedad, se rebota más.
-      const rebote = gravedad === 'marte' ? 0.09 : 0.035
-      alto = Math.abs(Math.sin(fase)) * rebote * andar
-      ladeo = Math.sin(fase) * 0.04 * andar
+      // Andando, la cadera está más alta a mitad del apoyo (piernas rectas, |cos| = 1) y
+      // más baja con las dos piernas abiertas. Corriendo es al revés: lo más alto es el
+      // vuelo y lo más bajo el apoyo, cuando la rodilla amortigua. En Marte el vuelo dura
+      // más y sube más (0.38 g).
+      const sube = marte ? 0.07 + 0.05 * mar.carrera : 0.05 + 0.02 * mar.carrera
+      const andando = Math.abs(Math.cos(fase)) * 0.035
+      const corriendo = Math.abs(Math.sin(fase)) * sube
+      alto = THREE.MathUtils.lerp(andando, corriendo, vuelo) * andar - 0.02 * vuelo * andar
+      ladeo = Math.sin(fase) * (marte ? 0.025 : 0.035) * andar
+      pitch = (0.04 + 0.1 * mar.carrera + (marte ? 0.06 : 0)) * andar
     } else {
       alto = Math.sin(t * 1.6) * 0.004
     }
     c.rotation.x += (pitch - c.rotation.x) * Math.min(1, dt * 5)
     c.rotation.z += (roll + ladeo - c.rotation.z) * Math.min(1, dt * 5)
-    c.position.y += (alto - c.position.y) * Math.min(1, dt * 8)
+    const ritmo = accion === 'pie' && andar > 0.05 ? 22 : 8
+    c.position.y += (alto - c.position.y) * Math.min(1, dt * ritmo)
 
     // Respirar: el pecho sube un poco.
     if (torso.current) torso.current.scale.y = 1 + Math.sin(t * (accion === 'correr' || accion === 'bici' ? 4 : 1.6)) * 0.012
@@ -251,17 +309,28 @@ export function Astronauta({ traje: trajeEntrada, distintivo, completo, pose, tu
       codoA = codoB = -0.5
       rodillaA = rodillaB = 0.2
     } else if (andar > 0.05) {
+      // Pierna A: ángulo s·A (positivo = pie atrás). Con cos > 0 va hacia atrás (apoyo) y
+      // con cos < 0 hacia delante (balanceo, con la rodilla doblada para no rozar el suelo).
       const s = Math.sin(fase)
-      const amplitud = gravedad === 'marte' ? 0.55 : 0.6
-      piernaA = s * amplitud * andar
-      piernaB = -s * amplitud * andar
-      rodillaA = Math.max(0, -Math.cos(fase)) * 0.9 * andar + 0.05
-      rodillaB = Math.max(0, Math.cos(fase)) * 0.9 * andar + 0.05
-      brazoA = -s * 0.5 * andar
-      brazoB = s * 0.5 * andar
-      codoA = codoB = -0.35 * andar - 0.1
+      const c = Math.cos(fase)
+      const A = mar.amplitud
+      piernaA = s * A * andar
+      piernaB = -s * A * andar
+      const balanceo = THREE.MathUtils.lerp(0.75, marte ? 1.15 : 1.45, vuelo)
+      const amortigua = 0.25 * vuelo
+      rodillaA = (Math.max(0, -c) * balanceo + Math.max(0, c) * amortigua) * andar + 0.05
+      rodillaB = (Math.max(0, c) * balanceo + Math.max(0, -c) * amortigua) * andar + 0.05
+      // Los brazos van al revés que la pierna de su lado. Con traje en Marte se balancean
+      // poco y se separan del cuerpo para mantener el equilibrio.
+      const brazo = marte ? 0.28 : THREE.MathUtils.lerp(0.42, 0.75, mar.carrera)
+      brazoA = -s * brazo * andar
+      brazoB = s * brazo * andar
+      codoA = codoB = -(0.25 + 1.0 * mar.carrera + (marte ? 0.3 : 0)) * andar - 0.1
+      abrir = 0.08 + (marte ? 0.18 : 0.04 * mar.carrera) * andar
     }
-    const k = Math.min(1, dt * 14)
+    // Los hombros giran al contrario que la cadera.
+    if (torso.current) torso.current.rotation.y = accion === 'pie' && andar > 0.05 ? Math.sin(fase) * 0.09 * andar * (marte ? 0.5 : 1) : 0
+    const k = Math.min(1, dt * (accion === 'pie' && andar > 0.05 ? 24 : 14))
     const ajustar = (g: THREE.Group | null, x: number, z = 0) => {
       if (!g) return
       g.rotation.x += (x - g.rotation.x) * k

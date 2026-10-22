@@ -511,14 +511,36 @@ export interface Proposal {
   estado: 'pendiente' | 'aprobada' | 'rechazada'
   creada: number
   vence: number
+  /** Valoración, cuando el resultado de aprobar o rechazar está claro. */
+  veredicto?: Veredicto | null
 }
 
-export interface EmergencyAlternative { id: string; etiqueta: string; consecuencia: string }
+/** Valoración de una decisión: buena, aceptable o arriesgada. */
+export type Nota = 'buena' | 'aceptable' | 'riesgosa'
+/** Valoración que ven quienes decidieron. `t` es la hora (ms) en que se resolvió. */
+export interface Veredicto { nota: Nota; porque: string; decisores: string[]; t: number }
+export interface EmergencyAlternative {
+  id: string
+  etiqueta: string
+  consecuencia: string
+  /** Lo que se gana y lo que cuesta, por separado. */
+  pro?: string
+  contra?: string
+  nota?: Nota
+  porque?: string
+}
 export interface Emergency {
   id: string
   tipo: string
   titulo: string
+  /** Titular corto para la línea de aviso: "Oxygen Generator failure". */
+  corto?: string
   descripcion: string
+  /** Por qué importa: el riesgo concreto y en cuánto tiempo. */
+  riesgo?: string
+  /** Jugador afectado (el paciente), que también ve la ventana completa. */
+  afectado?: string | null
+  veredicto?: Veredicto | null
   /** Referencia al registro real, si la emergencia viene de datos de NASA. */
   fuente: string | null
   rolesResponsables: Role[]
@@ -575,6 +597,10 @@ export interface RoomState {
   nombreMision: string
   /** 'solo': un jugador con tripulantes bot; 'multi': todos son personas. */
   modoJuego?: 'solo' | 'multi'
+  /** En 'multi': al empezar, bots ocupan los roles que ninguna persona elija (lo decide el anfitrión). */
+  rellenarBots?: boolean
+  /** Deberes de rutina de cada rol (ver DEBERES en shared/procedimientos.ts), por id. */
+  deberes?: Record<string, EstadoDeber>
   /** Memoria de los tripulantes bot, por id (ver server/tripulantes.ts). */
   bots?: Record<string, MemoriaBot>
   /** Avance de cada procedimiento por pasos (ver shared/procedimientos.ts), por id. */
@@ -632,6 +658,24 @@ export interface RoomState {
   chat: ChatMsg[]
   puntosCriticos: string[]
   resultado: { victoria: boolean; titulo: string; motivo: string } | null
+}
+
+/** Calendario de un deber de rutina: cuándo vuelve a tocar y hasta cuándo se puede hacer. */
+export interface EstadoDeber {
+  /** Segundo de misión y ms reales desde los que vuelve a tocar (tienen que pasar los dos). */
+  proximo: number
+  proximoMs: number
+  /** Toca ahora. */
+  pendiente: boolean
+  /** Segundo de misión y ms reales tras los que se da por saltado (tienen que pasar los dos). */
+  vence: number
+  venceMs: number
+  /** El último se saltó: su penalización sigue hasta que se vuelva a hacer. */
+  atrasado: boolean
+  /** El último se hizo como un experto (algunos beneficios dependen de eso). */
+  bueno?: boolean
+  hechos: number
+  saltados: number
 }
 
 /** Avance de un procedimiento: en qué paso va, qué tan bien se hizo cada paso y quién lo hizo. */

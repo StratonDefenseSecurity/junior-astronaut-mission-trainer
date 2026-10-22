@@ -3,7 +3,7 @@
 // la página principal, que reúne las opciones del esquema del equipo.
 import { createContext, useContext, type ReactNode } from 'react'
 import { C } from '@shared/ciencia'
-import { CULTIVO_BY_ID, MAX_MUESTRAS, cultivoDe, estacionSistema, kitsReparacion } from '@shared/procedimientos'
+import { CULTIVO_BY_ID, MAX_MUESTRAS, cultivoDe, deberesDeFase, enCurso, estacionSistema, kitsReparacion, procPorId } from '@shared/procedimientos'
 import {
   GESTION_BASE,
   PASOS_ENSAMBLAJE,
@@ -67,6 +67,34 @@ function Trabajar({ sala, yo, procId, motivo }: P & { procId: string; motivo?: b
   const remoto = useContext(Remoto)
   const aqui = useContext(Aqui)
   return <Trabajo sala={sala} yo={yo} procId={procId} estacion={aqui} remoto={remoto} motivo={motivo} />
+}
+
+/** Deberes de rutina que se hacen en esta estación, con lo que se gana y lo que se pierde. */
+function Deberes({ sala, yo, ids }: P & { ids: string[] }) {
+  const lista = deberesDeFase(sala).filter((d) => ids.includes(d.id))
+  if (!lista.length) return null
+  return (
+    <Seccion titulo="Routine duties">
+      {lista.map((d) => {
+        const e = sala.deberes?.[d.id]
+        const procId = `deber:${d.id}`
+        const activo = Boolean(e?.pendiente) || enCurso(sala, procId)
+        return (
+          <div key={d.id} className="stack">
+            {activo ? (
+              <Trabajar sala={sala} yo={yo} procId={procId} />
+            ) : (
+              <p className="mini">
+                <strong>{procPorId(procId, sala)?.titulo}</strong>: not due now. Done {e?.hechos ?? 0} times so far.
+              </p>
+            )}
+            <p className="mini muted">{d.beneficio}</p>
+            {e?.atrasado && <p className="mini warn">Skipped or done badly last time. {d.penalizacion}</p>}
+          </div>
+        )
+      })}
+    </Seccion>
+  )
 }
 
 /** Estado de un equipo, con sus botones de reparar y de encender o apagar. */
@@ -180,6 +208,7 @@ function SoporteVital({ sala, yo }: P) {
   return (
     <>
       <Tarea sala={sala} yo={yo} estacion="soporte" />
+      <Deberes sala={sala} yo={yo} ids={['filtros']} />
       <Seccion titulo="Cabin air">
         <div className="rejilla">
           <Dato etiqueta="Oxygen" valor={`${c.ppO2.toFixed(1)} kPa`} tono={nivel(c.ppO2 < C.PPO2_MINIMA_KPA, c.ppO2 < 19.5)} barra={{ valor: c.ppO2, max: C.PPO2_NOMINAL_KPA }} nota={`Normal is ${C.PPO2_NOMINAL_KPA} kPa`} />
@@ -316,6 +345,7 @@ function Enfermeria({ sala, yo }: P) {
   const remoto = useContext(Remoto)
   return (
     <>
+      <Deberes sala={sala} yo={yo} ids={['chequeo']} />
       <Seccion titulo="Crew vital signs">
         <table className="tabla compacta">
           <thead>
@@ -495,6 +525,7 @@ function Esclusa({ sala, yo }: P) {
   return (
     <>
       <Tarea sala={sala} yo={yo} estacion="esclusa" />
+      <Deberes sala={sala} yo={yo} ids={['trajes']} />
       <Seccion titulo="Your suit">
         <div className="rejilla">
           <Dato etiqueta="Oxygen" valor={`${o2}%`} tono={nivel(o2 < 20, o2 < 40)} barra={{ valor: o2 }} />
@@ -625,6 +656,33 @@ function contenido(id: string, p: P): ReactNode {
       return <Esclusa {...p} />
     case 'esclusaExt':
       return <EsclusaExterior {...p} />
+    case 'comms':
+      return (
+        <>
+          <Deberes {...p} ids={['planificacion', 'navegacion']} />
+          <Seccion titulo="Link to Earth">
+            <p className="mini">A signal takes about {Math.max(1, Math.round(p.sala.vuelo.retardo / 60))} minutes to reach Earth. Every question to Mission Control waits twice that long for its answer.</p>
+          </Seccion>
+        </>
+      )
+    case 'ciencia':
+      return (
+        <>
+          <Deberes {...p} ids={['experimento']} />
+          <Seccion titulo="Science Rack">
+            <p className="mini">A sealed glovebox and the radiation dosimeters. Rock samples are analyzed in the Lab & Garden.</p>
+          </Seccion>
+        </>
+      )
+    case 'estiba':
+      return (
+        <>
+          <Deberes {...p} ids={['inventario']} />
+          <Seccion titulo="Stowage">
+            <p className="mini">Cargo bags with a barcode on each. Food {Math.round(p.sala.rec.comida)} kg and water {Math.round(p.sala.rec.agua)} kg on board.</p>
+          </Seccion>
+        </>
+      )
     case 'campoSolar':
       return <CampoSolar {...p} />
     case 'plantaExt':

@@ -1,11 +1,12 @@
 // Sala de espera: se reúne la tripulación y cada uno personaliza su traje. Los roles no se
 // eligen aquí: se asignan en la contextualización, cuando ya conocen la situación.
-import { useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { CIUDADES, CIUDAD_BY_ID, ESCENARIOS, ESCENARIO_BY_ID, fechaLarga, type CiudadId, type EscenarioId } from '@shared/escenarios'
 import { PEINADOS, TRAJE_COLORES, TRAJE_PELOS, TRAJE_PIELES, TRAJE_VISORES, type Traje } from '@shared/types'
 import { MarcaIA } from '../hud/comun'
+import { ComprobacionConexion } from '../hud/Conexion'
 import { Astronauta } from '../mundo/Astronauta'
 import { api } from '../red'
 import { useStore, useYo } from '../store'
@@ -61,6 +62,32 @@ const RECORRIDO = [
   { titulo: 'Emergencies', texto: 'An alert comes in. You find the problem and choose between several options.' },
 ]
 
+/** Nombre de la misión: lo pone el anfitrión; los demás lo ven. */
+function NombreMision({ editable }: { editable: boolean }) {
+  const actual = useStore((s) => s.sala?.nombreMision ?? '')
+  const [texto, setTexto] = useState(actual)
+  useEffect(() => setTexto(actual), [actual])
+  const guardar = () => {
+    if (texto.trim() !== actual) void api.nombrarMision(texto)
+  }
+  if (!editable) return <h1 className="titulo-mision">{actual || 'Unnamed mission'}</h1>
+  return (
+    <label className="stack" style={{ gap: 3 }}>
+      <input
+        className="titulo-mision"
+        value={texto}
+        maxLength={28}
+        placeholder="Name your mission"
+        aria-label="Mission name"
+        onChange={(e) => setTexto(e.target.value)}
+        onBlur={guardar}
+        onKeyDown={(e) => e.key === 'Enter' && (e.currentTarget as HTMLInputElement).blur()}
+      />
+      <span className="mini muted">Mission name. The commander can change it in the briefing.</span>
+    </label>
+  )
+}
+
 export function LobbyScreen() {
   const sala = useStore((s) => s.sala)!
   const usuario = useStore((s) => s.usuario)
@@ -68,7 +95,7 @@ export function LobbyScreen() {
   const soyHost = sala.hostId === usuario?.id
   const solo = sala.modoJuego === 'solo'
   const presentes = sala.jugadores.filter((j) => j.conectado)
-  const puedeIniciar = soyHost && (solo || presentes.length >= 2)
+  const puedeIniciar = soyHost && (solo || presentes.length >= 2 || Boolean(sala.rellenarBots))
   const anfitrion = sala.jugadores.find((j) => j.id === sala.hostId)?.nombre ?? 'The host'
   const aviso = solo
     ? 'Your AI crew is already here. You pick your role first and they cover the rest.'
@@ -84,12 +111,15 @@ export function LobbyScreen() {
         <div className="row">
           <div className="grow">
             <div className="brand">Crew Room</div>
-            <h1 className="mono" style={{ letterSpacing: '0.2em' }}>{sala.codigo}</h1>
+            <NombreMision editable={soyHost} />
             <p className="muted">
-              {solo ? 'Single player with bots.' : 'Share this code.'} Disputed decisions: {sala.modoDecision === 'comandante' ? 'the Mission Commander approves them' : 'majority vote'}.
+              Room code <strong className="mono codigo-sala">{sala.codigo}</strong>. {solo ? 'Single player with bots.' : 'Share this code so others can join.'} Disputed decisions: {sala.modoDecision === 'comandante' ? 'the Mission Commander approves them' : 'majority vote'}.
             </p>
           </div>
-          <button onClick={() => api.salir()}>Leave</button>
+          <div className="stack" style={{ gap: 6, alignItems: 'flex-end', maxWidth: 340 }}>
+            <button onClick={() => api.salir()}>Leave</button>
+            <ComprobacionConexion />
+          </div>
         </div>
 
         <div className="lobby">
@@ -176,6 +206,11 @@ export function LobbyScreen() {
                   </select>
                 </label>
               </>
+            )}
+            {!solo && (
+              <label className="mini">
+                <input type="checkbox" checked={Boolean(sala.rellenarBots)} disabled={!soyHost} onChange={(e) => api.rellenarBots(e.target.checked)} /> Add bots for empty roles. They take only the roles nobody chooses.
+              </label>
             )}
             <div className="assistant">{aviso}</div>
             <button className="primary" disabled={!puedeIniciar} onClick={() => api.iniciar()}>Start the mission</button>

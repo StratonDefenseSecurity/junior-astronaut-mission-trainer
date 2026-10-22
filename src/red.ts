@@ -3,6 +3,7 @@
 // recibe dónde están los demás. Esa consulta va por WebSocket cuando el servidor lo ofrece
 // (Cloudflare) y por HTTP cuando no (servidor local), con la misma pregunta y la misma respuesta.
 import { masaTotal, type Loadout, type RoomState, type Traje } from '@shared/types'
+import { conexion } from './conexion'
 import { local } from './mundo/control'
 import { useStore } from './store'
 import { voz } from './voz'
@@ -87,6 +88,7 @@ async function llamar(op: string, datos: Record<string, unknown> = {}, silencios
   const s = useStore.getState()
   const n = ++secuencia
   let d: Resultado
+  const t0 = conexion.empezar()
   try {
     const r = await fetch('/api/juego', {
       method: 'POST',
@@ -95,7 +97,9 @@ async function llamar(op: string, datos: Record<string, unknown> = {}, silencios
     })
     if (r.headers.get('x-mt-ws') === '1') socketDisponible = true
     d = (await r.json().catch(() => ({ error: 'Invalid response from the server.' }))) as Resultado
+    conexion.terminar(t0, r.status < 500)
   } catch {
+    conexion.terminar(t0, false)
     useStore.getState().setConectado(false)
     return null
   }
@@ -163,6 +167,9 @@ function socketDe(codigo: string, token: string): WebSocket | null {
       return
     }
     const n = typeof d.n === 'number' ? d.n : 0
+    const enviada = sinRespuesta.find((p) => p.n === n)
+    // timeStamp es cuando llegó el mensaje, no cuando la página pudo atenderlo.
+    if (enviada) conexion.anotar(Math.max(0, (e.timeStamp || performance.now()) - enviada.t))
     sinRespuesta = sinRespuesta.filter((p) => p.n > n)
     aplicar(d, n, true)
   }
@@ -187,6 +194,7 @@ async function sondear() {
     const t = performance.now()
     if (sinRespuesta.length && t - sinRespuesta[0].t > 5000) {
       // El WebSocket dejó de responder: se cierra y esta consulta sigue por HTTP.
+      conexion.anotar(null)
       cerrarSocket(5000)
     } else {
       if (sinRespuesta.length < 2) {
@@ -225,6 +233,7 @@ export const api = {
   elegirRol: (rol: string | null) => llamar('rol', { rol }),
   elegirTraje: (traje: Partial<Traje>) => llamar('traje', { traje }),
   iniciar: () => llamar('iniciar'),
+  rellenarBots: (valor: boolean) => llamar('rellenarBots', { valor }),
   escenario: (escenario: string) => llamar('escenario', { escenario }),
   hogar: (hogar: string | null) => llamar('hogar', { hogar }),
   nombrarMision: (nombre: string) => llamar('nombre', { nombre }),

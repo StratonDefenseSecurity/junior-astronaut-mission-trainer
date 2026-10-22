@@ -338,3 +338,62 @@ ol.proc-pasos li.actual { color: var(--text); font-weight: 600; }
 .almohadillas { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 6px 0; }
 .almohadilla { display: flex; flex-direction: column; gap: 2px; border: 1px solid var(--border); border-radius: 8px; padding: 5px 6px; background: rgba(255, 106, 213, 0.05); }
 .almohadilla.muerta { opacity: 0.55; background: rgba(255, 107, 102, 0.06); }
+
+/* Emergencias: guía de la ventana, línea de aviso para quien no decide y valoración de decisiones. */
+.em-guia { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; margin: 6px 0 8px; font-size: 12.5px; line-height: 1.4; }
+.em-guia dt { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; padding-top: 2px; }
+.em-guia dd { margin: 0; }
+button.opcion small.pro { color: var(--ok); }
+button.opcion small.contra { color: var(--warn); }
+.aviso-linea { position: absolute; right: 252px; top: 86px; z-index: 12; max-width: min(430px, calc(100vw - 24px)); font-size: 12px; padding: 5px 10px; border-radius: 8px; background: rgba(6, 18, 32, 0.82); border: 1px solid rgba(255, 107, 102, 0.45); display: flex; gap: 6px; align-items: center; }
+.aviso-linea > i { width: 7px; height: 7px; border-radius: 50%; background: var(--bad); flex: none; }
+.veredicto { position: absolute; left: 50%; bottom: 120px; transform: translateX(-50%); width: min(420px, calc(100vw - 24px)); z-index: 15; background: var(--panel-solid); border: 1px solid var(--border); border-left-width: 4px; border-radius: 12px; padding: 10px 12px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45); }
+.veredicto p { margin: 4px 0 0; }
+.veredicto.buena { border-left-color: var(--ok); }
+.veredicto.buena b { color: var(--ok); }
+.veredicto.aceptable { border-left-color: var(--warn); }
+.veredicto.aceptable b { color: var(--warn); }
+.veredicto.riesgosa { border-left-color: var(--bad); }
+.veredicto.riesgosa b { color: var(--bad); }
+@media (max-width: 760px) { .aviso-linea { right: 12px; left: 12px; max-width: none; } .em-guia { grid-template-columns: 1fr; } }
+
+/* ---- Nombre de la misión, conexión y voz ---- */
+.mision-nombre { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 340px; margin-left: auto; }
+.codigo-sala { font-size: 11px; letter-spacing: 0.08em; }
+h1.titulo-mision, input.titulo-mision { font-size: 26px; font-weight: 700; margin: 4px 0 2px; }
+input.titulo-mision { width: min(100%, 460px); padding: 6px 10px; }
+.chip.conexion { border-color: var(--border); color: var(--text); display: inline-flex; align-items: center; gap: 5px; }
+.conexion .punto, .comprobacion-conexion .punto { width: 8px; height: 8px; border: none; background: var(--muted, #8a94a6); flex: none; }
+.conexion.ok .punto, .comprobacion-conexion.ok .punto { background: var(--ok); }
+.conexion.warn .punto, .comprobacion-conexion.warn .punto { background: var(--warn); }
+.conexion.bad .punto, .comprobacion-conexion.bad .punto { background: var(--bad); }
+.mision-linea { gap: 8px; justify-content: flex-end; flex-wrap: nowrap; }
+.aviso-conexion { position: absolute; top: calc(100% + 10px); right: 0; z-index: 20; white-space: nowrap; color: var(--warn); background: var(--panel-solid); border: 1px solid var(--warn); border-radius: 8px; padding: 4px 9px; pointer-events: none; }
+@media (max-height: 800px) {
+  .hud { padding: 6px; gap: 6px; }
+  .superior { padding: 5px 10px; gap: 4px 12px; }
+  .superior .reloj { font-size: 15px; }
+}
+.comprobacion-conexion { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; font-size: 13px; }
+.comprobacion-conexion .punto { margin-top: 5px; width: 10px; height: 10px; }
+.comprobacion-conexion.bad { border-color: var(--bad); }
+.comprobacion-conexion.warn { border-color: var(--warn); }
+.chip.aviso { border-color: var(--warn); }
+.panel-voz { position: absolute; top: calc(100% + 6px); right: 0; width: min(320px, calc(100vw - 24px)); max-height: calc(100vh - 90px); overflow: auto; z-index: 30; display: flex; flex-direction: column; gap: 8px; text-align: left; background: var(--panel-solid); box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45); }
+.acciones-superior { position: relative; }
+.medidor-mic { height: 8px; border-radius: 999px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
+.medidor-mic > i { display: block; height: 100%; background: var(--ok); transition: width 0.12s linear; }
+.voz-ind { display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; font-size: 10.5px; font-weight: 400; color: var(--muted, #8a94a6); font-family: var(--mono); }
+.voz-ind > i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; opacity: 0.6; }
+.voz-ind.habla { color: var(--ok); }
+.voz-ind.habla > i { opacity: 1; box-shadow: 0 0 0 3px rgba(95, 208, 138, 0.3); }
+.voz-ind.fallo { color: var(--bad); }
+.voz-ind.reintentando, .voz-ind.conectando { color: var(--warn); }
+
+/* Los paneles flotantes empiezan justo debajo de la barra superior, mida lo que mida. */
+.estacion, .emergencia, .emergencia-mini, .voto, .aviso-linea { top: calc(var(--alto-superior, 78px) + 8px); }
+.transmision { top: calc(var(--alto-superior, 78px) + 14px); }
+.estacion { max-height: calc(100vh - var(--alto-superior, 78px) - 140px); }
+.emergencia { max-height: calc(100vh - var(--alto-superior, 78px) - 150px); }
+.voto { max-height: calc(100vh - var(--alto-superior, 78px) - 150px); overflow: auto; }
+.izq { overflow-y: auto; }

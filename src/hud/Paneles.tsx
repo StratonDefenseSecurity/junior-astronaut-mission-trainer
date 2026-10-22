@@ -1,7 +1,7 @@
 // Paneles fijos de la pantalla de juego: barra superior, mi estado, tripulación, puntos
 // críticos y registro. Siguen el boceto del equipo: el mundo al centro, los integrantes a un
 // lado con su oxígeno, salud y pulso, y los puntos críticos abajo.
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useGraficos } from '../graficos'
 import { ASCENSO, llamadaCuenta, proximoEvento } from '@shared/ascenso'
 import { C } from '@shared/ciencia'
@@ -10,7 +10,8 @@ import { puede } from '../mundo/mapa'
 import { api } from '../red'
 import { useStore, useYo } from '../store'
 import { sonido, useSonido } from '../sonido'
-import { useVoz, voz } from '../voz'
+import { ChipConexion } from './Conexion'
+import { BotonesVoz, IndicadorVoz } from './Voz'
 import { Barra, Dato, MarcaIA, RolTag, enMarte, energiaUsada, escalaTexto, mmHg, nivel, pctTraje, relojMision, tiempoEnEspacio } from './comun'
 
 const FASES: Record<RoomState['fase'], string> = {
@@ -35,8 +36,24 @@ export function BarraSuperior({ sala }: { sala: RoomState }) {
   const frenada = !fija && sala.escala < Math.min(sala.escalaDeseada, maxima)
   const a = sala.ambiente
   const v = sala.vuelo
+  // La altura de la barra cambia con el ancho de la pantalla: los paneles flotantes se colocan
+  // debajo leyendo --alto-superior.
+  const barra = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const e = barra.current
+    if (!e || typeof ResizeObserver === 'undefined') return
+    const raiz = document.documentElement
+    const fijar = () => raiz.style.setProperty('--alto-superior', `${Math.round(e.getBoundingClientRect().bottom)}px`)
+    const o = new ResizeObserver(fijar)
+    o.observe(e)
+    fijar()
+    return () => {
+      o.disconnect()
+      raiz.style.removeProperty('--alto-superior')
+    }
+  }, [])
   return (
-    <div className="panel superior">
+    <div className="panel superior" ref={barra}>
       <div className="bloque">
         <div className="brand">{FASES[sala.fase]}</div>
         <div className="reloj">{reloj.principal}</div>
@@ -105,10 +122,15 @@ export function BarraSuperior({ sala }: { sala: RoomState }) {
       </div>
 
       <div className="grow" />
-      <div className="bloque" style={{ textAlign: 'right', marginLeft: 'auto' }}>
-        <div className="mono mini">Room {sala.codigo}</div>
-        <div className="row" style={{ gap: 4, justifyContent: 'flex-end' }}>
-          <BotonesAudio />
+      <div className="bloque acciones-superior" style={{ textAlign: 'right', marginLeft: 'auto' }}>
+        <div className="row mision-linea">
+          <div className="mision-nombre" title={`Room code ${sala.codigo}. Others use it to join.`}>
+            <strong>{sala.nombreMision || 'Unnamed mission'}</strong> <span className="mono mini muted">room {sala.codigo}</span>
+          </div>
+          <ChipConexion />
+        </div>
+        <div className="row" style={{ gap: 4, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+          <BotonesAudio sala={sala} />
           <button className="chip" onClick={alternar} title="Key H">Panels</button>
           <button className="chip" onClick={() => setFuentes(true)}>Sources</button>
           <button className="chip" onClick={() => api.salir()}>Leave</button>
@@ -119,9 +141,8 @@ export function BarraSuperior({ sala }: { sala: RoomState }) {
 }
 
 /** Silenciar el sonido y activar el chat de voz. */
-export function BotonesAudio() {
+export function BotonesAudio({ sala }: { sala: RoomState }) {
   const s = useSonido()
-  const v = useVoz()
   const g = useGraficos()
   return (
     <>
@@ -131,20 +152,7 @@ export function BotonesAudio() {
       <button className="chip" title={s.silenciado ? 'Turn sound on' : 'Mute'} onClick={() => (void sonido.activar(), sonido.silenciar(!s.silenciado))}>
         {s.silenciado ? 'Sound: off' : 'Sound'}
       </button>
-      {v.disponible && (
-        <button
-          className={`chip ${v.activa ? 'activo' : ''}`}
-          title={v.activa ? 'Leave voice chat' : 'Talk with the crew'}
-          onClick={() => (v.activa ? voz.desactivar() : void voz.activar())}
-        >
-          {v.activa ? `Voice · ${v.conectados}` : 'Voice'}
-        </button>
-      )}
-      {v.activa && v.microfono === 'si' && (
-        <button className="chip" title="Microphone" onClick={() => voz.silenciar(!v.silenciado)}>
-          {v.silenciado ? 'Mic: off' : 'Mic'}
-        </button>
-      )}
+      <BotonesVoz sala={sala} />
     </>
   )
 }
@@ -222,6 +230,7 @@ export function Tripulacion({ sala }: { sala: RoomState }) {
               <strong className="grow">
                 {j.nombre}
                 <MarcaIA bot={j.bot} />
+                <IndicadorVoz id={j.id} yo={j.id === yo?.id} />
               </strong>
               <span className="mini muted">{j.incapacitado > 0 ? 'out of action' : j.enRefugio ? 'shelter' : j.zona === 'exterior' ? 'outside' : !j.conectado ? 'away' : j.manual === 'sueno' ? 'asleep' : ''}</span>
             </div>

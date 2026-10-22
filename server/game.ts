@@ -42,13 +42,14 @@ import {
 } from '../shared/types.js'
 import { conRol, conectados, jugador, limitar, log, presentes, puedeActuar, rid, rolPresente, sis, tripulacion } from './base.js'
 import { UMBRAL_AVERIA, aplicarAlternativa } from './emergencies.js'
+import { valorarEmergencia, valorarPropuesta } from './veredictos.js'
 import { CIUDAD_BY_ID, ESCENARIOS, ESCENARIO_BY_ID, escenarioDe, fechaDeMision, type EscenarioId } from '../shared/escenarios.js'
 import { lsMarte } from '../shared/astronomia.js'
 import { ALTERNATIVAS, cargaRecomendada, minimoDe } from '../shared/plan.js'
 import { ahora, azar, fijarAhora, semilla } from './reloj.js'
 import { enSuperficie, indiceClimaParaLs, iniciarClimaEspacial } from './sim/ambiente.js'
 import { iniciarDescenso, pasoSimulacion, refrescar } from './sim/paso.js'
-import { pasoTripulantes } from './tripulantes.js'
+import { agregarBots, pasoTripulantes } from './tripulantes.js'
 
 export { jugador } from './base.js'
 
@@ -228,11 +229,15 @@ export function elegirHogar(room: RoomState, id: string, ciudad: string | null):
   return null
 }
 
-/** El comandante bautiza la misión. */
+/** El anfitrión bautiza la misión en la sala de espera, o el comandante en la contextualización. */
 export function nombrarMision(room: RoomState, id: string, nombre: string): string | null {
-  if (room.fase !== 'contexto') return 'The mission is named before launch.'
-  const j = jugador(room, id)
-  if (!j || !puedeActuar(room, j, ['comandante'])) return 'Only the Mission Commander names the mission.'
+  if (room.fase === 'lobby') {
+    if (room.hostId !== id) return 'Only the host names the mission in the crew room.'
+  } else {
+    if (room.fase !== 'contexto') return 'The mission is named before launch.'
+    const j = jugador(room, id)
+    if (!j || !puedeActuar(room, j, ['comandante'])) return 'Only the Mission Commander names the mission.'
+  }
   room.nombreMision = nombre.replace(/[\u0000-\u001f<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 28)
   return null
 }
@@ -241,7 +246,8 @@ export function iniciarMision(room: RoomState, id: string): string | null {
   if (room.fase !== 'lobby') return 'The mission has already started.'
   if (id !== room.hostId) return 'Only the host can start.'
   const solo = room.modoJuego === 'solo'
-  if (!solo && presentes(room).length < 2) return 'You need at least 2 crew members in the room.'
+  const rellenar = !solo && Boolean(room.rellenarBots)
+  if (!solo && !rellenar && presentes(room).length < 2) return 'You need at least 2 crew members in the room.'
   room.jugadores = presentes(room)
   for (const j of room.jugadores) {
     j.rol = null
@@ -249,8 +255,15 @@ export function iniciarMision(room: RoomState, id: string): string | null {
     j.listo = false
   }
   room.fase = 'contexto'
+  // Bots para los roles vacíos: eligen solo cuando todas las personas tienen el suyo.
+  if (rellenar && room.jugadores.length < 6) {
+    const antes = room.jugadores.length
+    agregarBots(room)
+    const n = room.jugadores.length - antes
+    if (n > 0) log(room, `${n} bot${n === 1 ? '' : 's'} joined the crew. They take only the roles nobody chooses.`)
+  }
   // Los bots avanzan por la contextualización con el reloj de la sala.
-  if (solo) {
+  if (solo || rellenar) {
     room.bots = {}
     room.reloj = ahora()
   }
@@ -469,6 +482,7 @@ function resolverPropuesta(room: RoomState, prop: Proposal) {
   if (decision === null) return
   prop.estado = decision ? 'aprobada' : 'rechazada'
   log(room, `Proposal "${prop.titulo}" ${decision ? 'approved' : 'rejected'}.`, decision ? 'ok' : 'alerta')
+  valorarPropuesta(room, prop, decision)
   if (decision) aplicarPropuesta(room, prop)
 }
 
@@ -512,7 +526,7 @@ function aplicarPropuesta(room: RoomState, prop: Proposal) {
       break
     case 'emergencia': {
       const em = room.emergencias.find((e) => e.id === d.emergenciaId)
-      if (em && em.estado === 'activa') resolverEmergencia(room, em, String(d.altId))
+      if (em && em.estado === 'activa') resolverEmergencia(room, em, String(d.altId), Object.keys(prop.votos))
       break
     }
   }
@@ -868,18 +882,19 @@ export function elegirAlternativa(room: RoomState, id: string, emId: string, alt
     return null
   }
   j.aportes = (j.aportes ?? 0) + 1
-  resolverEmergencia(room, em, altId)
+  resolverEmergencia(room, em, altId, [j.id])
   refrescar(room)
   return null
 }
 
-function resolverEmergencia(room: RoomState, em: Emergency, altId: string) {
+function resolverEmergencia(room: RoomState, em: Emergency, altId: string, decisores: string[]) {
   const alt = em.alternativas.find((a) => a.id === altId)
   if (!alt) return
   em.estado = 'resuelta'
   em.elegida = altId
   em.resultado = aplicarAlternativa(room, em, altId)
   log(room, `${em.titulo}: ${alt.etiqueta.charAt(0).toLowerCase() + alt.etiqueta.slice(1)}. ${em.resultado}`)
+  valorarEmergencia(room, em, decisores)
 }
 
 // ---------- Paso del tiempo ----------
@@ -899,6 +914,7 @@ function vencer(room: RoomState, t: number) {
       e.elegida = peor.id
       e.resultado = aplicarAlternativa(room, e, peor.id)
       log(room, `Nobody decided in time. ${e.titulo}: ${e.resultado}`, 'alerta')
+      valorarEmergencia(room, e, null)
     }
   }
 }

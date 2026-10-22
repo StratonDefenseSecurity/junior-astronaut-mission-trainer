@@ -10,7 +10,7 @@
 import { C } from '../shared/ciencia.js'
 import { CIUDADES, escenarioDe } from '../shared/escenarios.js'
 import { analizarCarga } from '../shared/plan.js'
-import { disponible, estacionSistema, pasoActual, procPorId } from '../shared/procedimientos.js'
+import { deberPendiente, deberesDeFase, disponible, estacionSistema, pasoActual, procPorId } from '../shared/procedimientos.js'
 import {
   PEINADOS,
   ROLE_BY_ID,
@@ -105,6 +105,9 @@ const ESTACIONES: Record<string, { zona: Zona; nombre: string; x: number; z: num
   refugio: { zona: 'nave', nombre: 'the Storm Shelter', x: 4.7, z: 2.6, radio: 0 },
   esclusa: { zona: 'nave', nombre: 'the Airlock', x: 8.4, z: 0, radio: 0 },
   comedor: { zona: 'nave', nombre: 'the Galley Table', x: 0.05, z: 0, radio: 0.62 },
+  comms: { zona: 'nave', nombre: 'Comms & Nav', x: -7.0, z: -2.6, radio: 0 },
+  ciencia: { zona: 'nave', nombre: 'the Science Rack', x: 7.0, z: -2.6, radio: 0 },
+  estiba: { zona: 'nave', nombre: 'Stowage', x: 7.0, z: 2.6, radio: 0 },
   esclusaExt: { zona: 'exterior', nombre: 'the Airlock', x: 10.6, z: 0, radio: 0 },
   plantaExt: { zona: 'exterior', nombre: 'the Power Plant', x: 14.5, z: -8, radio: 1.1 },
   campoSolar: { zona: 'exterior', nombre: 'the Solar Arrays', x: 21, z: -15, radio: 0 },
@@ -162,7 +165,19 @@ const elegir = <T>(room: RoomState, lista: readonly T[]): T => lista[Math.floor(
 
 // ---------- Crear la tripulación ----------
 
-/** Añade cinco tripulantes bot a una sala recién creada en modo de un jugador. */
+/**
+ * El anfitrión de una sala multijugador decide, en la sala de espera, si al empezar se suman bots
+ * para los roles que ninguna persona elija.
+ */
+export function fijarRellenoBots(room: RoomState, id: string, valor: boolean): string | null {
+  if (room.fase !== 'lobby') return 'Bots can only be added before the mission starts.'
+  if (id !== room.hostId) return 'Only the host can change this.'
+  if (room.modoJuego === 'solo') return 'This room already has a bot crew.'
+  room.rellenarBots = valor
+  return null
+}
+
+/** Añade tripulantes bot hasta ser seis: en modo de un jugador, o para los roles vacíos. */
 export function agregarBots(room: RoomState) {
   const usados = new Set(room.jugadores.map((j) => j.nombre.toLowerCase()))
   const colores = TRAJE_COLORES.filter((c) => !room.jugadores.some((o) => o.traje.color === c))
@@ -300,8 +315,8 @@ function contexto(room: RoomState, bots: Player[]) {
 function actuarContexto(room: RoomState, j: Player, m: MemoriaBot, persona: Player | null): boolean {
   if (j.paso === 0) return fijarPaso(room, j.id, 1) === null
   if (!j.rol) {
-    // La persona elige primero; los bots se reparten lo que queda.
-    if (persona && !persona.rol) return false
+    // Las personas eligen primero; los bots se reparten lo que queda.
+    if (room.jugadores.some((o) => !o.bot && o.conectado && !o.rol)) return false
     const libre = ORDEN_ROLES.find((r) => !room.jugadores.some((o) => o.rol === r))
     if (!libre || elegirRol(room, j.id, libre) !== null) return false
     m.marcas.rol = ORDEN_ROLES.indexOf(libre)
@@ -344,8 +359,8 @@ function actuarContexto(room: RoomState, j: Player, m: MemoriaBot, persona: Play
     }
     return false
   }
-  // El comandante bot autoriza el despegue cuando la persona está lista.
-  if (persona && !persona.listo) {
+  // El comandante bot autoriza el despegue cuando todas las personas están listas.
+  if (room.jugadores.some((o) => !o.bot && o.conectado && !o.listo)) {
     decir(room, j, 'When you are ready, mark it and I will authorize the launch.', 'esperaListo', 90_000)
     return false
   }
@@ -1029,20 +1044,33 @@ function decidir(room: RoomState, j: Player, m: MemoriaBot): Plan | null {
     }
   }
 
-  switch (j.rol) {
-    case 'sistemas':
-      return sistemas(room, j, plan)
-    case 'medico':
-      return medico(room, j, m, plan)
-    case 'logistica':
-      return logistica(room, j, plan)
-    case 'cientifico':
-      return cientifico(room, j, m, plan)
-    case 'piloto':
-      return piloto(room, j, plan) ?? paseo(room, j, plan)
-    default:
-      return paseo(room, j, plan)
+  const propio = ((): Plan | null => {
+    switch (j.rol) {
+      case 'sistemas':
+        return sistemas(room, j, plan)
+      case 'medico':
+        return medico(room, j, m, plan)
+      case 'logistica':
+        return logistica(room, j, plan)
+      case 'cientifico':
+        return cientifico(room, j, m, plan)
+      case 'piloto':
+        return piloto(room, j, plan) ?? paseo(room, j, plan)
+      default:
+        return paseo(room, j, plan)
+    }
+  })()
+  if (propio && propio.que !== 'paseo') return propio
+  // Sin nada urgente, los deberes de rutina de su rol (nunca los de una persona).
+  if (j.zona === 'nave') {
+    for (const d of deberesDeFase(room, j.rol)) {
+      const e = room.deberes?.[d.id]
+      if (!e || !deberPendiente(room, d.id) || !madura(room, m, `deber:${d.id}:${e.hechos + e.saltados}`, 3000, 9000)) continue
+      const hecho = trabajo(room, plan, `deber:${d.id}`)
+      if (hecho) return hecho
+    }
   }
+  return propio
 }
 
 type Planificar = (que: string, pasos: EtapaBot[], volver?: boolean) => Plan | null

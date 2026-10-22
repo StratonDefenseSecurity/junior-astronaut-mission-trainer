@@ -1,6 +1,7 @@
 // Ventanas que aparecen sobre el juego: emergencias (alerta → problema → alternativas),
 // propuestas que esperan tu voto, resultado final y las fuentes de los datos.
 import { useEffect, useRef, useState } from 'react'
+import { NOTA_TEXTO, lineaAviso, quienSeOcupa, veAlerta } from '@shared/avisos'
 import { C, FUENTES, SUPUESTOS } from '@shared/ciencia'
 import { ROLE_BY_ID, type Player, type RoomState } from '@shared/types'
 import { ESTACION_BY_ID, puede } from '../mundo/mapa'
@@ -43,16 +44,51 @@ export function Transmision({ sala }: { sala: RoomState }) {
   )
 }
 
+/** La emergencia activa (ventana completa o línea de aviso) y la valoración de la última decisión. */
 export function Emergencia({ sala, yo }: { sala: RoomState; yo: Player }) {
+  return (
+    <>
+      <Valoracion sala={sala} yo={yo} />
+      <AlertaActiva sala={sala} yo={yo} />
+    </>
+  )
+}
+
+function AlertaActiva({ sala, yo }: { sala: RoomState; yo: Player }) {
   const em = sala.emergencias.find((e) => e.estado === 'activa')
   const ahora = useAhora()
   const [minimizada, setMinimizada] = useState(false)
   useEffect(() => setMinimizada(false), [em?.id])
   if (!em) return null
   const restante = Math.max(0, Math.round((em.vence - ahora) / 1000))
+  // Solo quien decide (o el afectado) ve la ventana. El resto, una línea discreta.
+  if (!veAlerta(sala, yo, em)) {
+    return (
+      <div className="aviso-linea" role="status">
+        <i /> {lineaAviso(sala, em)} <span className="mono muted">{restante} s</span>
+      </div>
+    )
+  }
   const responsable = puede(sala, yo, em.rolesResponsables)
-  const variosRoles = em.rolesResponsables.filter((r) => sala.jugadores.some((j) => j.rol === r && j.conectado)).length > 1
+  const ocupan = quienSeOcupa(sala, em)
+  const variosRoles = ocupan.length > 1
   const propuesta = sala.propuestas.find((p) => p.tipo === 'emergencia' && p.estado === 'pendiente' && p.payload.emergenciaId === em.id)
+  const porDefecto = em.alternativas[em.alternativas.length - 1]
+  const quien = ocupan.length
+    ? ocupan
+        .map((r) => {
+          const nombres = sala.jugadores.filter((j) => j.rol === r && j.conectado).map((j) => (j.id === yo.id ? 'you' : j.nombre))
+          return `${ROLE_BY_ID[r].nombre}${nombres.length ? ` (${nombres.join(', ')})` : ''}`
+        })
+        .join(' and ')
+    : 'Anyone in the crew'
+  const tarea = responsable
+    ? propuesta
+      ? 'Approve or reject the proposed option.'
+      : `Pick one option below.${variosRoles ? ' It becomes a proposal the others approve.' : ''}`
+    : em.afectado === yo.id
+      ? 'Nothing yet. This is about you, and the crew decides your care.'
+      : 'Nothing. Your role does not decide this one.'
 
   if (minimizada) {
     return (
@@ -64,27 +100,68 @@ export function Emergencia({ sala, yo }: { sala: RoomState; yo: Player }) {
   return (
     <div className="emergencia">
       <div className="row">
-        <span className="tag bad">1 · Alert</span>
-        <span className="countdown grow">{restante} s left. If nobody decides, the last option is applied.</span>
+        <span className="tag bad">Alert</span>
+        <span className={`countdown grow ${restante <= 15 ? 'bad' : ''}`}>{restante} s left</span>
         <button className="small" onClick={() => setMinimizada(true)}>Minimize</button>
       </div>
       <h2>{em.titulo}</h2>
-      <span className="tag warn">2 · The problem</span>
-      <p>{em.descripcion}</p>
+      <dl className="em-guia">
+        <dt>What happened</dt>
+        <dd>{em.descripcion}</dd>
+        {em.riesgo && (
+          <>
+            <dt>Why it matters</dt>
+            <dd>{em.riesgo}</dd>
+          </>
+        )}
+        <dt>What you must do</dt>
+        <dd>{tarea}</dd>
+        <dt>Who decides</dt>
+        <dd>{quien}</dd>
+        <dt>Time left</dt>
+        <dd>
+          {restante} s. If nobody decides: {porDefecto.etiqueta.charAt(0).toLowerCase() + porDefecto.etiqueta.slice(1)}.
+        </dd>
+      </dl>
       {em.fuente && <p className="mini muted">Real data: {em.fuente}.</p>}
-      <p className="mini muted">
-        Who decides: {em.rolesResponsables.map((r) => ROLE_BY_ID[r].nombre).join(' and ')}.
-        {variosRoles ? ' Since several roles decide, the choice becomes a proposal.' : ''}
-      </p>
-      <span className="tag azul">3 · Options</span>
       {propuesta && <div className="help">Proposed: {propuesta.titulo.split(': ').slice(1).join(': ')}. It still needs approval.</div>}
       {em.alternativas.map((a) => (
         <button key={a.id} className="opcion" disabled={!responsable || Boolean(propuesta)} onClick={() => api.elegirAlternativa(em.id, a.id)}>
           <strong>{a.etiqueta}</strong>
-          <small>{a.consecuencia}</small>
+          {a.pro ? (
+            <>
+              <small className="pro">Gain: {a.pro}</small>
+              <small className="contra">Cost: {a.contra}</small>
+            </>
+          ) : (
+            <small>{a.consecuencia}</small>
+          )}
         </button>
       ))}
-      {!responsable && <p className="mini muted">Your role does not decide this emergency. You can ask the assistant or warn the crew.</p>}
+    </div>
+  )
+}
+
+/** Valoración de la última decisión, solo para quienes decidieron. Se cierra sola a los 15 s. */
+function Valoracion({ sala, yo }: { sala: RoomState; yo: Player }) {
+  const ahora = useAhora()
+  const [cerradas, setCerradas] = useState<string[]>([])
+  const items = [
+    ...sala.emergencias.map((e) => ({ id: e.id, v: e.veredicto, linea: `${e.titulo}: ${e.alternativas.find((a) => a.id === e.elegida)?.etiqueta ?? 'no decision'}.` })),
+    ...sala.propuestas.map((p) => ({ id: p.id, v: p.veredicto, linea: `${p.titulo}: ${p.estado === 'aprobada' ? 'approved' : 'rejected'}.` })),
+  ]
+  const it = items
+    .filter((x) => x.v && x.v.decisores.includes(yo.id) && ahora - x.v.t < 15_000 && !cerradas.includes(x.id))
+    .sort((a, b) => b.v!.t - a.v!.t)[0]
+  if (!it || !it.v) return null
+  return (
+    <div className={`veredicto ${it.v.nota}`} role="status">
+      <div className="row">
+        <b className="grow">{NOTA_TEXTO[it.v.nota]}</b>
+        <button className="small plano" onClick={() => setCerradas((c) => [...c, it.id])}>Close</button>
+      </div>
+      <p className="mini muted">{it.linea}</p>
+      <p>{it.v.porque}</p>
     </div>
   )
 }

@@ -61,6 +61,7 @@ console.log(`Servidor: ${base}${corto ? ' (prueba corta)' : ''}`)
 const clave = `prueba-${sufijo}`
 if (process.argv.includes('--solo')) {
   await pruebaSolo()
+  await pruebaRelleno()
   console.log(fallos === 0 ? '\nE2E OK' : `\nE2E CON ${fallos} FALLA(S)`)
   process.exit(fallos === 0 ? 0 : 1)
 }
@@ -360,6 +361,7 @@ if (!corto) {
 await llamar('salir', { codigo }, A)
 await llamar('salir', { codigo }, B)
 await pruebaSolo()
+await pruebaRelleno()
 console.log(fallos === 0 ? '\nE2E OK' : `\nE2E CON ${fallos} FALLA(S)`)
 process.exit(fallos === 0 ? 0 : 1)
 
@@ -460,4 +462,45 @@ async function pruebaSolo() {
     comprobar(s.t - t0 > 10 * 86400 && s.jugadores.every((j) => j.vit.salud > 50), `la misión avanza: día ${Math.round(s.t / 86400)}`)
   }
   await llamar('salir', { codigo: cod }, T)
+}
+
+/** Multijugador con dos personas: el anfitrión pide bots y estos toman solo los roles libres. */
+async function pruebaRelleno() {
+  console.log('\nMultijugador con bots en los roles vacíos')
+  const H = (await llamar('registro', { usuario: `e2e_host_${sufijo}`, clave })).d.token
+  const G = (await llamar('registro', { usuario: `e2e_invi_${sufijo}`, clave })).d.token
+  let s = (await llamar('crear', { modo: 'comandante' }, H)).d.sala
+  const cod = s.codigo
+  await llamar('unirse', { codigo: cod }, G)
+  const op = async (o, datos, tok = H) => {
+    const x = await llamar(o, { codigo: cod, v: s.version, ...datos }, tok)
+    if (x.d.sala) s = x.d.sala
+    return x
+  }
+  const mirar = async () => {
+    await llamar('estado', { codigo: cod, v: 0, h: '' }, G)
+    const x = await llamar('estado', { codigo: cod, v: 0, h: '' }, H)
+    if (x.d.sala) s = x.d.sala
+  }
+  comprobar((await op('rellenarBots', { valor: true }, G)).status !== 200, 'solo el anfitrión activa los bots')
+  comprobar((await op('rellenarBots', { valor: true })).status === 200 && s.rellenarBots === true, 'el anfitrión activa los bots para los roles vacíos')
+  comprobar((await op('iniciar', {})).status === 200 && s.fase === 'contexto', 'empieza la misión')
+  const bots = () => s.jugadores.filter((j) => j.bot)
+  comprobar(bots().length === 4, `cuatro bots para completar seis: ${bots().map((b) => b.nombre).join(', ')}`)
+  for (let i = 0; i < 6; i++) {
+    await esperar(1000)
+    await mirar()
+  }
+  comprobar(bots().every((j) => !j.rol), 'los bots esperan a que todas las personas elijan')
+  await op('rol', { rol: 'cientifico' })
+  await op('rol', { rol: 'medico' }, G)
+  for (let i = 0; i < 45 && bots().some((j) => !j.rol); i++) {
+    await esperar(1000)
+    await mirar()
+  }
+  const roles = s.jugadores.map((j) => j.rol)
+  comprobar(new Set(roles).size === 6 && roles.every(Boolean), `seis roles distintos: ${roles.join(', ')}`)
+  comprobar(bots().every((j) => j.rol !== 'cientifico' && j.rol !== 'medico'), 'los bots solo tomaron roles libres')
+  await llamar('salir', { codigo: cod }, G)
+  await llamar('salir', { codigo: cod }, H)
 }

@@ -260,7 +260,8 @@ function alTerminar(room: RoomState, p: Procedimiento, j: Player) {
   }
   if (p.tarea) completarTarea(room, j, p.tarea)
   const media = e.calidad.length ? e.calidad.reduce((a, b) => a + b, 0) / e.calidad.length : 1
-  if (p.tarea || p.id === 'huerto') log(room, `${p.titulo}: done at ${pct(media)} of how an expert would do it.`, media < 0.8 ? 'alerta' : 'ok')
+  const expertos = e.calidad.filter((q) => q >= 0.8).length
+  if (p.tarea || p.id === 'huerto') log(room, `${p.titulo}: done. ${expertos} of ${p.pasos.length} steps done like an expert.`, media < 0.8 ? 'alerta' : 'ok')
   e.terminado = true
   // Los que se repiten vuelven a empezar de cero la próxima vez.
   if (p.recurrente) delete room.procedimientos![p.id]

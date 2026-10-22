@@ -18,6 +18,7 @@ import {
 import { procPorId } from '../../shared/procedimientos.js'
 import { hacia, hayEmergencia, limitar, log, rendimiento, sis, tripulacion } from '../base.js'
 import { DOLENCIAS, UMBRAL_AVERIA, despacharCola, lanzarEmergencia } from '../emergencies.js'
+import { desgasteDeber, dosisDeber, pasoDeberes, riesgoMedicoDeber } from '../deberes.js'
 import { ahora, azar, movidos } from '../reloj.js'
 import { actualizarAmbiente, enSuperficie, eventosSolaresPendientes, fraccionSolar, registroDelSol, sorteoTormentaPolvo, tasaDeDosis } from './ambiente.js'
 import { pasoTripulante } from './fisiologia.js'
@@ -51,7 +52,8 @@ const TRABAJO_MS = 60_000
 function trabajando(room: RoomState): boolean {
   for (const [id, e] of Object.entries(room.procedimientos ?? {})) {
     if (e.terminado || e.paso <= 0 || ahora() - (e.datos?.ultimo ?? -Infinity) > TRABAJO_MS) continue
-    if (procPorId(id)?.aDemanda) return true
+    // Los deberes de rutina no frenan el reloj: son cortos y vuelven cada pocos minutos.
+    if (procPorId(id)?.aDemanda && !id.startsWith('deber:')) return true
   }
   return false
 }
@@ -284,7 +286,7 @@ function soporteVital(room: RoomState, dt: number, crew: Player[], superficie: b
       racionComida: racion,
       ejercicio: room.ajustes.ejercicio,
       // El reactor, si quedó cerca del hábitat, suma su radiación a la del ambiente.
-      dosisTasa: tasaDeDosis(room, j.zona, j.enRefugio) + (superficie ? (room.efectos?.reactorDosis ?? 0) : 0),
+      dosisTasa: tasaDeDosis(room, j.zona, j.enRefugio) * dosisDeber(room) + (superficie ? (room.efectos?.reactorDosis ?? 0) : 0),
       alerta,
     })
     o2 += cons.o2
@@ -385,7 +387,7 @@ function desgaste(room: RoomState, dt: number, superficie: boolean) {
   const dias = dt / 86400
   for (const s of room.sistemas) {
     if (!s.instalado || !s.operativo) continue
-    let tasa = DESGASTE[s.id] * escenarioDe(room.escenario).mod.desgaste
+    let tasa = DESGASTE[s.id] * escenarioDe(room.escenario).mod.desgaste * desgasteDeber(room, s.id)
     if (superficie && room.ambiente.tormentaPolvo && (s.id === 'energia' || s.id === 'isru')) tasa *= 3
     s.integridad = Math.max(0, s.integridad - tasa * dias)
     // Además del desgaste, una avería al azar cada unos 670 días por equipo (valor del juego).
@@ -452,9 +454,11 @@ function sucesos(room: RoomState, dt: number, crew: Player[], superficie: boolea
       log(room, `${j.nombre} recovered from ${j.dolencia}.`, 'ok')
       j.dolencia = null
     }
-    const riesgo = 0.0016 * (j.vit.fatiga > 70 ? 2 : 1) * dias
+    const riesgo = 0.0016 * (j.vit.fatiga > 70 ? 2 : 1) * riesgoMedicoDeber(room) * dias
     if (!j.dolencia && j.incapacitado <= 0 && azar(room) < riesgo) {
       const dolencia = DOLENCIAS[Math.floor(azar(room) * DOLENCIAS.length)]
+      // Sin controles médicos, el problema pasa días sin notarse y empieza peor.
+      if (riesgoMedicoDeber(room) > 1) j.vit.salud = limitar(j.vit.salud - 5, 0, 100)
       lanzarEmergencia(room, 'medico', { jugadorId: j.id, nombre: j.nombre, dolencia })
     }
   }
@@ -728,6 +732,7 @@ export function pasoSimulacion(room: RoomState) {
   const crew = tripulacion(room)
   calcularAutonomia(room, crew)
   room.puntosCriticos = puntosCriticos(room, crew)
+  pasoDeberes(room)
   despacharCola(room)
   redondear(room)
   room.escala = escalaEfectiva(room)

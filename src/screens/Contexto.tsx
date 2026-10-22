@@ -454,7 +454,9 @@ export function ContextoScreen() {
       <div className="card wide stack contexto">
         <div className="row">
           <div className="grow">
-            <div className="brand">Mission Briefing · room {sala.codigo}</div>
+            <div className="brand">
+              Mission Briefing{sala.nombreMision ? ` · ${sala.nombreMision}` : ''} <span className="mono muted codigo-sala">room {sala.codigo}</span>
+            </div>
             <h1>{PASOS_CONTEXTO[actual].titulo}</h1>
           </div>
           <button className="small" onClick={() => api.salir()}>Leave</button>

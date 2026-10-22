@@ -12,7 +12,7 @@ import { useStore } from '../store'
 import { sonido } from '../sonido'
 import { voz } from '../voz'
 import { useState } from 'react'
-import { Astronauta, type Accion, type Pose } from './Astronauta'
+import { Astronauta, avanzarPaso, type Accion, type Pose } from './Astronauta'
 import { Descenso, Lanzamiento } from './Cinematicas'
 import { controlesDeCamara, entrarEnZona, local, palanca, tecla, useTeclado } from './control'
 import { Exterior } from './Exterior'
@@ -181,7 +181,7 @@ function Jugador({ sala, yo }: { sala: RoomState; yo: Player }) {
       local.z = z
       local.giro = Math.atan2(dx, dz)
       local.vel = v
-      local.paso += dt * v * (gravedad === 'marte' ? 2.1 : 2.6)
+      local.paso = avanzarPaso(local.paso, v, dt, local.zona === 'nave' ? gravedad : 'marte')
       local.y += (0 - local.y) * Math.min(1, dt * 8)
     } else {
       local.vel = 0
@@ -209,6 +209,7 @@ function Jugador({ sala, yo }: { sala: RoomState; yo: Player }) {
     p.y = local.y
     p.giro = local.giro
     p.andando += ((local.vel > 0.2 ? 1 : 0) - p.andando) * Math.min(1, dt * 10)
+    p.velocidad = (p.velocidad ?? 0) + (local.vel - (p.velocidad ?? 0)) * Math.min(1, dt * 6)
     p.paso = local.paso
     p.accion = actividad?.accion ?? (local.trabajando ? 'consola' : sinGravedad ? 'flotar' : 'pie')
 
@@ -334,11 +335,15 @@ function Companero({ sala, j, indice }: { sala: RoomState; j: Player; indice: nu
     actual.z += dz
     actual.y = (actual.y ?? 0) + (ty - (actual.y ?? 0)) * k
     actual.accion = accion
-    const rapidez = Math.hypot(dx, dz) / Math.max(dt, 0.001)
-    actual.andando += ((rapidez > 0.35 ? 1 : 0) - actual.andando) * Math.min(1, dt * 8)
-    actual.paso += dt * Math.min(5, rapidez) * 2.6
-    if (rapidez > 0.35 && !actividad) actual.giro = Math.atan2(dx, dz)
-    else actual.giro = giro
+    // Se anima igual que el propio jugador, a partir de su rapidez (suavizada, porque las
+    // posiciones llegan a saltos con cada consulta al servidor).
+    const rapidez = dt > 0 ? Math.min(6, Math.hypot(dx, dz) / dt) : 0
+    const v = (actual.velocidad ?? 0) + (rapidez - (actual.velocidad ?? 0)) * Math.min(1, dt * 5)
+    actual.velocidad = accion === 'pie' ? v : 0
+    actual.andando += ((v > 0.35 && accion === 'pie' ? 1 : 0) - actual.andando) * Math.min(1, dt * 8)
+    actual.paso = sinGravedad ? actual.paso + dt : avanzarPaso(actual.paso, v, dt, x.zona === 'nave' ? gravedadDe(s) : 'marte')
+    if (v > 0.35 && !actividad && Math.hypot(dx, dz) > 1e-4) actual.giro = Math.atan2(dx, dz)
+    else if (v <= 0.35) actual.giro = giro
     return actual
   }
   useFrame((_, dt) => {

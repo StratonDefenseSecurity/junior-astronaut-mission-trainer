@@ -16,6 +16,7 @@ import {
 } from '../shared/procedimientos.js'
 import { SISTEMA_BY_ID, type Player, type RoomState, type SistemaId } from '../shared/types.js'
 import { jugador, limitar, log, sis } from './base.js'
+import { alTerminarDeber, fugaTrajeDeber, prepararDeber } from './deberes.js'
 import { lanzarEmergencia } from './emergencies.js'
 import { cambiarZona } from './game.js'
 import { ahora, azar } from './reloj.js'
@@ -92,10 +93,11 @@ export function prepararTrabajo(room: RoomState, p: Procedimiento, i: number) {
   const d = (e.datos ??= {})
   const v = e.valores ?? []
   const prob = (x: number) => (d.reintento ? 0 : limitar(x, 0, 0.9))
+  if (familia(p) === 'deber') return prepararDeber(room, p, i)
   switch (`${familia(p)}:${p.pasos[i]?.id}`) {
     case 'salida:fugas':
       // Un traje mal puesto tiene más posibilidades de perder aire (modelo del juego).
-      d.fuga = azar(room) < prob(0.12 + 0.15 * errores(v[0])) ? 1 : 0
+      d.fuga = azar(room) < prob(0.12 + 0.15 * errores(v[0]) + fugaTrajeDeber(room)) ? 1 : 0
       break
     case 'reparar:prueba':
       d.fallo = azar(room) < prob(0.12 + 0.12 * (errores(v[1]) + errores(v[3]))) ? 1 : 0
@@ -206,6 +208,9 @@ export function alTerminarTrabajo(room: RoomState, p: Procedimiento, j: Player) 
   const d = e.datos ?? {}
   const objetivo = String(p.objetivo ?? '')
   switch (familia(p)) {
+    case 'deber':
+      alTerminarDeber(room, p, j)
+      break
     case 'salida': {
       if (v[2] === 'cuatro') j.vit.fatiga = limitar(j.vit.fatiga + 10, 0, 100)
       if ((d.fuga ?? 0) > 0 && q[1] === 0) {

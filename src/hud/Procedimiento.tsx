@@ -30,6 +30,21 @@ import { Barra } from './comun'
 interface Aviso { tipo: 'ok' | 'warn' | 'bad'; texto: string }
 type Enviar = (valor: unknown) => Promise<void>
 
+/** Calidad a partir de la cual un paso cuenta como hecho "como un experto". */
+const EXPERTO = 0.8
+
+/** Respuesta inmediata tras un paso: "Correct" o "Not ideal", y por qué. */
+function retroPaso(sala: RoomState, def: Paso, calidad: number, mensaje: string): Aviso {
+  const bien = calidad >= EXPERTO
+  const detalle = mensaje === 'Done.' || mensaje === 'It is marked as good.' ? '' : mensaje
+  let porque = bien ? detalle || def.porque : detalle
+  // Una comprobación mal leída: se explica qué mostraba el instrumento.
+  if (!bien && def.tipo === 'comprobar') porque = def.lectura(sala).explicacion
+  // En los pasos de hacer (no de elegir), el dato se completa con la razón del método.
+  else if (!bien && def.tipo !== 'elegir') porque = `${detalle} ${def.porque}`.trim()
+  return { tipo: bien ? 'ok' : calidad >= 0.5 ? 'warn' : 'bad', texto: `${bien ? 'Correct' : 'Not ideal'}. ${porque}`.trim() }
+}
+
 const nombreDe = (sala: RoomState, id: string) => sala.jugadores.find((j) => j.id === id)?.nombre ?? (id ? 'someone' : 'not needed')
 
 // ---------- Mantener pulsado ----------
@@ -312,10 +327,18 @@ function Tarjeta({ sala, yo, proc, paso, remoto, alTerminar }: { sala: RoomState
     if (!r) setAviso({ tipo: 'bad', texto: 'No connection to the server.' })
     else if (r.error) setAviso({ tipo: 'bad', texto: r.error })
     else {
-      const a: Aviso = { tipo: ev.calidad >= 0.8 ? 'ok' : ev.calidad >= 0.5 ? 'warn' : 'bad', texto: ev.mensaje }
+      const a = retroPaso(sala, def, ev.calidad, ev.mensaje)
       setAviso(a)
       // Una comprobación que falla manda atrás a repetir pasos: no termina el procedimiento.
-      if (paso === proc.pasos.length - 1 && ev.valor !== 'falla') alTerminar({ ...a, texto: `${proc.titulo}: done. ${ev.mensaje}` })
+      if (paso === proc.pasos.length - 1 && ev.valor !== 'falla') {
+        const notas = [...(e?.calidad ?? []).slice(0, paso), ev.calidad]
+        const bien = notas.filter((q) => q >= EXPERTO).length
+        const total = proc.pasos.length
+        alTerminar({
+          tipo: bien === total ? 'ok' : bien >= total / 2 ? 'warn' : 'bad',
+          texto: `${proc.titulo}: done. ${bien} of ${total} steps done like an expert. ${a.texto}`,
+        })
+      }
       // Al cruzar la esclusa cambia la escena: se abre la estación del paso siguiente, o se cierra.
       if (def.cambiaZona) {
         const siguiente = proc.pasos[paso + 1]
