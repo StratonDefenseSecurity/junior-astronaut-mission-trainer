@@ -4,6 +4,7 @@
 import { C } from '../shared/ciencia.js'
 import { SISTEMA_BY_ID, nombreSistema, type Emergency, type EmergencyAlternative, type Nota, type Role, type RoomState, type SistemaId } from '../shared/types.js'
 import { hayEmergencia, jugador, limitar, log, rid, sis, tripulacion } from './base.js'
+import { factorPlazo } from './aprendizaje.js'
 import { ahora, azar } from './reloj.js'
 import { enSuperficie } from './sim/ambiente.js'
 
@@ -484,7 +485,7 @@ function crear(room: RoomState, tipo: string, datos: Datos) {
     alternativas: def.alternativas(room, datos),
     datos,
     creada: ahora(),
-    vence: ahora() + (def.segundos ?? 75) * 1000,
+    vence: ahora() + Math.round((def.segundos ?? 75) * 1000 * factorPlazo(room)),
     estado: 'activa',
     elegida: null,
     resultado: null,

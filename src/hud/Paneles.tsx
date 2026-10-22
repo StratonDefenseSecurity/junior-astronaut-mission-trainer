@@ -10,6 +10,7 @@ import { puede } from '../mundo/mapa'
 import { api } from '../red'
 import { useStore, useYo } from '../store'
 import { sonido, useSonido } from '../sonido'
+import { BotonAccesibilidad } from './Accesibilidad'
 import { ChipConexion } from './Conexion'
 import { BotonesVoz, IndicadorVoz } from './Voz'
 import { Barra, Dato, MarcaIA, RolTag, enMarte, energiaUsada, escalaTexto, mmHg, nivel, pctTraje, relojMision, tiempoEnEspacio } from './comun'
@@ -83,6 +84,15 @@ export function BarraSuperior({ sala }: { sala: RoomState }) {
               {sala.pausa ? 'Resume' : 'Pause'}
             </button>
           )}
+          {!fija && mando && (
+            <button
+              className="chip"
+              title="End the mission now and see the debrief"
+              onClick={() => window.confirm('End the mission now? You will see the debrief with what the crew achieved.') && api.accion('terminar')}
+            >
+              End mission
+            </button>
+          )}
         </div>
         <div className="mini" style={{ color: frenada ? 'var(--warn)' : 'var(--muted)' }}>
           {frenada ? `Running at ×${sala.escala}: there is an alert or someone is outside` : escalaTexto(sala.escala)}
@@ -132,6 +142,7 @@ export function BarraSuperior({ sala }: { sala: RoomState }) {
         <div className="row" style={{ gap: 4, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
           <BotonesAudio sala={sala} />
           <button className="chip" onClick={alternar} title="Key H">Panels</button>
+          <BotonAccesibilidad chip />
           <button className="chip" onClick={() => setFuentes(true)}>Sources</button>
           <button className="chip" onClick={() => api.salir()}>Leave</button>
         </div>

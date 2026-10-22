@@ -10,6 +10,7 @@ import { ASCENSO, altitudAscenso, distanciaAscenso, RUMBO_ASCENSO } from '@share
 import { calorEDL, EDL, estadoEDL, trayectoriaEDL } from '@shared/edl'
 import { escenarioDe, fechaDeMision } from '@shared/escenarios'
 import { DESCENSO_S, type RoomState } from '@shared/types'
+import { factorMovimiento } from '../accesibilidad'
 import { Cielo } from './cielo/Cielo'
 import { orientacionSuperficie, vectorHelio } from './cielo/astro'
 import { SITIOS_MARTE } from './cieloMarte'
@@ -220,7 +221,7 @@ export function Lanzamiento({ sala }: { sala: RoomState }) {
     cielo.current.copy(noche).lerp(azul, dia).lerp(negro, Math.min(1, alt / 70))
     scene.background = cielo.current
 
-    const temblor = t > -6.4 && t < ASCENSO.meco ? (Math.random() - 0.5) * 0.1 * Math.min(1, sala.vuelo.g / 2.5) : 0
+    const temblor = t > -6.4 && t < ASCENSO.meco ? (Math.random() - 0.5) * 0.1 * Math.min(1, sala.vuelo.g / 2.5) * factorMovimiento() : 0
     const centro = tmpV.set(0, 40 * U, 0).applyQuaternion(qCohete)
     if (co) centro.add(co.position)
     if (t < 0) {
@@ -515,7 +516,7 @@ export function Descenso({ sala }: { sala: RoomState }) {
     scene.background = cielo.current
     // Cámara: cerca de la cápsula al entrar, lejos para ver el paracaídas entero, y abajo junto
     // al rover en la grúa celeste. Pasa de un encuadre a otro con suavidad.
-    const temblor = (Math.random() - 0.5) * 0.25 * Math.min(1, sala.vuelo.g / 3)
+    const temblor = (Math.random() - 0.5) * 0.25 * Math.min(1, sala.vuelo.g / 3) * factorMovimiento()
     const giro = reloj * 0.1
     const conParacaidas = x >= EDL.paracaidas && x < EDL.cubierta + 3
     const final = x >= EDL.gruaCeleste - 4

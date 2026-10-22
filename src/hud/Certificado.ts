@@ -2,6 +2,7 @@
 // misión, la situación, las fechas reales y lo que lograron.
 import { C } from '@shared/ciencia'
 import { escenarioDe, fechaDeMision, fechaLarga } from '@shared/escenarios'
+import { DIFICULTAD_BY_ID } from '@shared/informe'
 import { ROLE_BY_ID, SITE_BY_ID, TRANSITO_INICIO_S, type RoomState } from '@shared/types'
 
 export function descargarCertificado(sala: RoomState) {
@@ -49,6 +50,11 @@ export function descargarCertificado(sala: RoomState) {
   texto('MISSION CERTIFICATE', W / 2, 175, 54, '#ffffff', '700', 'center')
   texto(sala.nombreMision || `Mission ${sala.codigo}`, W / 2, 250, 64, '#f5b942', '700', 'center')
   texto(`${esc.nombre} · ${sala.resultado?.titulo ?? ''}`, W / 2, 305, 30, victoria ? '#5fd08a' : '#ff8a80', '600', 'center')
+  const inf = sala.informe
+  if (inf) {
+    const dif = DIFICULTAD_BY_ID[sala.dificultad ?? 'astronauta']?.nombre ?? 'Astronaut'
+    texto(`MISSION SCORE ${inf.puntos}/100 · ${dif}${sala.demo ? ' · Quick demo' : ''}`, W / 2, 352, 30, '#4fc3f7', '700', 'center')
+  }
 
   const despegue = fechaDeMision(esc, 0)
   const llegada = sala.tAterrizaje > 0 ? fechaDeMision(esc, sala.tAterrizaje) : null
@@ -58,7 +64,8 @@ export function descargarCertificado(sala: RoomState) {
     `${Math.round(Math.max(0, (sala.tAterrizaje || sala.t) - TRANSITO_INICIO_S) / 86400)} days in space · ${Math.max(0, sala.ambiente.sol - 1)} sols on Mars`,
     `${sala.mision.muestrasAnalizadas} of ${sala.mision.muestrasObjetivo} samples analyzed${sala.mision.aguaObjetivo ? ` · ${Math.round(sala.mision.aguaExtraida)} kg of water taken from the ice` : ''}`,
   ]
-  lineas.forEach((l, i) => texto(l, 120, 400 + i * 44, 28))
+  if (inf) lineas.push(`${inf.objetivos.filter((o) => o.logrado).length} of ${inf.objetivos.length} learning objectives achieved`)
+  lineas.forEach((l, i) => texto(l, 120, 400 + i * 40, 26))
 
   texto('CREW', 120, 610, 22, '#4fc3f7', '600')
   sala.jugadores

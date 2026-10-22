@@ -1,0 +1,30 @@
+/* Dificultad, tutorial e informe final. */
+.dificultad { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 6px; }
+.demo-opcion { display: flex; gap: 8px; align-items: flex-start; }
+.informe-puntos { display: flex; align-items: center; gap: 14px; margin: 8px 0; }
+.informe-puntos .nota-total { font-family: var(--mono); font-size: 44px; font-weight: 700; color: var(--accent); line-height: 1; }
+.informe-partes { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 6px; }
+.informe-parte { border: 1px solid var(--border); border-radius: 10px; padding: 7px 9px; }
+.informe-parte .barra { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.08); margin: 4px 0; overflow: hidden; }
+.informe-parte .barra > span { display: block; height: 100%; background: var(--accent); }
+.informe-linea { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.informe-linea li { border-left: 3px solid var(--border); padding: 2px 0 2px 9px; }
+.informe-linea li.buena { border-color: var(--ok); }
+.informe-linea li.aceptable { border-color: var(--warn); }
+.informe-linea li.riesgosa { border-color: var(--bad); }
+.informe-personas { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px; }
+.informe-persona { border: 1px solid var(--border); border-radius: 10px; padding: 7px 9px; }
+.informe-objetivos { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.informe-objetivos .si { color: var(--ok); font-weight: 700; }
+.informe-objetivos .no { color: var(--muted); font-weight: 700; }
+.tutorial { position: fixed; z-index: 45; width: min(92vw, 380px); background: var(--panel-solid); border: 1px solid var(--accent); border-radius: 14px; padding: 14px 16px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5); }
+.tutorial.centro { left: 50%; top: 50%; transform: translate(-50%, -50%); }
+.tutorial.izq { left: 16px; bottom: 120px; }
+.tutorial.der { right: 16px; top: 120px; }
+.tutorial.arriba { left: 50%; top: 110px; transform: translateX(-50%); }
+.tutorial.abajo { left: 50%; bottom: 140px; transform: translateX(-50%); }
+.tutorial h3 { margin: 2px 0 6px; }
+.tutorial .puntos-tutorial { display: flex; gap: 4px; }
+.tutorial .puntos-tutorial span { width: 7px; height: 7px; border-radius: 50%; background: var(--border); }
+.tutorial .puntos-tutorial span.activo { background: var(--accent); }
+.boton-ayuda { position: fixed; z-index: 30; right: 16px; bottom: 16px; width: 34px; height: 34px; border-radius: 50%; font-weight: 700; padding: 0; }

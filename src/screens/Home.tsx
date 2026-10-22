@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import { api } from '../red'
 import { useStore } from '../store'
+import { BotonAccesibilidad } from '../hud/Accesibilidad'
+import { TablaRanking } from '../hud/Ranking'
+import { useObservador } from './Observador'
 
 export function HomeScreen() {
   const usuario = useStore((s) => s.usuario)
@@ -53,9 +56,16 @@ export function HomeScreen() {
           />
           <button disabled={codigo.length !== 6} onClick={() => api.unirse(codigo)}>Join</button>
         </div>
+        <div className="row" style={{ flexWrap: 'wrap' }}>
+          <button className="small" disabled={codigo.length !== 6} onClick={() => useObservador.getState().abrir(codigo)}>Teacher view: watch a room</button>
+          <small className="muted grow">Type the code, then watch the crew without joining it.</small>
+        </div>
+
+        <TablaRanking />
 
         <div className="row" style={{ marginTop: 12 }}>
           <button className="small plano" onClick={() => setFuentes(true)}>Where the data comes from</button>
+          <BotonAccesibilidad />
           <div className="grow" />
           <button className="small plano" onClick={() => setAuth(null, null)}>Log out</button>
         </div>

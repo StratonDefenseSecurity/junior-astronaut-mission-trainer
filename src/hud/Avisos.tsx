@@ -10,6 +10,7 @@ import { api } from '../red'
 import { useStore } from '../store'
 import { RolTag, useAhora } from './comun'
 import { descargarCertificado } from './Certificado'
+import { Informe } from './Informe'
 
 /**
  * Mensajes del centro de control y de casa. Aparecen un momento sobre el juego, como una
@@ -198,7 +199,7 @@ export function Resultado({ sala }: { sala: RoomState }) {
   const resueltas = sala.emergencias.filter((e) => e.estado !== 'activa')
   return (
     <div className="velo">
-      <div className={`modal ${sala.resultado.victoria ? 'ok' : 'bad'}`}>
+      <div className={`modal ancho ${sala.resultado.victoria ? 'ok' : 'bad'}`}>
         <div className="brand">{sala.resultado.titulo}</div>
         <h1>{sala.nombreMision ? `${sala.nombreMision}: ` : ''}{sala.resultado.victoria ? 'base established on Mars' : 'the mission is over'}</h1>
         <p>{sala.resultado.motivo}</p>
@@ -220,7 +221,8 @@ export function Resultado({ sala }: { sala: RoomState }) {
         <p className="mini muted">
           {dias} mission days · {sala.tAterrizaje > 0 ? `${Math.max(0, sala.ambiente.sol - 1)} sols on Mars` : 'did not reach the surface'} · {sala.mision.muestrasAnalizadas} of {sala.mision.muestrasObjetivo} samples · garden {sala.huerto.establecido ? 'established' : 'not established'}. Career radiation limit: {C.LIMITE_CARRERA_MSV} mSv.
         </p>
-        {resueltas.length > 0 && (
+        <Informe sala={sala} />
+        {!sala.informe && resueltas.length > 0 && (
           <>
             <h3>Latest decisions</h3>
             <div className="log">

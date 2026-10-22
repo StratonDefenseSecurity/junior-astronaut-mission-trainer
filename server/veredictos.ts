@@ -3,6 +3,7 @@
 import { NOTA_TEXTO, veAlerta } from '../shared/avisos.js'
 import { SISTEMA_BY_ID, type Emergency, type Nota, type Proposal, type RoomState, type SistemaId, type Veredicto } from '../shared/types.js'
 import { log } from './base.js'
+import { anotarDecision } from './aprendizaje.js'
 import { ahora } from './reloj.js'
 
 function anotar(room: RoomState, titulo: string, nota: Nota, porque: string, decisores: string[]): Veredicto {
@@ -20,9 +21,8 @@ export function valorarEmergencia(room: RoomState, em: Emergency, decisores: str
   if (decisores === null) {
     const quienes = room.jugadores.filter((j) => j.conectado && veAlerta(room, j, em)).map((j) => j.id)
     em.veredicto = anotar(room, em.titulo, 'riesgosa', `Nobody decided in time, so "${alt.etiqueta}" was applied.`, quienes)
-    return
-  }
-  em.veredicto = anotar(room, em.titulo, alt.nota ?? 'aceptable', alt.porque ?? alt.consecuencia, decisores)
+  } else em.veredicto = anotar(room, em.titulo, alt.nota ?? 'aceptable', alt.porque ?? alt.consecuencia, decisores)
+  anotarDecision(room, em.tipo, em.titulo, em.veredicto.nota, em.veredicto.porque, em.veredicto.decisores)
 }
 
 const VITALES: SistemaId[] = ['cdra', 'oga', 'termico', 'energia']
@@ -44,4 +44,5 @@ export function valorarPropuesta(room: RoomState, prop: Proposal, aprobada: bool
   }
   if (!v) return
   prop.veredicto = anotar(room, prop.titulo, v[0], v[1], Object.keys(prop.votos))
+  anotarDecision(room, prop.tipo, prop.titulo, v[0], v[1], prop.veredicto.decisores)
 }

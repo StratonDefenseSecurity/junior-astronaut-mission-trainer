@@ -7,6 +7,7 @@
 // Física, fuentes y límites: README.md de esta carpeta.
 import { useSyncExternalStore } from 'react'
 import { motor } from './motor'
+import { subtitular } from '../accesibilidad'
 import type { BucleSonido, EstadoSonido, NombreEvento, OpcionesEvento, ParametrosAmbiente, TipoAmbiente } from './motor'
 
 export type { BucleSonido, EstadoSonido, NombreEvento, OpcionesEvento, ParametrosAmbiente, TipoAmbiente }
@@ -36,7 +37,10 @@ export const sonido = {
   /** Actualiza los parámetros vivos. Es barato: no crea nodos y aplica como mucho 20 veces por segundo. */
   parametros: (p: ParametrosAmbiente): void => motor.parametros(p),
   /** Sonido corto. 'alarma' y 'ejercicio' se repiten hasta detener(nombre). Sin activar, no suena. */
-  evento: (nombre: NombreEvento, opciones?: OpcionesEvento): void => motor.evento(nombre, opciones),
+  evento: (nombre: NombreEvento, opciones?: OpcionesEvento): void => {
+    subtitular(nombre) // subtítulo del sonido, si el jugador los activó (src/accesibilidad.ts)
+    motor.evento(nombre, opciones)
+  },
   /** Detiene 'alarma' o 'ejercicio'; sin nombre, los dos. */
   detener: (nombre?: NombreEvento): void => motor.detener(nombre),
   /** El AudioContext, o null si aún no se activó. */

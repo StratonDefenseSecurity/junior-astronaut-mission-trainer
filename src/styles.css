@@ -397,3 +397,70 @@ input.titulo-mision { width: min(100%, 460px); padding: 6px 10px; }
 .emergencia { max-height: calc(100vh - var(--alto-superior, 78px) - 150px); }
 .voto { max-height: calc(100vh - var(--alto-superior, 78px) - 150px); overflow: auto; }
 .izq { overflow-y: auto; }
+
+/* ---------- Vista del docente (src/screens/Observador.tsx) ---------- */
+.observador .card.wide { width: min(100%, 1180px); }
+.obs-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
+.obs-fila { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.obs-fila:last-child { border-bottom: 0; }
+.obs-fila.offline { opacity: 0.6; }
+.obs-recursos { display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; }
+.obs-lista { margin: 0; padding-left: 16px; display: flex; flex-direction: column; gap: 5px; }
+.obs-log { max-height: 280px; overflow: auto; }
+.observador .help + .help { margin-top: 6px; }
+
+/* ---------- Clasificación (src/hud/Ranking.tsx) ---------- */
+.tabla-ranking { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; max-height: 300px; overflow: auto; }
+.tabla-ranking .fila { display: flex; gap: 8px; align-items: flex-start; padding: 6px 8px; border-radius: 8px; background: rgba(255, 255, 255, 0.04); }
+.tabla-ranking .puesto { width: 22px; color: var(--accent); }
+.tabla-ranking small { display: block; font-size: 11px; }
+.tabla-ranking .derecha { text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+
+/* ---------- Accesibilidad (src/accesibilidad.ts) ---------- */
+.a11y-opciones { gap: 8px; margin-top: 10px; }
+.a11y-opcion { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; cursor: pointer; }
+.a11y-opcion input { width: 20px; height: 20px; margin: 2px 0 0; flex: none; }
+.a11y-opcion strong { display: block; font-size: 14px; }
+.a11y-opcion small { display: block; color: var(--muted); font-size: 12.5px; }
+.subtitulos { position: fixed; left: 50%; bottom: 140px; transform: translateX(-50%); z-index: 50; pointer-events: none; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.subtitulos > div { background: rgba(0, 0, 0, 0.88); color: #fff; padding: 5px 12px; border-radius: 8px; font-size: 15px; font-weight: 600; border: 1px solid rgba(255, 255, 255, 0.4); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Texto más grande: escala los paneles sin tocar el mundo 3D. */
+html.a11y-texto body { font-size: 16px; }
+html.a11y-texto .card, html.a11y-texto .modal, html.a11y-texto .panel, html.a11y-texto .estacion,
+html.a11y-texto .toast, html.a11y-texto .transmision, html.a11y-texto .hud > :first-child { zoom: 1.18; }
+html.a11y-texto .hud { grid-template-columns: 340px 1fr 270px; }
+html.a11y-texto .abajo .panel { max-height: 150px; }
+html.a11y-texto .subtitulos > div { font-size: 18px; }
+
+/* Alto contraste apto para daltónicos: azul, amarillo y naranja (Okabe e Ito) en lugar de verde
+   y rojo, y un símbolo además del color en los estados. */
+html.a11y-contraste {
+  --ok: #5ab4ff;
+  --warn: #ffe14d;
+  --bad: #ff8a3d;
+  --text: #ffffff;
+  --muted: #c9d2e3;
+  --border: rgba(200, 220, 255, 0.55);
+  --panel: rgba(4, 6, 12, 0.95);
+  --panel-solid: #04060c;
+}
+html.a11y-contraste .panel, html.a11y-contraste .card, html.a11y-contraste .modal { backdrop-filter: none; }
+html.a11y-contraste button { border-width: 2px; }
+html.a11y-contraste button.ok { border-color: var(--ok); background: rgba(90, 180, 255, 0.18); }
+html.a11y-contraste button.danger { border-color: var(--bad); background: rgba(255, 138, 61, 0.18); }
+html.a11y-contraste .help { background: rgba(255, 225, 77, 0.12); border-color: var(--warn); }
+html.a11y-contraste .help.ok { background: rgba(90, 180, 255, 0.14); border-color: var(--ok); }
+html.a11y-contraste .tag.ok::before, html.a11y-contraste b.ok::before, html.a11y-contraste .log > .ok::before { content: '\2713\00a0'; }
+html.a11y-contraste .tag.warn::before, html.a11y-contraste b.warn::before { content: '!\00a0'; }
+html.a11y-contraste .tag.bad::before, html.a11y-contraste b.bad::before, html.a11y-contraste .log > .alerta::before { content: '\2715\00a0'; }
+html.a11y-contraste .critical .tag::before { content: '!\00a0'; }
+
+/* Movimiento reducido: sin animaciones ni transiciones en la interfaz. */
+html.a11y-calma *, html.a11y-calma *::before, html.a11y-calma *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}

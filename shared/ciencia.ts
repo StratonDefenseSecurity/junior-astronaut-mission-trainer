@@ -684,4 +684,7 @@ export const SUPUESTOS: string[] = [
   'How much dust each tool and brushing direction removes, and how much light a scratched panel loses for good (2% to 5%), are game values.',
   'The rocks at each sample site, their science value, the 50% chance that a cracked rock crumbles, the mineral and gas readings in the lab, the 3% detection limit and the rule that a sample counts if it keeps at least 60% of its value are game models.',
   'The findings, diagnoses and treatments in the Medical Bay are simplified, based on common problems of spaceflight. They are for learning, not for medical use.',
+  'The Quick demo mission compresses only time: it uses the real 150-day fast trajectory, a 3-sol surface stay with 2 samples, and starts each phase at the highest time scale allowed. Every rate, dose, supply and constant stays the same as in a full mission.',
+  'The difficulty levels change only game values: Cadet halves the chance of a random breakdown, gives 50% more time to decide in an emergency, sends hints and repeats shortage alerts twice as often. Commander has 60% more random breakdowns, 30% less time to decide and repeats shortage alerts half as often.',
+  'The mission score, its six parts and their weights are game design values for learning. They are not a NASA rating. The learning objectives are checked against what happened in your mission.',
 ]

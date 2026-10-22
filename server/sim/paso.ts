@@ -22,6 +22,7 @@ import { desgasteDeber, dosisDeber, pasoDeberes, riesgoMedicoDeber } from '../de
 import { ahora, azar, movidos } from '../reloj.js'
 import { actualizarAmbiente, enSuperficie, eventosSolaresPendientes, fraccionSolar, registroDelSol, sorteoTormentaPolvo, tasaDeDosis } from './ambiente.js'
 import { pasoTripulante } from './fisiologia.js'
+import { calcularInforme, factorAverias, factorEscasez, pasoAprendizaje } from '../aprendizaje.js'
 import { pasoHuerto } from './huerto.js'
 import { gActual, telemetriaAscenso, telemetriaCrucero, telemetriaDescenso } from './vuelo.js'
 
@@ -80,6 +81,7 @@ export function terminar(room: RoomState, victoria: boolean, titulo: string, mot
   room.resultado = { victoria, titulo, motivo }
   room.fase = 'fin'
   room.registro.push({ t: Math.round(room.t), fase: 'fin', texto: motivo, tipo: victoria ? 'ok' : 'alerta' })
+  calcularInforme(room)
 }
 
 // ---------- Cambios de fase ----------
@@ -391,7 +393,7 @@ function desgaste(room: RoomState, dt: number, superficie: boolean) {
     if (superficie && room.ambiente.tormentaPolvo && (s.id === 'energia' || s.id === 'isru')) tasa *= 3
     s.integridad = Math.max(0, s.integridad - tasa * dias)
     // Además del desgaste, una avería al azar cada unos 670 días por equipo (valor del juego).
-    const riesgo = (0.0015 + (s.integridad < 50 ? (50 - s.integridad) * 0.002 : 0)) * dias
+    const riesgo = (0.0015 + (s.integridad < 50 ? (50 - s.integridad) * 0.002 : 0)) * dias * factorAverias(room)
     if (s.integridad <= UMBRAL_AVERIA || azar(room) < riesgo) lanzarEmergencia(room, 'fallo', { sistema: s.id })
   }
 }
@@ -467,7 +469,7 @@ function sucesos(room: RoomState, dt: number, crew: Player[], superficie: boolea
   for (const recurso of ['agua', 'aire', 'comida'] as const) {
     const alcanza = room.autonomia[recurso]
     const clave = `escasez_${recurso}`
-    if (alcanza < necesarios * 0.9 && room.t - (room.avisos[clave] ?? -1e9) > 20 * 86400 && room.t > 3600) {
+    if (alcanza < necesarios * 0.9 && room.t - (room.avisos[clave] ?? -1e9) > 20 * 86400 * factorEscasez(room) && room.t > 3600) {
       room.avisos[clave] = room.t
       lanzarEmergencia(room, 'escasez', { recurso, dias: Math.round(alcanza), necesarios: Math.round(necesarios) })
     }
@@ -732,6 +734,7 @@ export function pasoSimulacion(room: RoomState) {
   const crew = tripulacion(room)
   calcularAutonomia(room, crew)
   room.puntosCriticos = puntosCriticos(room, crew)
+  pasoAprendizaje(room)
   pasoDeberes(room)
   despacharCola(room)
   redondear(room)

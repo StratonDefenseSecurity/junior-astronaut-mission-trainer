@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import { Emergencia, Interaccion, Resultado, Transmision, VotoRapido } from '../hud/Avisos'
 import { PanelEstacion } from '../hud/Estacion'
 import { Lateral } from '../hud/Lateral'
+import { Tutorial } from '../hud/Tutorial'
 import { BarraSuperior, MiEstado, PuntosCriticos, Registro, Telemetria, Tripulacion } from '../hud/Paneles'
 import { Mundo } from '../mundo/Mundo'
 import { useSonidoJuego } from '../mundo/Sonidos'
@@ -62,6 +63,7 @@ function JuegoConJugador({ sala, yo, ocultos, cinematica }: { sala: RoomState; y
       <VotoRapido sala={sala} yo={yo} />
       <Emergencia sala={sala} yo={yo} />
       <Resultado sala={sala} />
+      <Tutorial sala={sala} activo={!cinematica && !ocultos} />
     </div>
   )
 }

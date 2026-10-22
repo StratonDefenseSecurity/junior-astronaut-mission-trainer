@@ -14,6 +14,7 @@
 import { DurableObject } from 'cloudflare:workers'
 import { conAlmacen, type Almacen } from './almacen.js'
 import { codigoAleatorio, fijarSecreto, manejar, usuarioDeToken, type Respuesta } from './api.js'
+import { agregarRanking, fijarDestinoRanking, type EntradaRanking } from './ranking.js'
 
 interface Env {
   NODO: DurableObjectNamespace<Nodo>
@@ -82,6 +83,13 @@ export class Nodo extends DurableObject<Env> {
     super(ctx, env)
     this.almacen = almacenDurable(ctx.storage)
     fijarSecreto(env.AUTH_SECRET ?? '')
+    // Las misiones terminadas van a la clasificación global, que vive en su propio objeto.
+    fijarDestinoRanking((e) => env.NODO.get(env.NODO.idFromName('ranking')).agregarRanking(e))
+  }
+
+  /** Solo en el objeto "ranking": agrega una misión terminada. La llama la sala por RPC. */
+  agregarRanking(e: EntradaRanking): Promise<void> {
+    return conAlmacen(this.almacen, () => agregarRanking(e))
   }
 
   /** Una operación del juego. La llama el Worker por RPC. */
@@ -196,7 +204,7 @@ export default {
           return error(503, 'Could not create the room. Try again.')
         }
         const codigo = String(cuerpo.codigo ?? '').trim().toUpperCase()
-        const destino = !DE_CUENTAS.has(op) && CODIGO.test(codigo) ? `sala:${codigo}` : 'cuentas'
+        const destino = op === 'ranking' ? 'ranking' : !DE_CUENTAS.has(op) && CODIGO.test(codigo) ? `sala:${codigo}` : 'cuentas'
         return responder(await nodo(env, destino).operar(cuerpo, autorizacion))
       } catch (e) {
         console.error('[worker]', e)

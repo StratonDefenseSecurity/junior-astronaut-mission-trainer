@@ -234,6 +234,7 @@ export const api = {
   elegirTraje: (traje: Partial<Traje>) => llamar('traje', { traje }),
   iniciar: () => llamar('iniciar'),
   rellenarBots: (valor: boolean) => llamar('rellenarBots', { valor }),
+  dificultad: (dificultad: string, demo: boolean) => llamar('dificultad', { dificultad, demo }),
   escenario: (escenario: string) => llamar('escenario', { escenario }),
   hogar: (hogar: string | null) => llamar('hogar', { hogar }),
   nombrarMision: (nombre: string) => llamar('nombre', { nombre }),
@@ -306,4 +307,22 @@ export async function httpAuth(ruta: 'registro' | 'ingresar' | 'invitado', usuar
   const d = (await r.json().catch(() => ({ error: 'Invalid response from the server.' }))) as Resultado
   if (!r.ok || !d.token || !d.usuario) throw new Error(d.error ?? 'Could not complete the request.')
   return { token: d.token, usuario: d.usuario }
+}
+
+/**
+ * Petición suelta que no toca la sala del jugador: la vista del docente (observar, mensaje y
+ * pausa de Mission Control) y la clasificación global.
+ */
+export async function pedirSuelto<T extends object>(op: string, datos: Record<string, unknown> = {}): Promise<Partial<T> & { error?: string }> {
+  const token = useStore.getState().token
+  try {
+    const r = await fetch('/api/juego', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify({ op, ...datos }),
+    })
+    return (await r.json().catch(() => ({ error: 'Invalid response from the server.' }))) as Partial<T> & { error?: string }
+  } catch {
+    return { error: 'No connection to the server.' } as Partial<T> & { error?: string }
+  }
 }

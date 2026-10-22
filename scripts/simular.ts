@@ -1,5 +1,5 @@
 // Simula una misión completa sin navegador, con una tripulación que juega "razonablemente".
-//   npx tsx scripts/simular.ts [tripulantes=6] [preset=equilibrado] [politica=buena|pasiva] [trayectoria] [perfil]
+//   npx tsx scripts/simular.ts [tripulantes=6] [preset=equilibrado] [politica=buena|pasiva] [trayectoria] [perfil] [situación] [dificultad] [demo]
 // Sirve para comprobar la lógica y el equilibrio del juego.
 import { C, REMS_RESUMEN } from '../shared/ciencia.js'
 import { CLIMA_MARTE } from '../server/datos/climaMarte.js'
@@ -26,13 +26,14 @@ import {
   votar,
 } from '../server/game.js'
 import { responderBot } from '../server/bot.js'
+import { fijarDificultad } from '../server/aprendizaje.js'
 import { pasoProcedimiento, procedimientosPendientes, valorExperto } from '../server/procedimientos.js'
 import { escenarioDe } from '../shared/escenarios.js'
 
 const N = Math.min(6, Math.max(2, Number(process.argv[2] ?? 6)))
 const PRESET = process.argv[3] ?? 'equilibrado'
 const POLITICA = process.argv[4] ?? 'buena'
-const TRAYECTORIA = process.argv[5] ?? 'estandar'
+const TRAYECTORIA = process.argv[5] ?? (process.argv[9] === 'demo' ? 'rapida' : 'estandar')
 const PERFIL = process.argv[6] ?? 'estandar'
 const ESCENARIO = process.argv[7] ?? 'primeraBase'
 
@@ -77,6 +78,9 @@ tic()
 exigir(elegirRol(room, 'u0', 'comandante') !== null, 'en la sala de espera aún no hay roles')
 exigir(elegirEscenario(room, 'u1', ESCENARIO) !== null, 'solo quien creó la sala elige la situación')
 sinError(elegirEscenario(room, 'u0', ESCENARIO), 'situación')
+// Dificultad (cadete, astronauta, comandante) y misión de demostración: argumentos 8 y 9 ('demo').
+exigir(fijarDificultad(room, 'u1', 'cadete', false) !== null, 'solo el anfitrión elige la dificultad')
+sinError(fijarDificultad(room, 'u0', process.argv[8] ?? 'astronauta', process.argv[9] === 'demo'), 'dificultad')
 sinError(iniciarMision(room, 'u0'), 'iniciar')
 exigir(room.jugadores.every((j) => j.paso === 0 && !j.rol), 'la contextualización empieza por la situación, sin roles')
 exigir(fijarPaso(room, 'u1', 2) !== null, 'no se pasa al objetivo sin rol')
@@ -309,6 +313,19 @@ exigir(room.resultado, 'la misión debe terminar')
 exigir(copia, 'la base llegó a funcionar')
 probarTrabajos(copia!)
 console.log(`\n${room.resultado!.titulo}: ${room.resultado!.motivo}`)
+// Informe final: puntuación, decisiones clave, fichas y objetivos de aprendizaje.
+const inf = room.informe
+exigir(inf && inf.puntos >= 0 && inf.puntos <= 100 && inf.partes.length === 6, 'el informe final tiene la puntuación y sus 6 partes')
+exigir(inf!.partes.reduce((s, p) => s + p.max, 0) === 100, 'las partes suman 100 como máximo')
+exigir(inf!.personas.length === room.jugadores.filter((j) => j.rol).length && inf!.objetivos.length === 6, 'una ficha por tripulante y 6 objetivos')
+exigir(inf!.decisiones.length <= 8, 'como mucho 8 decisiones clave')
+console.log(`Mission score: ${inf!.puntos}/100 · ${inf!.partes.map((p) => `${p.nombre} ${p.puntos}/${p.max}`).join(' · ')}`)
+console.log(`Objetivos: ${inf!.objetivos.map((o) => `${o.nombre} ${o.logrado ? 'sí' : 'no'}`).join(', ')} · decisiones clave ${inf!.decisiones.length}`)
+console.log(`Tamaño del informe: ${JSON.stringify(inf).length} bytes`)
+// La dificultad cambia el tiempo para decidir: 75 o 90 s en Astronaut, 50% más en Cadet y 30% menos en Commander.
+const plazos = room.emergencias.map((e) => Math.round((e.vence - e.creada) / 1000))
+const dif = process.argv[8] ?? 'astronauta'
+exigir(plazos.every((p) => (dif === 'cadete' ? p >= 112 : dif === 'comandante' ? p <= 63 : p >= 75 && p <= 90)), `plazos de emergencia según la dificultad (${dif}): ${plazos.join(', ')} s`)
 console.log(`Tiempo real de juego a máxima escala: ${Math.round(segundos / 60)} min. Emergencias:`, JSON.stringify(cuenta))
 console.log(`Equipos: ${room.sistemas.filter((s) => s.instalado).map((s) => `${s.id} ${Math.round(s.integridad)}`).join(', ')}`)
 exigir(calidades.every((q) => q === 1), `los valores de experto dan calidad 1: ${calidades.filter((q) => q !== 1).join(', ')}`)

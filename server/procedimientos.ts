@@ -28,6 +28,7 @@ import {
 } from '../shared/procedimientos.js'
 import { ROLE_BY_ID, TAREAS_ENSAMBLAJE, type CultivoId, type EstadoProcedimiento, type Player, type Role, type RoomState, type SistemaId, type Zona } from '../shared/types.js'
 import { jugador, limitar, log, puedeActuar, sis, tripulacion } from './base.js'
+import { anotarPaso } from './aprendizaje.js'
 import { completarTarea } from './game.js'
 import { ahora, azar } from './reloj.js'
 import { refrescar } from './sim/paso.js'
@@ -305,6 +306,7 @@ export function pasoProcedimiento(room: RoomState, jugadorId: string, procId: st
   }
   e.calidad[actual] = ev.calidad
   e.por[actual] = j.id
+  anotarPaso(room, j, procId, ev.calidad)
   valores[actual] = ev.valor
   e.paso = actual + 1
   // Cuándo se hizo el último paso: mientras alguien trabaja, el tiempo no corre tan rápido.

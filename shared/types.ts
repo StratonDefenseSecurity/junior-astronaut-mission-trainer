@@ -658,6 +658,12 @@ export interface RoomState {
   chat: ChatMsg[]
   puntosCriticos: string[]
   resultado: { victoria: boolean; titulo: string; motivo: string } | null
+  /** Dificultad y misión de demostración (ver shared/informe.ts). Sin valor = Astronaut, misión normal. */
+  dificultad?: import('./informe.js').Dificultad
+  demo?: boolean
+  /** Lo que se anota para el informe final, y el informe que se calcula al terminar. */
+  bitacora?: import('./informe.js').Bitacora
+  informe?: import('./informe.js').Informe | null
 }
 
 /** Calendario de un deber de rutina: cuándo vuelve a tocar y hasta cuándo se puede hacer. */

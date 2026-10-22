@@ -62,6 +62,7 @@ const clave = `prueba-${sufijo}`
 if (process.argv.includes('--solo')) {
   await pruebaSolo()
   await pruebaRelleno()
+  await pruebaDificultad()
   console.log(fallos === 0 ? '\nE2E OK' : `\nE2E CON ${fallos} FALLA(S)`)
   process.exit(fallos === 0 ? 0 : 1)
 }
@@ -222,6 +223,25 @@ for (let i = 0; i < 50 && sala.jugadores[1].manual !== null; i++) {
 }
 comprobar(sala.jugadores[1].manual === null && sala.jugadores[1].incapacitado === 0, 'la sesión termina sola tras una hora de misión, sin agotar a nadie')
 
+// Vista del docente: observa sin ser tripulante, habla como Mission Control y pausa.
+{
+  const O = (await llamar('invitado', { usuario: `Docente ${sufijo}` })).d.token
+  const tripulantes = sala.jugadores.length
+  const vista = await llamar('observar', { codigo }, O)
+  comprobar(vista.status === 200 && vista.d.sala?.codigo === codigo && vista.d.observador === true, 'el docente observa la sala por su código')
+  comprobar(vista.d.sala?.jugadores.length === tripulantes, 'el observador no cuenta como jugador')
+  const msj = await llamar('controlMensaje', { codigo, texto: 'Check your oxygen levels.' }, O)
+  comprobar(msj.d.sala?.registro.some((l) => l.texto === 'Mission Control: Check your oxygen levels.' && l.tipo === 'radio'), 'el mensaje de Mission Control llega al registro por radio')
+  const pausa = await llamar('controlPausa', { codigo, pausa: true }, O)
+  comprobar(pausa.d.sala?.pausa === true, 'el docente pausa la misión para comentarla en clase')
+  const sigue = await llamar('controlPausa', { codigo, pausa: false }, O)
+  comprobar(sigue.d.sala?.pausa === false && sigue.d.sala?.jugadores.length === tripulantes, 'el docente reanuda la misión sin unirse')
+  comprobar((await llamar('estado', { codigo, v: 0, h: '' }, O)).status === 403, 'el observador no consulta como tripulante')
+  const rk = await llamar('ranking', {})
+  comprobar(rk.status === 200 && Array.isArray(rk.d.ranking), 'la clasificación global responde')
+  await estado(A)
+}
+
 if (!corto) {
   console.log('  ... viaje de 150 días (unos 3 minutos, atendiendo emergencias)')
   const atender = async () => {
@@ -356,12 +376,26 @@ if (!corto) {
   comprobar(sala.jugadores.every((x) => !x.enRefugio), 'la tripulación sale del refugio')
   const clima = await llamar('bot', { codigo, v: sala.version, texto: 'what is the weather outside?' }, A)
   comprobar(/Curiosity/.test(clima.d.respuesta ?? ''), 'el asistente cita el clima medido por Curiosity')
+
+  // Informe final: el comandante termina antes (para clases con poco tiempo) y se ve qué se aprendió.
+  await paso(B, 'accion', { id: 'terminar', payload: {} }, 'solo el comandante termina la misión antes', 400)
+  await paso(A, 'accion', { id: 'terminar', payload: {} }, 'el comandante termina la misión antes')
+  const inf = sala.informe
+  comprobar(sala.fase === 'fin' && sala.resultado?.titulo === 'Mission Ended Early', 'la misión termina y se muestra el resultado')
+  comprobar(inf && inf.puntos >= 0 && inf.puntos <= 100 && inf.partes.length === 6 && inf.partes.reduce((s, p) => s + p.max, 0) === 100, `informe con puntuación ${inf?.puntos}/100 y 6 partes`)
+  comprobar(inf?.personas.length === 2 && inf.personas.every((p) => p.rol && Array.isArray(p.habilidades)), `una ficha por tripulante: ${inf?.personas.map((p) => `${p.nombre} ${p.pasos} pasos, ${p.habilidades.length} habilidades`).join('; ')}`)
+  comprobar(inf?.personas.some((p) => p.habilidades.includes('eva') && p.habilidades.includes('muestra')), 'las habilidades salen de lo que hizo cada uno (salir y tomar muestras)')
+  comprobar(inf?.objetivos.length === 6 && inf.objetivos.find((o) => o.id === 'ciencia')?.logrado === true, 'objetivos de aprendizaje: el método científico se logró con la muestra analizada')
+  comprobar(inf?.decisiones.length <= 8 && inf.decisiones.every((d) => d.titulo && d.nota), `decisiones clave valoradas: ${inf?.decisiones.length}`)
+  comprobar(JSON.stringify(inf).length < 6000, `el informe es pequeño: ${JSON.stringify(inf).length} bytes`)
+  await paso(A, 'accion', { id: 'terminar', payload: {} }, 'una misión terminada no se termina otra vez', 400)
 }
 
 await llamar('salir', { codigo }, A)
 await llamar('salir', { codigo }, B)
 await pruebaSolo()
 await pruebaRelleno()
+await pruebaDificultad()
 console.log(fallos === 0 ? '\nE2E OK' : `\nE2E CON ${fallos} FALLA(S)`)
 process.exit(fallos === 0 ? 0 : 1)
 
@@ -501,6 +535,31 @@ async function pruebaRelleno() {
   const roles = s.jugadores.map((j) => j.rol)
   comprobar(new Set(roles).size === 6 && roles.every(Boolean), `seis roles distintos: ${roles.join(', ')}`)
   comprobar(bots().every((j) => j.rol !== 'cientifico' && j.rol !== 'medico'), 'los bots solo tomaron roles libres')
+  await llamar('salir', { codigo: cod }, G)
+  await llamar('salir', { codigo: cod }, H)
+}
+
+/** Dificultad y misión de demostración: las elige el anfitrión en la sala de espera. */
+async function pruebaDificultad() {
+  console.log('\nDificultad y misión de demostración')
+  const H = (await llamar('registro', { usuario: `e2e_dif_${sufijo}`, clave })).d.token
+  const G = (await llamar('registro', { usuario: `e2e_dig_${sufijo}`, clave })).d.token
+  let s = (await llamar('crear', { modo: 'comandante' }, H)).d.sala
+  const cod = s.codigo
+  await llamar('unirse', { codigo: cod }, G)
+  const op = async (o, datos, tok = H) => {
+    const x = await llamar(o, { codigo: cod, v: s.version, ...datos }, tok)
+    if (x.d.sala) s = x.d.sala
+    return x
+  }
+  comprobar((s.dificultad ?? 'astronauta') === 'astronauta' && !s.demo, 'por defecto: Astronaut y misión completa')
+  comprobar((await op('dificultad', { dificultad: 'comandante', demo: true }, G)).status === 400, 'solo el anfitrión elige la dificultad')
+  comprobar((await op('dificultad', { dificultad: 'experto', demo: false })).status === 400, 'una dificultad inválida no se acepta')
+  const r = await op('dificultad', { dificultad: 'comandante', demo: true })
+  comprobar(r.status === 200 && s.dificultad === 'comandante' && s.demo === true, 'el anfitrión elige Commander y la misión de demostración')
+  comprobar((await op('iniciar', {})).status === 200 && s.fase === 'contexto', 'empieza la misión')
+  comprobar(s.trayectoria === 'rapida' && s.mision.diasTransito === 150 && s.mision.solesObjetivo === 3, `la demostración usa el viaje real de ${s.mision.diasTransito} días y ${s.mision.solesObjetivo} soles`)
+  comprobar((await op('dificultad', { dificultad: 'cadete', demo: false })).status === 400 && s.dificultad === 'comandante', 'la dificultad no cambia una vez empezada')
   await llamar('salir', { codigo: cod }, G)
   await llamar('salir', { codigo: cod }, H)
 }

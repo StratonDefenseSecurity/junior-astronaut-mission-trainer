@@ -48,7 +48,9 @@ import { lsMarte } from '../shared/astronomia.js'
 import { ALTERNATIVAS, cargaRecomendada, minimoDe } from '../shared/plan.js'
 import { ahora, azar, fijarAhora, semilla } from './reloj.js'
 import { enSuperficie, indiceClimaParaLs, iniciarClimaEspacial } from './sim/ambiente.js'
-import { iniciarDescenso, pasoSimulacion, refrescar } from './sim/paso.js'
+import { iniciarDescenso, pasoSimulacion, refrescar, terminar } from './sim/paso.js'
+import { prepararDemo } from './aprendizaje.js'
+import { DEMO } from '../shared/informe.js'
 import { agregarBots, pasoTripulantes } from './tripulantes.js'
 
 export { jugador } from './base.js'
@@ -152,7 +154,8 @@ export function nuevoJugador(id: string, nombre: string): Player {
 }
 
 function aplicarPerfil(room: RoomState) {
-  const p = PERFIL_BY_ID[room.perfil]
+  // La demostración acorta la estancia y pide menos muestras; el resto de números no cambia.
+  const p = room.demo ? { ...PERFIL_BY_ID.corta, soles: DEMO.soles, muestras: DEMO.muestras } : PERFIL_BY_ID[room.perfil]
   const esc = escenarioDe(room.escenario)
   const sitio = room.sitio ?? esc.sitio ?? null
   const bono = sitio ? SITE_BY_ID[sitio].bonoCiencia : 0
@@ -271,6 +274,7 @@ export function iniciarMision(room: RoomState, id: string): string | null {
   room.escenario = room.escenarioElegido !== 'azar' && ESCENARIO_BY_ID[room.escenarioElegido as EscenarioId]
     ? room.escenarioElegido
     : ESCENARIOS[Math.floor(azar(room) * ESCENARIOS.length)].id
+  prepararDemo(room)
   aplicarPerfil(room)
   room.cargamento = cargaRecomendada(room, 1.15)
   room.masa = masaTotal(room.cargamento)
@@ -658,6 +662,12 @@ export function accion(room: RoomState, id: string, tipo: string, d: Record<stri
   if (!['transito', 'llegada', 'ensamblaje', 'base'].includes(room.fase)) return 'You cannot take actions right now.'
   const j = jugador(room, id)
   if (!j || !j.rol) return 'Player not found.'
+  // Terminar antes: para clases con poco tiempo. Se ve el informe con lo que se logró.
+  if (tipo === 'terminar') {
+    if (!puedeActuar(room, j, ['comandante'])) return 'Only the Mission Commander can end the mission early.'
+    terminar(room, false, 'Mission Ended Early', `${j.nombre} ended the mission early. Here is what the crew achieved and learned.`)
+    return null
+  }
   // Desde el refugio se puede decidir, pero no hacer trabajo físico.
   const esDecision = ['racionComida', 'racionAgua', 'prioridad', 'equipo', 'ejercicio', 'refugio'].includes(tipo)
   if (!esDecision || j.incapacitado > 0) {

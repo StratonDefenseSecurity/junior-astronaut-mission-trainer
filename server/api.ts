@@ -45,8 +45,10 @@ import {
   usarRefugio,
   votar,
 } from './game.js'
+import { fijarDificultad } from './aprendizaje.js'
 import { log } from './base.js'
 import { pasoProcedimiento } from './procedimientos.js'
+import { anotarSiTermino, leerRanking, MOSTRADAS } from './ranking.js'
 import { fijarAhora, fijarMovidos } from './reloj.js'
 import { agregarBots, fijarRellenoBots, posicionesBots, type Andar } from './tripulantes.js'
 
@@ -257,10 +259,13 @@ async function obtener(codigo: string, versionCliente: number): Promise<Entrada 
 }
 
 /** Marca al usuario como visto y recalcula quién está conectado según las consultas recientes. */
-function actualizarPresencia(codigo: string, room: RoomState, usuarioId: string, t: number, pos?: unknown) {
+function actualizarPresencia(codigo: string, room: RoomState, usuarioId: string | null, t: number, pos?: unknown) {
+  const nueva = !presencias.has(codigo)
   const p = presenciaDe(codigo)
-  p.ultimo.set(usuarioId, t)
-  if (Array.isArray(pos) && pos.length >= 3 && pos.length <= 5 && pos.every((v) => typeof v === 'number' && Number.isFinite(v))) {
+  // Un observador (null) no cuenta como presencia: solo se recalcula la de la tripulación.
+  if (usuarioId !== null) p.ultimo.set(usuarioId, t)
+  else if (nueva) p.desde = t - DESCONECTADO_MS // nadie aparece conectado por la consulta del observador
+  if (usuarioId !== null && Array.isArray(pos) && pos.length >= 3 && pos.length <= 5 && pos.every((v) => typeof v === 'number' && Number.isFinite(v))) {
     const nueva = (pos as number[]).map((v) => Math.round(v * 100) / 100)
     const previa = p.pos.get(usuarioId)
     if (!previa || Math.abs(previa[0] - nueva[0]) + Math.abs(previa[1] - nueva[1]) > 0.05) p.movido.set(usuarioId, t)
@@ -310,16 +315,16 @@ function mutar(
   usuario: Usuario,
   versionCliente: number,
   fn: Mutacion,
-  opciones: { soloMiembros?: boolean; noExiste?: string } = {},
+  opciones: { soloMiembros?: boolean; noExiste?: string; observador?: boolean } = {},
 ): Promise<Respuesta> {
-  const soloMiembros = opciones.soloMiembros ?? true
+  const soloMiembros = !opciones.observador && (opciones.soloMiembros ?? true)
   return enCola(codigo, async () => {
     for (let intento = 0; intento < 4; intento++) {
       const e = await obtener(codigo, versionCliente)
       if (!e) return fallo(404, opciones.noExiste ?? 'That room no longer exists.', SIN_SALA)
       const room = e.room
       const t = Date.now()
-      actualizarPresencia(codigo, room, usuario.id, t)
+      actualizarPresencia(codigo, room, opciones.observador ? null : usuario.id, t)
       if (room.fase === 'lobby') podarLobby(codigo, room, t)
       avanzar(room, t, e.visto)
       e.visto = t
@@ -328,7 +333,10 @@ function mutar(
       if (error) return fallo(400, error)
       room.version += 1
       const texto = JSON.stringify(room)
-      if (await guardar(codigo, e, texto, t)) return respuestaSala(e, texto, codigo, usuario.id, t)
+      if (await guardar(codigo, e, texto, t)) {
+        await anotarSiTermino(room)
+        return opciones.observador ? respuestaObservador(room, t) : respuestaSala(e, texto, codigo, usuario.id, t)
+      }
     }
     return fallo(409, 'The room is very busy. Try again.')
   })
@@ -344,6 +352,7 @@ function consultar(codigo: string, usuario: Usuario, versionCliente: number, hue
     actualizarPresencia(codigo, room, usuario.id, t, pos)
     avanzar(room, t, e.visto)
     e.visto = t
+    await anotarSiTermino(room)
     // Punto de guardado: si la instancia se recicla, se pierde como mucho este intervalo.
     if (t - e.guardado > GUARDAR_MS && !['lobby', 'contexto', 'fin'].includes(room.fase)) {
       room.version += 1
@@ -453,9 +462,59 @@ function preguntarBot(codigo: string, usuario: Usuario, versionCliente: number, 
   })
 }
 
+// ---------- Observador (vista del docente, "Mission Control") ----------
+// Un docente sigue una sala por su código sin ser tripulante: no ocupa rol, no cuenta como
+// jugador ni como presencia (no mantiene la sala "conectada") y su consulta no avanza la
+// simulación, que solo avanza con la tripulación.
+
+const respuestaObservador = (room: RoomState, t: number): Respuesta => ({
+  status: 200,
+  json: `{"sala":${JSON.stringify(room)},"ahora":${t - room.desfase},"observador":true}`,
+})
+
+function observar(codigo: string): Promise<Respuesta> {
+  return enCola(codigo, async () => {
+    const e = await obtener(codigo, 0)
+    if (!e) return fallo(404, 'There is no room with that code.', SIN_SALA)
+    return respuestaObservador(e.room, Date.now())
+  })
+}
+
+function controlMensaje(codigo: string, usuario: Usuario, mensaje: string): Promise<Respuesta> {
+  return mutar(
+    codigo,
+    usuario,
+    0,
+    (room, t) => {
+      log(room, `Mission Control: ${mensaje}`, 'radio')
+      room.chat.push({ id: crypto.randomUUID(), de: 'Mission Control', texto: mensaje, t, bot: false })
+      if (room.chat.length > 40) room.chat.splice(0, room.chat.length - 40)
+      return null
+    },
+    { observador: true, noExiste: 'There is no room with that code.' },
+  )
+}
+
+function controlPausa(codigo: string, usuario: Usuario, pausa: boolean): Promise<Respuesta> {
+  return mutar(
+    codigo,
+    usuario,
+    0,
+    (room) => {
+      if (room.fase === 'lobby' || room.fase === 'contexto') return 'The mission has not launched yet.'
+      if (room.fase === 'fin' || room.resultado) return 'The mission is over.'
+      if (room.pausa === pausa) return null
+      room.pausa = pausa
+      log(room, pausa ? 'Mission Control paused the mission for a class discussion.' : 'Mission Control resumed the mission.', 'radio')
+      return null
+    },
+    { observador: true, noExiste: 'There is no room with that code.' },
+  )
+}
+
 // ---------- Entrada ----------
 
-const texto = (v: unknown, max = 300) => String(v ?? '').trim().slice(0, max)
+const texto =(v: unknown, max = 300) => String(v ?? '').trim().slice(0, max)
 const objeto = (v: unknown) => (v && typeof v === 'object' ? (v as Record<string, unknown>) : {})
 
 export interface OpcionesManejo {
@@ -468,6 +527,7 @@ async function despachar(c: Record<string, unknown>, autorizacion: string | unde
   if (op === 'registro') return registro(texto(c.usuario, 40), String(c.clave ?? ''))
   if (op === 'ingresar') return ingresar(texto(c.usuario, 40), String(c.clave ?? ''))
   if (op === 'invitado') return invitado(texto(c.usuario, 40))
+  if (op === 'ranking') return ok({ ranking: (await leerRanking()).slice(0, MOSTRADAS) })
 
   const usuario = verificar(autorizacion)
   if (!usuario) return fallo(401, 'Invalid session. Please log in again.', { sinSesion: true })
@@ -481,6 +541,15 @@ async function despachar(c: Record<string, unknown>, autorizacion: string | unde
   const m = (fn: Mutacion) => mutar(codigo, usuario, v, fn)
 
   switch (op) {
+    // Vista del docente: ver, hablar como Mission Control y pausar para comentar en clase.
+    case 'observar':
+      return observar(codigo)
+    case 'controlMensaje': {
+      const mensaje = texto(c.texto, 200)
+      return mensaje ? controlMensaje(codigo, usuario, mensaje) : fallo(400, 'Type a message.')
+    }
+    case 'controlPausa':
+      return controlPausa(codigo, usuario, Boolean(c.pausa))
     case 'unirse':
       return unirse(codigo, usuario)
     case 'salir':
@@ -500,6 +569,8 @@ async function despachar(c: Record<string, unknown>, autorizacion: string | unde
       return m((room) => iniciarMision(room, yo))
     case 'rellenarBots':
       return m((room) => fijarRellenoBots(room, yo, Boolean(c.valor)))
+    case 'dificultad':
+      return m((room) => fijarDificultad(room, yo, texto(c.dificultad, 20), Boolean(c.demo)))
     case 'escenario':
       return m((room) => elegirEscenario(room, yo, texto(c.escenario, 20)))
     case 'hogar':

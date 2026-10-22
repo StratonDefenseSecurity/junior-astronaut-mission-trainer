@@ -10,6 +10,7 @@ import { ComprobacionConexion } from '../hud/Conexion'
 import { Astronauta } from '../mundo/Astronauta'
 import { api } from '../red'
 import { useStore, useYo } from '../store'
+import { DificultadLobby } from './DificultadLobby'
 
 function Giratorio({ traje, distintivo }: { traje: Traje; distintivo: string }) {
   const ref = useRef<THREE.Group>(null)
@@ -161,6 +162,8 @@ export function LobbyScreen() {
                 {sala.escenarioElegido === 'azar' ? 'The situation will be assigned when you start.' : `Chosen situation: ${ESCENARIO_BY_ID[sala.escenarioElegido as EscenarioId]?.nombre}.`}
               </p>
             )}
+
+            <DificultadLobby sala={sala} soyHost={soyHost} />
 
             <h3>How the mission works</h3>
             <ol className="recorrido">
