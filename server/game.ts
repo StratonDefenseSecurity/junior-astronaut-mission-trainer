@@ -458,7 +458,8 @@ function crearPropuesta(
 
 export function votar(room: RoomState, id: string, propId: string, aprueba: boolean): string | null {
   const prop = room.propuestas.find((p) => p.id === propId)
-  if (!prop || prop.estado !== 'pendiente') return 'That proposal is no longer open.'
+  // Ya se decidió o venció mientras el botón seguía en pantalla: no es un error, el cliente se pone al día.
+  if (!prop || prop.estado !== 'pendiente') return null
   const j = jugador(room, id)
   if (!j || !j.rol) return 'You need a role to vote.'
   if (room.modoDecision === 'comandante' && rolPresente(room, 'comandante') && j.rol !== 'comandante' && id !== prop.proponente) {
@@ -878,8 +879,11 @@ export function elegirAlternativa(room: RoomState, id: string, emId: string, alt
   if (!puedeActuar(room, j, em.rolesResponsables)) return 'Your role does not decide this emergency.'
   const presentes = em.rolesResponsables.filter((r) => rolPresente(room, r))
   if (presentes.length > 1) {
-    if (room.propuestas.some((p) => p.estado === 'pendiente' && p.tipo === 'emergencia' && p.payload.emergenciaId === emId)) {
-      return 'An option has already been proposed for this emergency.'
+    const previa = room.propuestas.find((p) => p.estado === 'pendiente' && p.tipo === 'emergencia' && p.payload.emergenciaId === emId)
+    if (previa) {
+      // Alguien propuso lo mismo un instante antes: se toma como un voto a favor.
+      if (previa.payload.altId === altId && previa.proponente !== id) return votar(room, id, previa.id, true)
+      return 'Another crew member just proposed an option for this emergency. Approve or reject it in Proposals.'
     }
     crearPropuesta(room, {
       tipo: 'emergencia',

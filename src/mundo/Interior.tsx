@@ -6,12 +6,15 @@
 // de dormir sujetos a la pared (en Marte, literas), cámara de cultivo con luz rosada de LED
 // rojos y azules, camilla en la enfermería y una mesa común en el centro para comer y conversar.
 // Sin gravedad, algunos objetos sueltos flotan por el módulo.
-import { useMemo, useRef, type ReactNode } from 'react'
+import { useLayoutEffect, useMemo, useRef, type ReactNode } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Html, RoundedBox } from '@react-three/drei'
 import * as THREE from 'three'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import type { Almohadilla, CultivoId, RoomState } from '@shared/types'
-import { ESTACION_BY_ID, INTERIOR, PUNTOS } from './mapa'
+import { useGraficos } from '../graficos'
+import { ESTACION_BY_ID, ESTACIONES, INTERIOR, PUNTOS } from './mapa'
+import { azar, texturaBastidor, texturaCTB, texturaDesgaste, texturaFranjas, texturaLuz, texturaPortatil, texturaRejilla, texturaRotulo } from './procedural'
 import { Ventana } from './Ventana'
 
 const L = INTERIOR.x1 - INTERIOR.x0
@@ -98,8 +101,9 @@ function Pantalla({ x = 0, y = 1.45, z = 0, ancho = 0.9, alto = 0.55, color = '#
   )
 }
 
-/** Portátil sujeto con velcro, como los de la Estación Espacial. */
+/** Portátil sobre su brazo articulado, anclado al bastidor, como los de la Estación Espacial. */
 function Portatil({ x, y, z = 0.05, giro = 0 }: { x: number; y: number; z?: number; giro?: number }) {
+  const pantalla = useMemo(() => new THREE.MeshBasicMaterial({ map: texturaPortatil(Math.round(x * 10 + y * 7)) }), [x, y])
   return (
     <group position={[x, y, z]} rotation={[0, giro, 0]}>
       <mesh material={MAT.oscuro} position={[0, 0, 0.1]}>
@@ -108,21 +112,43 @@ function Portatil({ x, y, z = 0.05, giro = 0 }: { x: number; y: number; z?: numb
       <mesh position={[0, 0.12, -0.01]} rotation={[-0.25, 0, 0]} material={MAT.oscuro}>
         <boxGeometry args={[0.36, 0.24, 0.015]} />
       </mesh>
-      <mesh position={[0, 0.12, 0.0]} rotation={[-0.25, 0, 0]}>
+      <mesh position={[0, 0.12, 0.0]} rotation={[-0.25, 0, 0]} material={pantalla}>
         <planeGeometry args={[0.32, 0.2]} />
-        <meshBasicMaterial color="#7cc4ff" />
+      </mesh>
+      {/* brazo: placa en el bastidor, dos tramos y la rótula bajo el teclado */}
+      <mesh position={[0, -0.12, -0.07]} material={MAT.junta}>
+        <boxGeometry args={[0.09, 0.12, 0.02]} />
+      </mesh>
+      <mesh position={[0, -0.12, 0.02]} rotation={[Math.PI / 2, 0, 0]} material={MAT.metal}>
+        <cylinderGeometry args={[0.014, 0.014, 0.18, 8]} />
+      </mesh>
+      <mesh position={[0, -0.12, 0.11]} material={MAT.metal}>
+        <sphereGeometry args={[0.022, 10, 8]} />
+      </mesh>
+      <mesh position={[0, -0.06, 0.11]} material={MAT.metal}>
+        <cylinderGeometry args={[0.012, 0.012, 0.11, 8]} />
       </mesh>
     </group>
   )
 }
 
-/** Bolsa blanca de transporte de carga. */
+/** Material de cada variante de bolsa de carga (CTB). */
+const CTB_MAT = new Map<number, THREE.MeshStandardMaterial>()
+function materialCTB(n: number) {
+  const k = n % 6
+  let m = CTB_MAT.get(k)
+  if (!m) {
+    m = new THREE.MeshStandardMaterial({ map: texturaCTB(k), roughness: 0.95 })
+    CTB_MAT.set(k, m)
+  }
+  return m
+}
+const CAJA = new THREE.BoxGeometry(1, 1, 1)
+
+/** Bolsa blanca de transporte de carga (CTB) con sus cintas de velcro y la tarjeta de inventario. */
 function Bolsa({ p, t = [0.5, 0.32, 0.4] }: { p: [number, number, number]; t?: [number, number, number] }) {
-  return (
-    <RoundedBox args={t} radius={0.05} smoothness={2} position={p} material={MAT.bolsa} castShadow>
-      <meshStandardMaterial attach="material" color="#f1f0ea" roughness={0.95} />
-    </RoundedBox>
-  )
+  const n = Math.abs(Math.round(p[0] * 13 + p[1] * 7 + p[2] * 3))
+  return <mesh geometry={CAJA} position={p} scale={t} material={materialCTB(n)} />
 }
 
 interface PuestoProps {
@@ -139,6 +165,12 @@ interface PuestoProps {
 function Puesto({ id, cerca, destacadas, color, ancho = 2.5, children }: PuestoProps) {
   const e = ESTACION_BY_ID[id]
   const lado = Math.sign(e.z) // -1 pared norte, +1 pared sur
+  const alta = useGraficos((s) => s.calidad) === 'alta'
+  // Frente con cajones, placas y código de ubicación al estilo de la Estación Espacial.
+  const frente = useMemo(() => {
+    const codigo = `HAB1${lado < 0 ? 'P' : 'S'}${Math.round((e.x - INTERIOR.x0) / 2.3)}`
+    return new THREE.MeshStandardMaterial({ map: texturaBastidor(codigo, ancho, 2.24, e.x * 3 + lado, alta), roughness: 0.72, metalness: 0.05 })
+  }, [e.x, lado, ancho, alta])
   return (
     <group position={[e.x, 0, e.z]}>
       <group rotation={[0, lado > 0 ? Math.PI : 0, 0]}>
@@ -146,6 +178,9 @@ function Puesto({ id, cerca, destacadas, color, ancho = 2.5, children }: PuestoP
         <RoundedBox args={[ancho, 2.3, 0.5]} radius={0.04} smoothness={2} position={[0, 1.15, -0.28]} castShadow receiveShadow>
           <meshStandardMaterial color="#d3d0c6" roughness={0.75} metalness={0.05} />
         </RoundedBox>
+        <mesh position={[0, 1.15, -0.026]} material={frente} receiveShadow>
+          <planeGeometry args={[ancho - 0.05, 2.24]} />
+        </mesh>
         {[-ancho / 2 + 0.01, ancho / 2 - 0.01].map((x) => (
           <mesh key={x} position={[x, 1.15, 0.0]} material={MAT.junta}>
             <boxGeometry args={[0.04, 2.3, 0.04]} />
@@ -632,6 +667,80 @@ function Puente({ cerca, destacadas }: { cerca: string | null; destacadas: strin
   )
 }
 
+/**
+ * Detalle de la escotilla: marco, ventanilla redonda, palanca de cierre, pestillos, válvula de
+ * igualar presión, rótulos de plantilla y franjas de aviso en el umbral.
+ */
+function HatchDetalle({ enMarte }: { enMarte: boolean }) {
+  const alta = useGraficos((s) => s.calidad) === 'alta'
+  const m = useMemo(() => {
+    const franjas = texturaFranjas().clone()
+    franjas.repeat.set(1, 8)
+    franjas.needsUpdate = true
+    return {
+      rotulo: new THREE.MeshStandardMaterial({ map: texturaRotulo('AIRLOCK HATCH', '#f2f1ea', '#111'), roughness: 0.7 }),
+      aviso: new THREE.MeshStandardMaterial({ map: texturaRotulo('CHECK ΔP BEFORE OPENING', '#f2c230', '#141414'), roughness: 0.7 }),
+      franjas: new THREE.MeshStandardMaterial({ map: franjas, roughness: 0.8 }),
+    }
+  }, [])
+  // Por la ventanilla se ve el exterior: el cielo de Marte o la oscuridad del espacio.
+  const vista = enMarte ? '#c98a55' : '#05070c'
+  return (
+    <group>
+      {/* marco grueso alrededor de la escotilla */}
+      {[
+        [0.47, 2.14, 0, 0.3, 0.14, 1.9],
+        [0.47, 0.36, 0, 0.3, 0.14, 1.9],
+        [0.47, 1.25, 0.88, 0.3, 1.9, 0.14],
+        [0.47, 1.25, -0.88, 0.3, 1.9, 0.14],
+      ].map(([x, y, z, sx, sy, sz], i) => (
+        <mesh key={i} position={[x, y, z]} material={MAT.panelGris}>
+          <boxGeometry args={[sx, sy, sz]} />
+        </mesh>
+      ))}
+      {/* ventanilla con su anillo */}
+      <mesh position={[0.318, 1.7, 0]} rotation={[0, Math.PI / 2, 0]} material={MAT.junta}>
+        <torusGeometry args={[0.115, 0.022, 8, 24]} />
+      </mesh>
+      <mesh position={[0.322, 1.7, 0]} rotation={[0, -Math.PI / 2, 0]}>
+        <circleGeometry args={[0.11, 24]} />
+        <meshStandardMaterial color="#0a0f16" emissive={vista} emissiveIntensity={0.35} roughness={0.05} metalness={0.6} />
+      </mesh>
+      {/* palanca de cierre */}
+      <mesh position={[0.27, 1.25, 0]} rotation={[0.5, 0, 0]} material={MAT.metal}>
+        <boxGeometry args={[0.035, 0.06, 0.5]} />
+      </mesh>
+      <mesh position={[0.25, 1.25, 0.22]} rotation={[0.5, 0, 0]} material={MAT.oscuro}>
+        <boxGeometry args={[0.05, 0.07, 0.1]} />
+      </mesh>
+      {/* válvula de igualar presión */}
+      <mesh position={[0.3, 1.7, 0.3]} rotation={[0, 0, Math.PI / 2]} material={MAT.oscuro}>
+        <cylinderGeometry args={[0.035, 0.035, 0.05, 12]} />
+      </mesh>
+      {/* pestillos del contorno */}
+      {alta &&
+        [
+          [1.98, 0.5], [1.98, -0.5], [0.52, 0.5], [0.52, -0.5], [1.25, 0.72], [1.25, -0.72],
+        ].map(([y, z], i) => (
+          <mesh key={i} position={[0.31, y, z]} material={MAT.junta}>
+            <boxGeometry args={[0.03, 0.06, 0.09]} />
+          </mesh>
+        ))}
+      {/* rótulos */}
+      <mesh position={[0.315, 0.62, 0]} rotation={[0, -Math.PI / 2, 0]} material={m.rotulo}>
+        <planeGeometry args={[0.7, 0.13]} />
+      </mesh>
+      <mesh position={[0.315, 1.95, 0]} rotation={[0, -Math.PI / 2, 0]} material={m.aviso}>
+        <planeGeometry args={[0.8, 0.12]} />
+      </mesh>
+      {/* franjas de aviso en el umbral */}
+      <mesh position={[0.16, 0.004, 0]} rotation={[-Math.PI / 2, 0, 0]} material={m.franjas}>
+        <planeGeometry args={[0.3, 1.7]} />
+      </mesh>
+    </group>
+  )
+}
+
 function Esclusa({ sala, cerca, destacadas }: { sala: RoomState; cerca: string | null; destacadas: string[] }) {
   const e = ESTACION_BY_ID.esclusa
   const s = sala.sistemas.find((x) => x.id === 'esclusa')!
@@ -650,10 +759,176 @@ function Esclusa({ sala, cerca, destacadas }: { sala: RoomState; cerca: string |
         <boxGeometry args={[0.04, 0.12, 0.5]} />
         <meshStandardMaterial color="#0b1220" emissive={color} emissiveIntensity={1} />
       </mesh>
+      <HatchDetalle enMarte={enMarte} />
       <group position={[-0.9, 0, 0]}>
         <Marca activo={cerca === 'esclusa'} destacado={destacadas.includes('esclusa')} radio={0.7} />
       </group>
       <Rotulo texto={enMarte ? 'Airlock · exit to the outside' : 'Airlock'} activo={cerca === 'esclusa'} destacado={destacadas.includes('esclusa')} />
+    </group>
+  )
+}
+
+// ---------- Detalle de la Estación Espacial (instanciado: pocas llamadas de dibujo) ----------
+
+const _p = new THREE.Vector3()
+const _q = new THREE.Quaternion()
+const _e = new THREE.Euler()
+const _s = new THREE.Vector3()
+/** Matriz de una instancia: posición, giro (x, y, z) y escala. */
+function matriz(x: number, y: number, z: number, giro: [number, number, number] = [0, 0, 0], escala: [number, number, number] = [1, 1, 1]) {
+  return new THREE.Matrix4().compose(_p.set(x, y, z), _q.setFromEuler(_e.set(giro[0], giro[1], giro[2])), _s.set(escala[0], escala[1], escala[2]))
+}
+
+/** Muchas copias de la misma pieza en una sola llamada de dibujo. */
+function Instancias({ geo, mat, m }: { geo: THREE.BufferGeometry; mat: THREE.Material | THREE.Material[]; m: THREE.Matrix4[] }) {
+  const ref = useRef<THREE.InstancedMesh>(null)
+  useLayoutEffect(() => {
+    const im = ref.current
+    if (!im) return
+    m.forEach((x, i) => im.setMatrixAt(i, x))
+    im.instanceMatrix.needsUpdate = true
+    im.computeBoundingSphere()
+  }, [m])
+  return <instancedMesh key={m.length} ref={ref} args={[geo, mat, m.length]} receiveShadow />
+}
+
+const GEO = {
+  cilindro: new THREE.CylinderGeometry(1, 1, 1, 8),
+  plano: new THREE.PlaneGeometry(1, 1),
+  lazo: new THREE.TorusGeometry(0.09, 0.012, 4, 10, Math.PI),
+}
+
+const MAT_EXTRA = {
+  cableBlanco: new THREE.MeshStandardMaterial({ color: '#e4e2da', roughness: 0.7 }),
+  cableGris: new THREE.MeshStandardMaterial({ color: '#2f343b', roughness: 0.6 }),
+  palanca: new THREE.MeshStandardMaterial({ color: '#d5d8dc', roughness: 0.3, metalness: 0.8 }),
+  cincha: new THREE.MeshStandardMaterial({ color: '#3a4458', roughness: 0.9 }),
+}
+
+/** Cable que cuelga entre dos puntos, con su comba. */
+function catenaria(a: THREE.Vector3, b: THREE.Vector3, comba: number, radio: number) {
+  const medio = a.clone().lerp(b, 0.5)
+  medio.y -= comba
+  const p1 = a.clone().lerp(medio, 0.55).setY(a.y - comba * 0.7)
+  const p2 = b.clone().lerp(medio, 0.55).setY(b.y - comba * 0.7)
+  return new THREE.TubeGeometry(new THREE.CatmullRomCurve3([a, p1, medio, p2, b]), 14, radio, 5, false)
+}
+
+type ColorCable = 'blanco' | 'gris' | 'naranja'
+const COLORES_CABLE: ColorCable[] = ['blanco', 'gris', 'naranja']
+
+/**
+ * Bastidores genéricos de las paredes, con lo que rodea a los de la Estación Espacial:
+ * paneles de interruptores, pasamanos verticales, bolsas de carga sujetas con cinchas y
+ * mazos de cables que cuelgan de un bastidor a otro. Lo más fino, solo en calidad alta.
+ */
+function BastidoresGenericos({ tramos }: { tramos: Record<number, number[]> }) {
+  const alta = useGraficos((s) => s.calidad) === 'alta'
+  const datos = useMemo(() => {
+    const variantes: THREE.Matrix4[][] = [[], [], []]
+    const paneles: THREE.Matrix4[] = []
+    const palancas: THREE.Matrix4[] = []
+    const barras: THREE.Matrix4[] = []
+    const soportes: THREE.Matrix4[] = []
+    const bolsas: THREE.Matrix4[][] = [[], []]
+    const cinchas: THREE.Matrix4[] = []
+    const cables: Record<ColorCable, THREE.BufferGeometry[]> = { blanco: [], gris: [], naranja: [] }
+    const r = azar(5)
+    const fz = A / 2 - 0.2 // frente de los bastidores
+    for (const s of [-1, 1]) {
+      const giro: [number, number, number] = [0, s > 0 ? Math.PI : 0, 0]
+      const xs = tramos[s]
+      xs.forEach((x, i) => {
+        variantes[(i + (s > 0 ? 1 : 0)) % 3].push(matriz(x, 1.15, s * (A / 2 - 0.12), giro, [0.58, 2.2, 0.16]))
+        if (i % 2 === 0) {
+          paneles.push(matriz(x, 1.62, s * (fz - 0.015), giro, [0.42, 0.13, 0.03]))
+          for (let k = 0; k < 6; k++) palancas.push(matriz(x - 0.16 + k * 0.064, 1.63, s * (fz - 0.04), [s * (Math.PI / 2 + (k % 3 === 1 ? -0.4 : 0.4)), 0, 0], [0.005, 0.035, 0.005]))
+        } else {
+          barras.push(matriz(x + 0.2, 1.3, s * (fz - 0.07), [0, 0, 0], [0.017, 0.56, 0.017]))
+          for (const y of [1.06, 1.54]) soportes.push(matriz(x + 0.2, y, s * (fz - 0.035), giro, [0.03, 0.03, 0.07]))
+        }
+        if (i % 3 === 1) {
+          bolsas[0].push(matriz(x, 0.16, s * (fz - 0.18), giro, [0.5, 0.3, 0.36]))
+          bolsas[1].push(matriz(x, 0.47, s * (fz - 0.18), giro, [0.5, 0.3, 0.36]))
+          for (const dx of [-0.13, 0.13]) cinchas.push(matriz(x + dx, 0.32, s * (fz - 0.365), giro, [0.025, 0.66, 0.008]))
+        }
+        // mazos de tres cables colgando hasta el bastidor vecino
+        const sig = xs[i + 1]
+        if (sig !== undefined && sig - x < 0.7 && r() < 0.65) {
+          const comba = 0.12 + r() * 0.22
+          COLORES_CABLE.forEach((color, k) => {
+            const z = s * (fz - 0.04 - k * 0.022)
+            cables[color].push(catenaria(new THREE.Vector3(x, 2.18 + k * 0.02, z), new THREE.Vector3(sig, 2.16 + k * 0.02, z), comba + k * 0.03, color === 'naranja' ? 0.009 : 0.014))
+          })
+        }
+        // bajada desde la bandeja de cables hasta el panel de interruptores
+        if (i % 2 === 0 && r() < 0.5) {
+          const a = new THREE.Vector3(x + 0.12, HP - 0.02, s * (A / 2 - 0.08))
+          const b = new THREE.Vector3(x + 0.14, 1.7, s * (fz - 0.03))
+          const c = new THREE.CatmullRomCurve3([a, new THREE.Vector3(x + 0.2, 2.1, s * (fz - 0.09)), b])
+          cables.gris.push(new THREE.TubeGeometry(c, 12, 0.012, 5, false))
+        }
+      })
+    }
+    const unir = (g: THREE.BufferGeometry[]) => {
+      if (!g.length) return null
+      const m = mergeGeometries(g)
+      g.forEach((x) => x.dispose())
+      return m
+    }
+    return { variantes, paneles, palancas, barras, soportes, bolsas, cinchas, cables: { blanco: unir(cables.blanco), gris: unir(cables.gris), naranja: unir(cables.naranja) } }
+  }, [tramos])
+  const frentes = useMemo(
+    () =>
+      ['HAB1D2', 'HAB1O4', 'HAB1P6'].map((codigo, k) => {
+        const frente = new THREE.MeshStandardMaterial({ map: texturaBastidor(codigo, 0.58, 2.2, 31 + k * 17, alta), roughness: 0.75, metalness: 0.05 })
+        return [MAT.panel, MAT.panel, MAT.panel, MAT.panel, frente, MAT.panel]
+      }),
+    [alta],
+  )
+  return (
+    <group>
+      {datos.variantes.map((m, k) => (
+        <Instancias key={k} geo={CAJA} mat={frentes[k]} m={m} />
+      ))}
+      <Instancias geo={GEO.cilindro} mat={MAT.pasamanos} m={datos.barras} />
+      <Instancias geo={CAJA} mat={MAT.junta} m={datos.soportes} />
+      <Instancias geo={CAJA} mat={materialCTB(1)} m={datos.bolsas[0]} />
+      <Instancias geo={CAJA} mat={materialCTB(4)} m={datos.bolsas[1]} />
+      {alta && (
+        <>
+          <Instancias geo={CAJA} mat={MAT.oscuro} m={datos.paneles} />
+          <Instancias geo={GEO.cilindro} mat={MAT_EXTRA.palanca} m={datos.palancas} />
+          <Instancias geo={CAJA} mat={MAT_EXTRA.cincha} m={datos.cinchas} />
+          {datos.cables.blanco && <mesh geometry={datos.cables.blanco} material={MAT_EXTRA.cableBlanco} />}
+          {datos.cables.gris && <mesh geometry={datos.cables.gris} material={MAT_EXTRA.cableGris} />}
+          {datos.cables.naranja && <mesh geometry={datos.cables.naranja} material={MAT.cableNaranja} />}
+        </>
+      )}
+    </group>
+  )
+}
+
+/** Rejillas de ventilación en los chaflanes y estribos para los pies frente a cada puesto. */
+function DetallesCasco() {
+  const alta = useGraficos((s) => s.calidad) === 'alta'
+  const rejilla = useMemo(() => new THREE.MeshStandardMaterial({ map: texturaRejilla(), roughness: 0.6, metalness: 0.3 }), [])
+  const rejillas = useMemo(() => [-7.2, -4.0, -0.8, 2.4, 5.6].map((x) => matriz(x, -0.053, 0.24, [Math.PI / 2, 0, 0], [0.5, 0.3, 1])), [])
+  const lazos = useMemo(
+    () =>
+      ESTACIONES.filter((e) => e.zona === 'nave' && Math.abs(e.z) > 1).flatMap((e) =>
+        [-0.2, 0.2].map((dx) => matriz(e.x + dx, 0, e.z - Math.sign(e.z) * 0.62, [0, 0, 0], [1, 0.45, 1])),
+      ),
+    [],
+  )
+  return (
+    <group>
+      {[-1, 1].map((s) => (
+        <group key={s} position={[0, HP + 0.27, s * (A / 2 - 0.3)]} rotation={[s * Math.PI * 0.25, 0, 0]}>
+          <Instancias geo={GEO.plano} mat={rejilla} m={rejillas} />
+        </group>
+      ))}
+      {alta && <Instancias geo={GEO.lazo} mat={MAT_EXTRA.cincha} m={lazos} />}
     </group>
   )
 }
@@ -674,6 +949,14 @@ function Casco() {
       return xs
     }
     return { [-1]: lista(-1), [1]: lista(1) } as Record<number, number[]>
+  }, [])
+  const luzPanel = useMemo(() => new THREE.MeshBasicMaterial({ map: texturaLuz() }), [])
+  // Paneles claros con marcas de uso (manos, roces) y juntas.
+  useLayoutEffect(() => {
+    const t = texturaDesgaste()
+    t.repeat.set(7, 1.2)
+    MAT.panelClaro.map = t
+    MAT.panelClaro.needsUpdate = true
   }, [])
   return (
     <group>
@@ -696,19 +979,8 @@ function Casco() {
           <boxGeometry args={[L, HP, 0.1]} />
         </mesh>
       ))}
-      {/* bastidores genéricos en los huecos */}
-      {[-1, 1].map((s) =>
-        tramos[s].map((x) => (
-          <group key={`${s}${x}`} position={[x, 0, s * (A / 2 - 0.12)]}>
-            <mesh position={[0, 1.15, 0]} material={MAT.panel}>
-              <boxGeometry args={[0.58, 2.2, 0.16]} />
-            </mesh>
-            <mesh position={[0, 1.6, -s * 0.085]} material={MAT.panelGris}>
-              <boxGeometry args={[0.4, 0.3, 0.02]} />
-            </mesh>
-          </group>
-        )),
-      )}
+      {/* bastidores genéricos en los huecos, todos de una vez (tres variantes de frente) */}
+      <BastidoresGenericos tramos={tramos} />
       {/* chaflanes entre pared y techo, con tiras de luz LED */}
       {[-1, 1].map((s) => (
         <group key={s}>
@@ -735,10 +1007,16 @@ function Casco() {
       <mesh position={[0, H + 0.05, 0]} material={MAT.panelClaro}>
         <boxGeometry args={[L, 0.1, A - 1.1]} />
       </mesh>
+      {/* paneles de luz LED con su marco y difusor */}
       {[-6, -2, 2, 6].map((x) => (
-        <mesh key={x} position={[x, H - 0.01, 0]} material={MAT.led}>
-          <boxGeometry args={[2.0, 0.03, 0.6]} />
-        </mesh>
+        <group key={x} position={[x, H - 0.012, 0]}>
+          <mesh material={MAT.junta}>
+            <boxGeometry args={[2.1, 0.03, 0.7]} />
+          </mesh>
+          <mesh position={[0, -0.017, 0]} rotation={[Math.PI / 2, 0, 0]} material={luzPanel}>
+            <planeGeometry args={[2.0, 0.6]} />
+          </mesh>
+        </group>
       ))}
       {/* anillos de estructura que dividen el módulo */}
       {[-3.05, 3.15].map((x) => (
@@ -882,6 +1160,7 @@ export function Interior({ sala, cerca, destacadas }: { sala: RoomState; cerca: 
       {/* luz que entra por el ventanal */}
       <directionalLight position={[-30, 12, 6]} intensity={enMarte ? (noche ? 0.05 : 0.8) : 0.55} color={enMarte ? '#ffd9b8' : '#ffffff'} />
       <Casco />
+      <DetallesCasco />
       <Ventana sala={sala} />
       <Puente cerca={cerca} destacadas={destacadas} />
       <Estaciones sala={sala} cerca={cerca} destacadas={destacadas} micro={micro} />

@@ -1,7 +1,10 @@
 // El personaje de cada jugador, hecho con geometría propia (sin modelos externos): cara con
 // ojos que parpadean y miran, cejas, nariz, boca, orejas y pelo; cuerpo articulado (hombros,
-// codos, caderas, rodillas) con el mono de vuelo de su color. Fuera lleva el traje completo:
-// casco transparente con visor dorado levantado (así se le ve la cara), mochila de soporte vital.
+// codos, caderas, rodillas). Dentro viste ropa de a bordo: polo de su color y pantalón de
+// bolsillos. Fuera lleva un traje de exploración al estilo del xEMU de NASA: casco de burbuja con
+// visor dorado levantado (así se le ve la cara), carcasa con focos y cámaras, mochila de soporte
+// vital (PLSS), módulo de pantalla y mandos en el pecho, rodamientos en las articulaciones,
+// guantes, botas con suela de tacos y parche de misión. El detalle más fino, solo en calidad alta.
 //
 // Las animaciones dependen de lo que esté haciendo: de pie, andando, flotando sin gravedad,
 // corriendo en la cinta, pedaleando, durmiendo, trabajando en una consola, encogido en el
@@ -11,6 +14,8 @@ import { useFrame } from '@react-three/fiber'
 import { Html } from '@react-three/drei'
 import * as THREE from 'three'
 import { trajePorDefecto, type Traje } from '@shared/types'
+import { useGraficos } from '../graficos'
+import { empolvar, texturaParche } from './procedural'
 
 export type Accion = 'pie' | 'flotar' | 'correr' | 'bici' | 'dormir' | 'consola' | 'refugio' | 'tumbado'
 
@@ -171,6 +176,22 @@ export function Astronauta({ traje: trajeEntrada, distintivo, completo, pose, tu
       cristal: new THREE.MeshPhysicalMaterial({ color: '#dbeafe', roughness: 0.04, metalness: 0, transparent: true, opacity: 0.16, depthWrite: false, clearcoat: 1 }),
       visor: new THREE.MeshStandardMaterial({ color: traje.visor, roughness: 0.05, metalness: 0.95, emissive: traje.visor, emissiveIntensity: 0.06 }),
       saco: new THREE.MeshStandardMaterial({ color: '#4f6f9a', roughness: 0.9 }),
+      // ropa de a bordo
+      pantalon: new THREE.MeshStandardMaterial({ color: '#3f4552', roughness: 0.9 }),
+      pantalonOscuro: new THREE.MeshStandardMaterial({ color: '#30353f', roughness: 0.9 }),
+      boton: new THREE.MeshStandardMaterial({ color: '#f1f1ee', roughness: 0.4 }),
+      suela: new THREE.MeshStandardMaterial({ color: '#e5e7eb', roughness: 0.8 }),
+      // traje de exploración
+      rodamiento: new THREE.MeshStandardMaterial({ color: '#b9c0c9', roughness: 0.28, metalness: 0.85 }),
+      pliegue: new THREE.MeshStandardMaterial({ color: '#d9dce1', roughness: 0.85 }),
+      dcm: new THREE.MeshStandardMaterial({ color: '#c9cdd3', roughness: 0.5, metalness: 0.2 }),
+      pantallaDcm: new THREE.MeshStandardMaterial({ color: '#06121a', emissive: '#3ddc97', emissiveIntensity: 0.7, roughness: 0.2 }),
+      mando: new THREE.MeshStandardMaterial({ color: '#23272e', roughness: 0.5, metalness: 0.3 }),
+      purga: new THREE.MeshStandardMaterial({ color: '#b91c1c', roughness: 0.5 }),
+      foco: new THREE.MeshBasicMaterial({ color: '#fff6e0' }),
+      palma: new THREE.MeshStandardMaterial({ color: '#4a4f57', roughness: 0.9 }),
+      botaTraje: empolvar(new THREE.MeshStandardMaterial({ color: '#d7dade', roughness: 0.8 }), 0.55),
+      parche: new THREE.MeshStandardMaterial({ map: texturaParche(), roughness: 0.7 }),
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [traje.piel, traje.pelo, traje.color, traje.acento, traje.visor, distintivo, completo])
@@ -374,6 +395,10 @@ export function Astronauta({ traje: trajeEntrada, distintivo, completo, pose, tu
 
   // ---- Medidas (metros) ----
   const grosor = completo ? 1.25 : 1
+  const alta = useGraficos((s) => s.calidad) === 'alta'
+  // Tela de cada parte: traje blanco fuera; dentro, polo arriba y pantalón abajo.
+  const arriba = completo ? m.eva : m.tela
+  const abajo = completo ? m.eva : m.pantalon
 
   return (
     <group ref={raiz} scale={escala}>
@@ -386,15 +411,33 @@ export function Astronauta({ traje: trajeEntrada, distintivo, completo, pose, tu
           const lado = i === 0 ? -1 : 1
           return (
             <group key={i} ref={piernas[i]} position={[lado * 0.1, 0.92, 0]}>
-              <mesh geometry={G.capsula} position={[0, -0.22, 0]} scale={[0.075 * grosor, 0.15, 0.08 * grosor]} material={completo ? m.eva : m.tela} castShadow />
-              {/* bolsillo lateral del muslo */}
-              {!completo && <mesh geometry={G.caja} position={[lado * 0.07, -0.2, 0.01]} scale={[0.02, 0.11, 0.09]} material={m.telaOscura} />}
-              <mesh geometry={G.cilindro} position={[0, -0.12, 0]} scale={[0.079 * grosor, 0.03, 0.084 * grosor]} material={m.acento} />
+              <mesh geometry={G.capsula} position={[0, -0.22, 0]} scale={[0.075 * grosor, 0.15, 0.08 * grosor]} material={abajo} castShadow />
+              {/* bolsillo lateral del muslo (pantalón de a bordo) */}
+              {!completo && <mesh geometry={G.caja} position={[lado * 0.07, -0.2, 0.01]} scale={[0.02, 0.11, 0.09]} material={m.pantalonOscuro} />}
+              {/* franja del traje con el color del jugador y rodamiento de la cadera */}
+              {completo && <mesh geometry={G.cilindro} position={[0, -0.12, 0]} scale={[0.079 * grosor, 0.03, 0.084 * grosor]} material={m.acento} />}
+              {completo && <mesh geometry={G.cilindro} position={[0, -0.03, 0]} scale={[0.1, 0.028, 0.104]} material={m.rodamiento} />}
               <group ref={rodillas[i]} position={[0, -0.44, 0]}>
-                <mesh geometry={G.capsula} position={[0, -0.2, 0]} scale={[0.062 * grosor, 0.15, 0.066 * grosor]} material={completo ? m.eva : m.tela} castShadow />
-                {/* bota */}
-                <mesh geometry={G.caja} position={[0, -0.42, 0.04]} scale={[0.1 * grosor, 0.08, 0.24]} material={m.bota} castShadow />
-                <mesh geometry={G.caja} position={[0, -0.455, 0.04]} scale={[0.105 * grosor, 0.02, 0.25]} material={m.gris} />
+                <mesh geometry={G.capsula} position={[0, -0.2, 0]} scale={[0.062 * grosor, 0.15, 0.066 * grosor]} material={abajo} castShadow />
+                {/* pliegues de la rodilla del traje */}
+                {completo && alta && [0.02, -0.025].map((y) => <mesh key={y} geometry={G.cilindro} position={[0, y, 0]} scale={[0.084, 0.016, 0.088]} material={m.pliegue} />)}
+                {completo ? (
+                  <>
+                    {/* bota del traje: caña, rodamiento del tobillo, puntera y suela de tacos */}
+                    <mesh geometry={G.cilindro} position={[0, -0.33, 0.005]} scale={[0.074, 0.12, 0.08]} material={m.botaTraje} />
+                    <mesh geometry={G.cilindro} position={[0, -0.27, 0.005]} scale={[0.08, 0.02, 0.085]} material={m.rodamiento} />
+                    <mesh geometry={G.caja} position={[0, -0.42, 0.045]} scale={[0.13, 0.09, 0.27]} material={m.botaTraje} castShadow />
+                    <mesh geometry={G.esferaBaja} position={[0, -0.43, 0.165]} scale={[0.066, 0.05, 0.05]} material={m.botaTraje} />
+                    <mesh geometry={G.caja} position={[0, -0.47, 0.05]} scale={[0.136, 0.025, 0.3]} material={m.mando} />
+                    {alta && [-0.06, 0.02, 0.1].map((z) => <mesh key={z} geometry={G.caja} position={[0, -0.487, z]} scale={[0.13, 0.012, 0.03]} material={m.mando} />)}
+                  </>
+                ) : (
+                  <>
+                    {/* zapatilla con suela clara */}
+                    <mesh geometry={G.caja} position={[0, -0.42, 0.04]} scale={[0.1, 0.08, 0.24]} material={m.bota} castShadow />
+                    <mesh geometry={G.caja} position={[0, -0.455, 0.04]} scale={[0.105, 0.02, 0.25]} material={m.suela} />
+                  </>
+                )}
               </group>
             </group>
           )
@@ -403,30 +446,66 @@ export function Astronauta({ traje: trajeEntrada, distintivo, completo, pose, tu
         {/* ---- torso ---- */}
         <group ref={torso} position={[0, 0.92, 0]}>
           {/* cadera y cinturón */}
-          <mesh geometry={G.capsula} position={[0, 0.06, 0]} scale={[0.15 * grosor, 0.05, 0.11 * grosor]} material={completo ? m.eva : m.tela} />
-          <mesh geometry={G.cilindro} position={[0, 0.06, 0]} scale={[0.158 * grosor, 0.035, 0.118 * grosor]} material={m.gris} />
+          <mesh geometry={G.capsula} position={[0, 0.06, 0]} scale={[0.15 * grosor, 0.05, 0.11 * grosor]} material={abajo} />
+          <mesh geometry={G.cilindro} position={[0, 0.06, 0]} scale={[0.158 * grosor, 0.035, 0.118 * grosor]} material={completo ? m.rodamiento : m.mando} />
           {/* pecho: más ancho arriba */}
-          <mesh geometry={G.capsula} position={[0, 0.3, 0]} scale={[0.165 * grosor, 0.13, 0.11 * grosor]} material={completo ? m.eva : m.tela} castShadow />
-          <mesh geometry={G.esfera} position={[0, 0.38, 0.005]} scale={[0.2 * grosor, 0.1, 0.115 * grosor]} material={completo ? m.eva : m.tela} castShadow />
-          {/* cremallera y cuello del mono */}
+          <mesh geometry={G.capsula} position={[0, 0.3, 0]} scale={[0.165 * grosor, 0.13, 0.11 * grosor]} material={arriba} castShadow />
+          <mesh geometry={G.esfera} position={[0, 0.38, 0.005]} scale={[0.2 * grosor, 0.1, 0.115 * grosor]} material={arriba} castShadow />
+          {/* polo: cuello con solapas y tapeta con botones */}
           {!completo && (
             <>
-              <mesh geometry={G.caja} position={[0, 0.3, 0.113]} scale={[0.008, 0.28, 0.004]} material={m.telaOscura} />
-              <mesh geometry={G.anillo} position={[0, 0.48, 0]} rotation={[Math.PI / 2, 0, 0]} scale={[0.065, 0.06, 0.12]} material={m.acento} />
+              <mesh geometry={G.anillo} position={[0, 0.48, 0]} rotation={[Math.PI / 2, 0, 0]} scale={[0.065, 0.06, 0.12]} material={m.tela} />
+              {[-1, 1].map((l) => (
+                <mesh key={l} geometry={G.caja} position={[l * 0.035, 0.475, 0.07]} rotation={[-0.5, 0, l * 0.55]} scale={[0.06, 0.03, 0.008]} material={m.telaOscura} />
+              ))}
+              <mesh geometry={G.caja} position={[0, 0.43, 0.113]} scale={[0.026, 0.08, 0.004]} material={m.telaOscura} />
+              {[0.45, 0.415].map((y) => (
+                <mesh key={y} geometry={G.esferaBaja} position={[0, y, 0.117]} scale={0.0055} material={m.boton} />
+              ))}
             </>
           )}
+          {/* traje: rodamiento de la cintura */}
+          {completo && <mesh geometry={G.cilindro} position={[0, 0.15, 0]} scale={[0.19, 0.022, 0.135]} material={m.rodamiento} />}
           {/* distintivo del rol */}
           <mesh geometry={G.caja} position={[0.075, 0.38, 0.118 * grosor]} scale={[0.06, 0.04, 0.008]} material={m.distintivo} />
-          {/* parche de misión: círculo con el color del traje y borde de acento */}
-          <mesh geometry={G.disco} position={[-0.08, 0.38, 0.121 * grosor]} scale={0.032} material={m.acento} />
-          {/* panel de control del traje */}
-          {completo && <mesh geometry={G.caja} position={[0, 0.27, 0.15]} scale={[0.17, 0.11, 0.05]} material={m.gris} />}
-          {/* mochila de soporte vital */}
+          {/* parche de misión */}
+          <mesh geometry={G.disco} position={[-0.08, 0.38, 0.121 * grosor]} scale={0.032} material={m.parche} />
+          {/* módulo de pantalla y mandos del pecho (DCM): pantalla, perillas y la de purga */}
           {completo && (
-            <group position={[0, 0.33, -0.17]}>
-              <mesh geometry={G.caja} scale={[0.36, 0.52, 0.2]} material={m.eva} castShadow />
-              <mesh geometry={G.caja} position={[0, 0.17, -0.105]} scale={[0.22, 0.05, 0.012]} material={m.acento} />
-              <mesh geometry={G.cilindro} position={[0.12, -0.12, -0.105]} rotation={[Math.PI / 2, 0, 0]} scale={[0.03, 0.02, 0.03]} material={m.gris} />
+            <group position={[0, 0.25, 0.155]}>
+              <mesh geometry={G.caja} scale={[0.19, 0.11, 0.06]} material={m.dcm} castShadow />
+              <mesh geometry={G.caja} position={[0, 0.055, 0.005]} rotation={[-0.45, 0, 0]} scale={[0.17, 0.012, 0.05]} material={m.dcm} />
+              <mesh geometry={G.caja} position={[0, 0.06, 0.012]} rotation={[-0.45 - Math.PI / 2, 0, 0]} scale={[0.11, 0.035, 0.002]} material={m.pantallaDcm} />
+              {[-0.06, 0.06].map((x) => (
+                <mesh key={x} geometry={G.cilindro} position={[x, -0.015, 0.035]} rotation={[Math.PI / 2, 0, 0]} scale={[0.016, 0.02, 0.016]} material={m.mando} />
+              ))}
+              <mesh geometry={G.cilindro} position={[0, -0.03, 0.035]} rotation={[Math.PI / 2, 0, 0]} scale={[0.012, 0.018, 0.012]} material={m.purga} />
+              {/* mangueras hacia la mochila */}
+              {alta &&
+                [-1, 1].map((l) => (
+                  <mesh key={l} geometry={G.capsula} position={[l * 0.13, -0.01, -0.06]} rotation={[0.9, 0, l * 0.5]} scale={[0.012, 0.06, 0.012]} material={m.mando} />
+                ))}
+            </group>
+          )}
+          {/* mochila de soporte vital (PLSS): cuerpo, rieles, rejilla, botella de reserva y antena */}
+          {completo && (
+            <group position={[0, 0.33, -0.18]}>
+              <mesh geometry={G.caja} scale={[0.4, 0.56, 0.22]} material={m.eva} castShadow />
+              <mesh geometry={G.caja} position={[0, 0.2, -0.115]} scale={[0.24, 0.05, 0.012]} material={m.acento} />
+              {[-1, 1].map((l) => (
+                <mesh key={l} geometry={G.caja} position={[l * 0.205, 0, 0]} scale={[0.02, 0.5, 0.2]} material={m.dcm} />
+              ))}
+              <mesh geometry={G.caja} position={[0, -0.19, -0.115]} scale={[0.28, 0.08, 0.01]} material={m.mando} />
+              <mesh geometry={G.cilindro} position={[0, -0.3, -0.01]} rotation={[0, 0, Math.PI / 2]} scale={[0.06, 0.36, 0.06]} material={m.eva} />
+              <mesh geometry={G.cilindro} position={[0.13, -0.08, -0.115]} rotation={[Math.PI / 2, 0, 0]} scale={[0.03, 0.02, 0.03]} material={m.gris} />
+              {alta && (
+                <>
+                  <mesh geometry={G.cilindro} position={[0.15, 0.36, -0.05]} scale={[0.007, 0.12, 0.007]} material={m.gris} />
+                  {[0.08, -0.05].map((y) => (
+                    <mesh key={y} geometry={G.caja} position={[0, y, -0.112]} scale={[0.34, 0.004, 0.004]} material={m.pliegue} />
+                  ))}
+                </>
+              )}
             </group>
           )}
 
@@ -435,9 +514,23 @@ export function Astronauta({ traje: trajeEntrada, distintivo, completo, pose, tu
             const lado = i === 0 ? -1 : 1
             return (
               <group key={i} ref={brazos[i]} position={[lado * 0.215 * (completo ? 1.12 : 1), 0.44, 0]}>
-                <mesh geometry={G.esfera} scale={[0.065 * grosor, 0.065 * grosor, 0.065 * grosor]} material={completo ? m.eva : m.tela} />
-                <mesh geometry={G.capsula} position={[0, -0.15, 0]} scale={[0.05 * grosor, 0.1, 0.052 * grosor]} material={completo ? m.eva : m.tela} castShadow />
-                <mesh geometry={G.cilindro} position={[0, -0.07, 0]} scale={[0.053 * grosor, 0.025, 0.055 * grosor]} material={m.acento} />
+                <mesh geometry={G.esfera} scale={[0.065 * grosor, 0.065 * grosor, 0.065 * grosor]} material={arriba} />
+                {completo ? (
+                  <>
+                    <mesh geometry={G.capsula} position={[0, -0.15, 0]} scale={[0.05 * grosor, 0.1, 0.052 * grosor]} material={m.eva} castShadow />
+                    <mesh geometry={G.cilindro} position={[0, -0.07, 0]} scale={[0.053 * grosor, 0.025, 0.055 * grosor]} material={m.acento} />
+                    {/* rodamientos del hombro y del brazo */}
+                    <mesh geometry={G.cilindro} position={[0, -0.025, 0]} scale={[0.072, 0.024, 0.072]} material={m.rodamiento} />
+                    {alta && <mesh geometry={G.cilindro} position={[0, -0.2, 0]} scale={[0.066, 0.018, 0.068]} material={m.rodamiento} />}
+                  </>
+                ) : (
+                  <>
+                    {/* manga corta del polo con su ribete y el brazo al aire */}
+                    <mesh geometry={G.capsula} position={[0, -0.08, 0]} scale={[0.05, 0.045, 0.052]} material={m.tela} castShadow />
+                    <mesh geometry={G.cilindro} position={[0, -0.135, 0]} scale={[0.051, 0.012, 0.053]} material={m.telaOscura} />
+                    <mesh geometry={G.capsula} position={[0, -0.18, 0]} scale={[0.04, 0.07, 0.042]} material={m.piel} />
+                  </>
+                )}
                 {/* bandera en el hombro izquierdo */}
                 {bandera && i === 0 && (
                   <group position={[-0.051 * grosor, -0.11, 0]} rotation={[0, -Math.PI / 2, 0]}>
@@ -453,7 +546,16 @@ export function Astronauta({ traje: trajeEntrada, distintivo, completo, pose, tu
                   </group>
                 )}
                 <group ref={codos[i]} position={[0, -0.29, 0]}>
-                  <mesh geometry={G.capsula} position={[0, -0.13, 0]} scale={[0.044 * grosor, 0.09, 0.046 * grosor]} material={completo ? m.eva : m.tela} castShadow />
+                  <mesh geometry={G.capsula} position={[0, -0.13, 0]} scale={[0.044 * grosor, 0.09, 0.046 * grosor]} material={completo ? m.eva : m.piel} castShadow />
+                  {completo && (
+                    <>
+                      {/* pliegues del codo, rodamiento de la muñeca y guantelete */}
+                      {alta && <mesh geometry={G.cilindro} position={[0, 0, 0]} scale={[0.062, 0.016, 0.064]} material={m.pliegue} />}
+                      <mesh geometry={G.cilindro} position={[0, -0.215, 0]} scale={[0.054, 0.024, 0.056]} material={m.rodamiento} />
+                      <mesh geometry={G.cilindro} position={[0, -0.235, 0]} scale={[0.05, 0.02, 0.052]} material={m.guante} />
+                      <mesh geometry={G.esferaBaja} position={[0, -0.3, 0.01]} scale={[0.045, 0.03, 0.03]} material={m.palma} />
+                    </>
+                  )}
                   {/* mano: palma y pulgar */}
                   <mesh geometry={G.esfera} position={[0, -0.27, 0.005]} scale={[0.04 * grosor, 0.055, 0.025 * grosor]} material={m.guante} />
                   <mesh geometry={G.capsula} position={[-lado * 0.03, -0.25, 0.02]} rotation={[0, 0, lado * 0.6]} scale={[0.012 * grosor, 0.018, 0.012 * grosor]} material={m.guante} />
@@ -499,8 +601,18 @@ export function Astronauta({ traje: trajeEntrada, distintivo, completo, pose, tu
             {completo && (
               <>
                 <mesh geometry={G.esfera} position={[0, 0.0, 0.01]} scale={0.175} material={m.cristal} renderOrder={2} />
-                <mesh geometry={G.casquete} position={[0, 0.02, 0.012]} rotation={[-0.55, 0, 0]} scale={[0.178, 0.178, 0.178]} material={m.visor} />
-                <mesh geometry={G.anillo} position={[0, -0.135, 0]} rotation={[Math.PI / 2, 0, 0]} scale={[0.15, 0.15, 0.25]} material={m.gris} />
+                {/* carcasa trasera del casco (cubre la nuca) y visor dorado levantado */}
+                <mesh geometry={G.casquete} position={[0, 0.0, 0.0]} rotation={[-Math.PI / 2 - 0.15, 0, 0]} scale={[0.184, 0.184, 0.184]} material={m.eva} />
+                <mesh geometry={G.casquete} position={[0, 0.02, 0.012]} rotation={[-0.55, 0, 0]} scale={[0.186, 0.186, 0.186]} material={m.visor} />
+                {/* focos y cámaras a los lados */}
+                {[-1, 1].map((l) => (
+                  <group key={l} position={[l * 0.17, 0.05, 0.02]}>
+                    <mesh geometry={G.caja} scale={[0.035, 0.05, 0.08]} material={m.eva} />
+                    <mesh geometry={G.disco} position={[0, 0, 0.041]} scale={0.016} material={m.foco} />
+                    <mesh geometry={G.cilindro} position={[0, 0.042, 0.015]} rotation={[Math.PI / 2, 0, 0]} scale={[0.011, 0.05, 0.011]} material={m.mando} />
+                  </group>
+                ))}
+                <mesh geometry={G.anillo} position={[0, -0.135, 0]} rotation={[Math.PI / 2, 0, 0]} scale={[0.15, 0.15, 0.25]} material={m.rodamiento} />
               </>
             )}
           </group>

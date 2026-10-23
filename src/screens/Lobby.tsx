@@ -11,6 +11,7 @@ import { Astronauta } from '../mundo/Astronauta'
 import { api } from '../red'
 import { useStore, useYo } from '../store'
 import { DificultadLobby } from './DificultadLobby'
+import { BotonAccesibilidad } from '../hud/Accesibilidad'
 
 function Giratorio({ traje, distintivo }: { traje: Traje; distintivo: string }) {
   const ref = useRef<THREE.Group>(null)
@@ -118,7 +119,10 @@ export function LobbyScreen() {
             </p>
           </div>
           <div className="stack" style={{ gap: 6, alignItems: 'flex-end', maxWidth: 340 }}>
-            <button onClick={() => api.salir()}>Leave</button>
+            <div className="row" style={{ gap: 6 }}>
+              <BotonAccesibilidad />
+              <button onClick={() => api.salir()}>Leave</button>
+            </div>
             <ComprobacionConexion />
           </div>
         </div>
@@ -215,9 +219,12 @@ export function LobbyScreen() {
                 <input type="checkbox" checked={Boolean(sala.rellenarBots)} disabled={!soyHost} onChange={(e) => api.rellenarBots(e.target.checked)} /> Add bots for empty roles. They take only the roles nobody chooses.
               </label>
             )}
-            <div className="assistant">{aviso}</div>
-            <button className="primary" disabled={!puedeIniciar} onClick={() => api.iniciar()}>Start the mission</button>
           </div>
+        </div>
+        {/* Pie fijo: en pantallas bajas (1366×768) el botón queda a la vista sin desplazar. */}
+        <div className="lobby-pie">
+          <div className="assistant grow">{aviso}</div>
+          <button className="primary" disabled={!puedeIniciar} onClick={() => api.iniciar()}>Start the mission</button>
         </div>
       </div>
     </div>

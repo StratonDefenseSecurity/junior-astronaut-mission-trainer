@@ -366,6 +366,7 @@ if (!corto) {
   await trabajo(B, `entrada:${idB}`, 'B vuelve al hábitat por la esclusa')
   await trabajo(B, `analizar:${idB}`, 'B tamiza, analiza y lee la muestra en el laboratorio')
   comprobar(sala.mision.muestrasAnalizadas === 1, 'la muestra cuenta para el objetivo')
+  await estado(A) // A sigue conectado: un cliente real consulta sin parar (sin esto, más de 12 s quieto = desconectado).
   await paso(B, 'accion', { id: 'racionComida', payload: { nivel: 'ahorro' } }, 'sistemas no decide las raciones si hay comandante', 400)
   await paso(A, 'accion', { id: 'racionComida', payload: { nivel: 'ahorro' } }, 'el comandante propone ración de ahorro')
   comprobar(sala.ajustes.racionComida === 'ahorro', 'en modo comandante su propuesta queda aprobada')
