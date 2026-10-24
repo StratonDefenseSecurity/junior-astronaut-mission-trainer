@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
-import { ASCENSO, altitudAscenso, distanciaAscenso, RUMBO_ASCENSO } from '@shared/ascenso'
+import { ASCENSO, altitudAscenso, distanciaAscenso, empujeRS25, empujeSRB, RUMBO_ASCENSO } from '@shared/ascenso'
 import { calorEDL, EDL, estadoEDL, trayectoriaEDL } from '@shared/edl'
 import { escenarioDe, fechaDeMision } from '@shared/escenarios'
 import { DESCENSO_S, type RoomState } from '@shared/types'
@@ -15,6 +15,8 @@ import { Cielo } from './cielo/Cielo'
 import { orientacionSuperficie, vectorHelio } from './cielo/astro'
 import { SITIOS_MARTE } from './cieloMarte'
 import { Destello, type Oclusor } from './Destello'
+import { NubesDespegue, ResplandorPlataforma } from './EfectosDespegue'
+import { sonido } from '../sonido'
 import { direccionSolEscena, Marte, Tierra } from './planetas'
 import { CUBIERTA_M, PlataformaLC39B, posicionCohete, U, VehiculoSLS } from './SLS'
 
@@ -130,8 +132,33 @@ const ENCUADRES: ReadonlyArray<readonly [number, number, number, number, number]
 ]
 const encuadre = (t: number) => [...ENCUADRES].reverse().find((e) => t >= e[0]) ?? ENCUADRES[0]
 
+/**
+ * Cámaras como en la transmisión de NASA TV, que cambian solas según la cronología: la plataforma,
+ * la de seguimiento de largo alcance, la de a bordo que mira hacia atrás por la etapa central y la
+ * de persecución. Con C el jugador las recorre (y vuelve a la automática).
+ */
+type ModoCamara = 'pad' | 'tracking' | 'onboard' | 'chase'
+const NOMBRE_CAMARA: Record<ModoCamara, string> = { pad: 'Pad', tracking: 'Tracking', onboard: 'Onboard', chase: 'Chase' }
+const PROGRAMA: ReadonlyArray<readonly [number, ModoCamara]> = [
+  [-Infinity, 'pad'],
+  [8, 'tracking'],
+  [T_ACOMPANA, 'chase'],
+  [ASCENSO.apagadoSRB - 6, 'onboard'],
+  [ASCENSO.separacionSRB + 16, 'chase'],
+  [300, 'onboard'],
+  [345, 'chase'],
+]
+const camaraAuto = (t: number) => [...PROGRAMA].reverse().find((e) => t >= e[0])![1]
+/** Las de tierra solo mientras el mundo queda quieto (antes de que la cámara acompañe al cohete). */
+const camarasDisponibles = (t: number): ModoCamara[] => (t < T_ACOMPANA ? ['pad', 'tracking', 'onboard', 'chase'] : ['onboard', 'chase'])
+/** Velocidad del sonido a nivel del mar, 343 m/s: el rugido llega tarde a las cámaras de tierra. */
+const SONIDO_M_S = 343
+const empujeTotal = (t: number) => Math.min(1, 0.78 * empujeSRB(t) + 0.32 * empujeRS25(t))
+
 const EJE_Y = new THREE.Vector3(0, 1, 0)
 const EJE_Z = new THREE.Vector3(0, 0, 1)
+const tmpB = new THREE.Vector3()
+const tmpArriba = new THREE.Vector3()
 const tmpQ = new THREE.Quaternion()
 const tmpQ2 = new THREE.Quaternion()
 const tmpV = new THREE.Vector3()
@@ -170,6 +197,55 @@ export function Lanzamiento({ sala }: { sala: RoomState }) {
     }
   }, [])
   const camara = useRef({ R: 50, e: 0, az: 0, ty: 40, listo: false })
+  // null = cámara automática; si no, la que eligió el jugador con C.
+  const elegida = useRef<ModoCamara | null>(null)
+  const rotulo = useRef<HTMLDivElement | null>(null)
+  const sonidoEnviado = useRef({ km: -1, cuando: 0 })
+  const lienzo = useThree((s) => s.gl.domElement)
+  // Rótulo de la cámara, como en la transmisión: arriba al centro del lienzo 3D.
+  useEffect(() => {
+    const padre = lienzo.parentElement
+    if (!padre) return
+    const d = document.createElement('div')
+    d.title = 'Press C to change camera'
+    d.setAttribute('aria-live', 'polite')
+    Object.assign(d.style, {
+      position: 'absolute',
+      top: '72px', // debajo de la barra superior del HUD
+      left: '50%',
+      transform: 'translateX(-50%)',
+      pointerEvents: 'none',
+      zIndex: '1',
+      font: '600 12px ui-monospace, Menlo, Consolas, monospace',
+      letterSpacing: '0.08em',
+      textTransform: 'uppercase',
+      color: '#fff',
+      background: 'rgba(0,0,0,0.55)',
+      padding: '3px 8px',
+      borderRadius: '3px',
+    })
+    padre.appendChild(d)
+    rotulo.current = d
+    return () => {
+      d.remove()
+      rotulo.current = null
+    }
+  }, [lienzo])
+  useEffect(() => {
+    const alPulsar = (e: KeyboardEvent) => {
+      if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || e.key.toLowerCase() !== 'c') return
+      const el = e.target as HTMLElement | null
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)) return
+      const lista: (ModoCamara | null)[] = [null, ...camarasDisponibles(tiempo())]
+      elegida.current = lista[(lista.indexOf(elegida.current) + 1) % lista.length]
+    }
+    window.addEventListener('keydown', alPulsar)
+    return () => {
+      window.removeEventListener('keydown', alPulsar)
+      sonido.parametros({ distanciaKm: 0 })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const desdeTierra = sala.t < T_ACOMPANA
   const objetivo = useMemo(() => new THREE.Vector3(), [])
   useExposicion(1.05)
@@ -217,28 +293,68 @@ export function Lanzamiento({ sala }: { sala: RoomState }) {
     if (plataforma.current) plataforma.current.visible = !acompana
     if (luzSol.current) luzSol.current.position.copy(solEscena.current).multiplyScalar(100)
 
-    // Cielo azul de día (negro de noche) que se apaga al subir.
-    cielo.current.copy(noche).lerp(azul, dia).lerp(negro, Math.min(1, alt / 70))
+    // Cámara: la elegida por el jugador si se puede usar ahora; si no, la de la cronología.
+    const disponibles = camarasDisponibles(t)
+    if (elegida.current && !disponibles.includes(elegida.current)) elegida.current = null
+    const auto = camaraAuto(t)
+    const modo: ModoCamara = elegida.current ?? (disponibles.includes(auto) ? auto : 'chase')
+    const enTierra = modo === 'pad' || modo === 'tracking'
+    if (rotulo.current) {
+      const texto = `CAMERA: ${NOMBRE_CAMARA[modo]}${elegida.current ? '' : ' · auto'}`
+      if (rotulo.current.textContent !== texto) rotulo.current.textContent = texto
+    }
+
+    // Cielo azul de día (negro de noche) que se oscurece al subir, visto desde donde está la cámara.
+    const altCielo = enTierra ? 0 : alt
+    cielo.current.copy(noche).lerp(azul, dia).lerp(negro, 1 - Math.exp(-altCielo / 14))
     scene.background = cielo.current
 
-    const temblor = t > -6.4 && t < ASCENSO.meco ? (Math.random() - 0.5) * 0.1 * Math.min(1, sala.vuelo.g / 2.5) * factorMovimiento() : 0
+    const fm = factorMovimiento()
+    const vibra = t > -6.4 && t < ASCENSO.meco ? Math.min(1, sala.vuelo.g / 2.5) * fm : 0
+    const temblor = (Math.random() - 0.5) * 0.1 * vibra
     const centro = tmpV.set(0, 40 * U, 0).applyQuaternion(qCohete)
-    if (co) centro.add(co.position)
-    if (t < 0) {
+    const base = tmpB.set(0, 0, 0)
+    if (co) {
+      centro.add(co.position)
+      base.copy(co.position)
+    }
+    let mirarAbajo = true
+    if (modo !== 'chase') camara.current.listo = false
+    if (modo === 'pad' && t < -6.4) {
       // Cuenta regresiva: vuelta lenta alrededor de la plataforma, desde el suroeste.
       const a = 2.0 + (t + 12) * 0.025
       const r = 80 - (t + 12) * 0.5
       cam.position.set(Math.cos(a) * r, 5 + CUBIERTA_M * U, Math.sin(a) * r).applyQuaternion(marco.guinada)
       cam.fov = 50
       cam.lookAt(centro.x, centro.y - 2, centro.z)
-    } else if (!acompana) {
+    } else if (modo === 'pad') {
+      // Cámara de la plataforma, a ras del suelo a unos 140 m: ve salir las nubes y sigue al
+      // cohete hacia arriba cerrando el zoom.
+      cam.position.set(55 * U, 2.5 * U, 128 * U).applyQuaternion(marco.guinada)
+      tmpH.set(0, (12 + 30 * THREE.MathUtils.smoothstep(t, 0, 6)) * U, 0).applyQuaternion(qCohete).add(base)
+      const d = cam.position.distanceTo(tmpH)
+      cam.fov = THREE.MathUtils.clamp((2 * Math.atan2(62 * U, d) * 180) / Math.PI, 6, 58)
+      cam.lookAt(tmpH)
+    } else if (modo === 'tracking') {
       // Cámara de seguimiento a ~400 m al oeste: sigue al cohete y cierra el zoom a medida que se
       // aleja, como las cámaras de largo alcance.
       cam.position.set(-330 * U, 2 * U, 200 * U).applyQuaternion(marco.guinada)
       const d = cam.position.distanceTo(centro)
       cam.fov = THREE.MathUtils.clamp((2 * Math.atan2(30 + 0.012 * d, d) * 180) / Math.PI, 4, 50)
-      cam.lookAt(centro.x + temblor * 0.3, centro.y - 6 + temblor * 0.3, centro.z)
-      camara.current.listo = false
+      cam.lookAt(centro.x, centro.y - 6, centro.z)
+    } else if (modo === 'onboard') {
+      // Cámara de a bordo en lo alto de la etapa central, mirando hacia atrás: el costado naranja,
+      // los propulsores y, abajo, la Tierra.
+      cam.position.set(0, 62 * U, 4.9 * U).applyQuaternion(qCohete).add(base)
+      tmpH.set(0, -150 * U, 12 * U).applyQuaternion(qCohete).add(base)
+      cam.up.copy(tmpArriba.set(0, 0, 1).applyQuaternion(qCohete))
+      cam.fov = 72
+      cam.lookAt(tmpH)
+      cam.up.set(0, 1, 0)
+      // La estructura vibra con el empuje.
+      cam.rotateX((Math.random() - 0.5) * 0.004 * vibra)
+      cam.rotateY((Math.random() - 0.5) * 0.004 * vibra)
+      mirarAbajo = false
     } else {
       const [, R, e, az, ty] = encuadre(t)
       const c = camara.current
@@ -248,20 +364,36 @@ export function Lanzamiento({ sala }: { sala: RoomState }) {
       c.e += (e - c.e) * k
       c.az += (az + 0.08 * Math.sin(clock.elapsedTime * 0.07) - c.az) * k
       c.ty += (ty - c.ty) * k
-      objetivo.set(0, c.ty * U, 0).applyQuaternion(qCohete)
+      objetivo.set(0, c.ty * U, 0).applyQuaternion(qCohete).add(base)
       tmpH.copy(marco.costado).multiplyScalar(Math.cos(c.az)).addScaledVector(marco.avance, -Math.sin(c.az))
       cam.position.copy(objetivo).addScaledVector(tmpH, Math.cos(c.e) * c.R).addScaledVector(EJE_Y, Math.sin(c.e) * c.R)
       // Nunca por debajo del suelo.
-      const suelo = -CUBIERTA_M * U - bajadaTierra(alt) + 3
+      const suelo = acompana ? -CUBIERTA_M * U - bajadaTierra(alt) + 3 : 1
       if (cam.position.y < suelo) cam.position.y = suelo
       cam.position.x += temblor
       cam.position.y += temblor
       cam.fov = 50
       cam.lookAt(objetivo)
     }
+
+    // Desde tierra el rugido llega con el retraso del sonido, y con él tiembla el suelo.
+    const distanciaM = enTierra ? cam.position.distanceTo(base) / U : 0
+    if (enTierra && fm > 0) {
+      const llega = empujeTotal(t - distanciaM / SONIDO_M_S) * Math.min(1, 260 / Math.max(1, distanciaM))
+      const amp = 0.012 * llega * (cam.fov / 50)
+      cam.rotateX((Math.random() - 0.5) * amp)
+      cam.rotateY((Math.random() - 0.5) * amp * 0.7)
+    }
+    const km = Math.round(distanciaM / 10) / 100
+    const ahora = clock.elapsedTime
+    if (km !== sonidoEnviado.current.km && ahora - sonidoEnviado.current.cuando > 0.1) {
+      sonido.parametros({ distanciaKm: km })
+      sonidoEnviado.current = { km, cuando: ahora }
+    }
+
     // El panel de telemetría tapa la parte baja de la pantalla: se baja un poco la mirada para que
     // el cohete quede en la mitad de arriba.
-    cam.rotateX((-cam.fov * Math.PI * 0.17) / 180)
+    if (mirarAbajo) cam.rotateX((-cam.fov * Math.PI * 0.17) / 180)
     cam.updateProjectionMatrix()
   })
 
@@ -281,6 +413,8 @@ export function Lanzamiento({ sala }: { sala: RoomState }) {
         </group>
         <group ref={plataforma} position={[0, R_PLANETA + CUBIERTA_M * U, 0]} quaternion={marco.guinada} scale={U}>
           <PlataformaLC39B tiempo={tiempo} noche={1 - dia} />
+          <NubesDespegue tiempo={tiempo} noche={1 - dia} sol={() => solEscena.current} sueloY={-CUBIERTA_M} />
+          <ResplandorPlataforma tiempo={tiempo} sueloY={-CUBIERTA_M} />
         </group>
       </group>
       <group ref={cohete} position={[0, CUBIERTA_M * U, 0]} quaternion={marco.guinada}>

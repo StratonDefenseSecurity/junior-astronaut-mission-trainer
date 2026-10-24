@@ -21,6 +21,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import { materialConoVapor, vaporTransonico } from './EfectosDespegue'
 import { ASCENSO, altitudAscenso, distanciaAscenso, empujeRS25, empujeSRB, trayectoriaAscenso } from '@shared/ascenso'
 
 /** Unidades de la escena por metro: el cohete de 98 m mide 24.5 unidades. */
@@ -70,6 +71,7 @@ const VERTICE_CHORRO = /* glsl */ `
   uniform float uR1;
   uniform float uLargo;
   varying float vS;
+  varying float vA;
   varying vec3 vN;
   varying vec3 vV;
   void main() {
@@ -77,6 +79,7 @@ const VERTICE_CHORRO = /* glsl */ `
     float r = mix(uR0, uR1, sqrt(s));
     vec3 p = vec3(position.x * r, -s * uLargo, position.z * r);
     vS = s;
+    vA = atan(position.z, position.x);
     vN = normalize(normalMatrix * vec3(normal.x, 0.0, normal.z));
     vec4 mv = modelViewMatrix * vec4(p, 1.0);
     vV = normalize(-mv.xyz);
@@ -125,6 +128,7 @@ function materialChorro(nucleo: string, borde: string) {
       uR1: { value: 2 },
       uLargo: { value: 10 },
       uDiamantes: { value: 0 },
+      uTurb: { value: 0 },
       uNucleo: { value: new THREE.Color(nucleo) },
       uBorde: { value: new THREE.Color(borde) },
     },
@@ -133,15 +137,20 @@ function materialChorro(nucleo: string, borde: string) {
       uniform float uFuerza;
       uniform float uTiempo;
       uniform float uDiamantes;
+      uniform float uTurb;
       uniform vec3 uNucleo;
       uniform vec3 uBorde;
       varying float vS;
+      varying float vA;
       varying vec3 vN;
       varying vec3 vV;
       void main() {
         float centro = pow(abs(dot(normalize(vN), normalize(vV))), 1.4);
-        float largo = pow(1.0 - vS, 1.8);
+        float largo = pow(1.0 - vS, mix(1.8, 1.15, uTurb));
         float parpadeo = 0.86 + 0.14 * sin(uTiempo * 47.0 + vS * 31.0) * sin(uTiempo * 23.0 - vS * 13.0);
+        // Turbulencia: remolinos que bajan por el chorro y lo deshilachan hacia la punta.
+        float remolino = sin(vS * 29.0 - uTiempo * 41.0 + vA * 3.0) * sin(vS * 11.0 + uTiempo * 23.0 - vA * 5.0);
+        parpadeo *= 1.0 + uTurb * (0.25 + 0.5 * vS) * remolino;
         float diamantes = uDiamantes * pow(0.5 + 0.5 * cos(vS * 62.0), 6.0) * exp(-vS * 7.0) * centro;
         vec3 col = mix(uBorde, uNucleo, clamp(centro * (1.15 - vS), 0.0, 1.0));
         float a = uFuerza * (largo * (0.15 + centro) * parpadeo + diamantes);
@@ -156,8 +165,9 @@ function materialChorro(nucleo: string, borde: string) {
   })
 }
 
-function ajustarChorro(m: THREE.ShaderMaterial, fuerza: number, r0: number, r1: number, largo: number, diamantes: number, reloj: number) {
+function ajustarChorro(m: THREE.ShaderMaterial, fuerza: number, r0: number, r1: number, largo: number, diamantes: number, reloj: number, turb = 0) {
   const u = m.uniforms
+  u.uTurb.value = turb
   u.uFuerza.value = fuerza
   u.uR0.value = r0
   u.uR1.value = r1
@@ -468,6 +478,9 @@ export function VehiculoSLS({ tiempo, noche = 0 }: { tiempo: () => number; noche
   const estela = useRef<THREE.Mesh>(null)
   const estelaMat = useMemo(materialHumo, [])
   useEffect(() => () => estelaMat.dispose(), [estelaMat])
+  const vaporMat = useMemo(materialConoVapor, [])
+  useEffect(() => () => vaporMat.dispose(), [vaporMat])
+  const vapor = useRef<THREE.Group>(null)
 
   useFrame(({ clock }) => {
     const t = tiempo()
@@ -478,16 +491,22 @@ export function VehiculoSLS({ tiempo, noche = 0 }: { tiempo: () => number; noche
     const abre = apertura(alt, 7)
 
     // Propulsores: chorro brillante de óxido de aluminio que se abre al subir.
-    ajustarChorro(chorroSRB, srbF * 1.15, 1.9, 4 + 3.2 * (abre - 1), 75 + 30 * (abre - 1), 0, reloj)
+    // Largo y turbulento: casi tan largo como el cohete al despegar.
+    ajustarChorro(chorroSRB, srbF * 1.5, 1.9, 4.6 + 3.4 * (abre - 1), 100 + 40 * (abre - 1), 0, reloj, 1)
     // RS-25: chorro casi transparente de vapor de agua, con discos de choque cerca del suelo.
     const abreRS = apertura(alt, 9)
-    ajustarChorro(chorroRS25, rsF * (0.55 - 0.4 * THREE.MathUtils.smoothstep(alt, 20, 60)), 1.15, 1.5 + 1.6 * (abreRS - 1), 22 + 8 * (abreRS - 1), 1.6 * Math.exp(-alt / 6), reloj)
+    ajustarChorro(chorroRS25, rsF * (0.3 - 0.2 * THREE.MathUtils.smoothstep(alt, 20, 60)), 1.15, 1.5 + 1.6 * (abreRS - 1), 22 + 8 * (abreRS - 1), 2.8 * Math.exp(-alt / 6), reloj)
     // Arriba, los cuatro chorros se funden en uno solo, enorme y tenue.
     const arriba = THREE.MathUtils.smoothstep(alt, 25, 90)
     ajustarChorro(envolvente, rsF * 0.2 * arriba, 3.4, 6 + 4.5 * abreRS, 50 + 30 * abreRS, 0, reloj)
     // El motor de separación de la torre se enciende al soltarla.
     const tt = t - ASCENSO.torreEscape
     ajustarChorro(chorroTorre, tt > 0 && tt < 2.5 ? 2.2 * (1 - tt / 2.5) : 0, 0.18, 1.2, 9, 0, reloj)
+    // Cono de condensación cerca de Mach 1 y la máxima presión dinámica.
+    const ov = vaporTransonico(t)
+    vaporMat.uniforms.uOpacidad.value = 1.1 * ov
+    vaporMat.uniforms.uTiempo.value = reloj
+    if (vapor.current) vapor.current.visible = ov > 0.01
     if (luz.current) luz.current.intensity = 2600 * srbF + (t < 0 ? 140 : 260) * rsF
     if (estela.current) {
       // Humo de los propulsores: denso en el aire bajo, desaparece al subir.
@@ -519,7 +538,8 @@ export function VehiculoSLS({ tiempo, noche = 0 }: { tiempo: () => number; noche
       const empujon = Math.min(ts, 1)
       const lateral = 1.5 * empujon * empujon + 3 * Math.max(0, ts - 1)
       g.position.set(lado * (X_SRB + lateral), CM_SRB - 1.2 * ts * ts, 0)
-      g.rotation.set(0, 0, -lado * Math.min(1.3, 0.05 * ts + 0.004 * ts * ts))
+      // Se van dando vueltas de punta a punta, con un leve cabeceo.
+      g.rotation.set(0.15 * Math.sin(ts * 0.4 + lado), 0, -lado * (0.06 * ts + 0.012 * ts * ts))
       g.visible = ts < 40
     })
     if (destellos.current) {
@@ -528,7 +548,9 @@ export function VehiculoSLS({ tiempo, noche = 0 }: { tiempo: () => number; noche
       destellos.current.children.forEach((c) => {
         const lado = c.position.x > 0 ? 1 : -1
         c.position.x = lado * (X_SRB + R_SRB + 1 + 1.5 * Math.min(1, Math.max(0, ts)) ** 2)
-        ;((c as THREE.Sprite).material as THREE.SpriteMaterial).opacity = Math.max(0, 1 - ts / 1.4)
+        const k = Math.min(1, Math.max(0, ts) / 0.35)
+        c.scale.setScalar(7 + 15 * k)
+        ;((c as THREE.Sprite).material as THREE.SpriteMaterial).opacity = Math.min(1, 1.6 * Math.max(0, 1 - ts / 1.4))
       })
     }
 
@@ -607,6 +629,14 @@ export function VehiculoSLS({ tiempo, noche = 0 }: { tiempo: () => number; noche
       {/* columna de humo detrás de los propulsores, mientras empujan en el aire denso */}
       <mesh ref={estela} geometry={GEO_CHORRO} material={estelaMat} position={[0, -40, 0]} visible={false} frustumCulled={false} />
       <Destellos textura={textura} refGrupo={destellos} />
+      {/* conos de condensación: en los hombros de Orion, del adaptador y de las puntas de los propulsores */}
+      <group ref={vapor} visible={false}>
+        <mesh geometry={GEO_CHORRO} material={vaporMat} position={[0, ORION_BASE + 1.5, 0]} scale={[R_ORION + 0.6, 14, R_ORION + 0.6]} frustumCulled={false} />
+        <mesh geometry={GEO_CHORRO} material={vaporMat} position={[0, CENTRAL_TOPE + 2, 0]} scale={[R_CENTRAL + 0.8, 26, R_CENTRAL + 0.8]} frustumCulled={false} />
+        {[-1, 1].map((lado) => (
+          <mesh key={lado} geometry={GEO_CHORRO} material={vaporMat} position={[lado * X_SRB, LARGO_SRB - 2, 0]} scale={[R_SRB + 0.5, 16, R_SRB + 0.5]} frustumCulled={false} />
+        ))}
+      </group>
       <ICPS m={m} />
       <Orion m={m} />
       {paneles.map((r, i) => (
@@ -848,17 +878,15 @@ export function PlataformaLC39B({ tiempo, noche }: PropsPlataforma) {
   const cables = useMemo(geometriaCables, [])
   const suelo = useMemo(texturaSuelo, [])
   const borde = useMemo(texturaBorde, [])
-  const vapor = useMemo(() => texturaSuave('235,235,235'), [])
   const chispa = useMemo(() => texturaSuave('255,190,110'), [])
   useEffect(
     () => () => {
       ;[lanzador, pararrayos, mastiles, cables].forEach((g) => g.dispose())
-      ;[suelo, borde, vapor, chispa].forEach((t) => t.dispose())
+      ;[suelo, borde, chispa].forEach((t) => t.dispose())
     },
-    [lanzador, pararrayos, mastiles, cables, suelo, borde, vapor, chispa],
+    [lanzador, pararrayos, mastiles, cables, suelo, borde, chispa],
   )
   const brazos = useRef<THREE.Group>(null)
-  const nubes = useRef<THREE.Group>(null)
   const chispas = useRef<THREE.Points>(null)
   const focos = [useRef<THREE.SpotLight>(null), useRef<THREE.SpotLight>(null)]
   const objetivoFocos = useMemo(() => {
@@ -873,17 +901,6 @@ export function PlataformaLC39B({ tiempo, noche }: PropsPlataforma) {
     return g
   }, [])
   useEffect(() => () => geoChispas.dispose(), [geoChispas])
-  // Nubes de vapor: salen sobre todo por el canal de llamas, hacia el norte.
-  const semillas = useMemo(
-    () =>
-      Array.from({ length: 30 }, (_, i) => {
-        const norte = i % 3 !== 0
-        const a = norte ? -Math.PI / 2 + (((i * 0.618) % 1) - 0.5) * 1.2 : ((i * 0.618) % 1) * Math.PI * 2
-        return { a, retraso: (i % 10) * 0.6, lejos: norte ? 1.6 : 0.8, alto: 0.6 + ((i * 0.37) % 1) * 0.8 }
-      }),
-    [],
-  )
-
   useFrame(() => {
     const t = tiempo()
     // Brazos umbilicales: se sueltan y giran hacia la torre al despegar.
@@ -907,29 +924,6 @@ export function PlataformaLC39B({ tiempo, noche }: PropsPlataforma) {
         }
         p.needsUpdate = true
       }
-    }
-    // Vapor y humo: empieza con los RS-25 y crece mucho con los propulsores.
-    if (nubes.current) {
-      nubes.current.children.forEach((c, i) => {
-        const s = semillas[i]
-        const tr = t - ASCENSO.arranqueRS25 - s.retraso
-        const sprite = c as THREE.Sprite
-        const mat = sprite.material as THREE.SpriteMaterial
-        if (tr <= 0) {
-          sprite.visible = false
-          return
-        }
-        sprite.visible = true
-        const fuerza = t < 0 ? 0.35 : 1
-        const d = (25 + 14 * Math.pow(tr, 0.75) * fuerza) * s.lejos
-        sprite.position.set(Math.cos(s.a) * d, -CUBIERTA_M + 6 + Math.pow(tr, 0.7) * 3 * s.alto, Math.sin(s.a) * d)
-        const tam = 18 + 9 * Math.pow(tr, 0.8) * fuerza
-        sprite.scale.set(tam, tam * 0.8, 1)
-        mat.opacity = Math.min(0.85, tr / 2) * (1 - THREE.MathUtils.smoothstep(t, 60, 120))
-        // De noche, la llama ilumina el vapor de naranja.
-        const brillo = Math.max(empujeSRB(t), 0.3 * empujeRS25(t)) * Math.exp(-d / 160)
-        mat.color.setRGB(0.42 + 0.5 * (1 - noche) + 0.6 * brillo, 0.42 + 0.48 * (1 - noche) + 0.35 * brillo, 0.45 + 0.45 * (1 - noche) + 0.1 * brillo)
-      })
     }
     focos.forEach((f) => {
       if (f.current) f.current.intensity = noche * 9000
@@ -971,13 +965,6 @@ export function PlataformaLC39B({ tiempo, noche }: PropsPlataforma) {
       <points ref={chispas} geometry={geoChispas} visible={false}>
         <pointsMaterial map={chispa} size={1.1} color="#ffc070" transparent depthWrite={false} blending={THREE.AdditiveBlending} />
       </points>
-      <group ref={nubes}>
-        {semillas.map((_, i) => (
-          <sprite key={i} visible={false}>
-            <spriteMaterial map={vapor} transparent depthWrite={false} opacity={0} />
-          </sprite>
-        ))}
-      </group>
       <primitive object={objetivoFocos} />
       {[-1, 1].map((lado, i) => (
         <spotLight key={lado} ref={focos[i]} position={[lado * 90, -CUBIERTA_M + 4, 110]} target={objetivoFocos} angle={0.42} penumbra={0.6} distance={0} decay={2} color="#e9efff" intensity={0} />

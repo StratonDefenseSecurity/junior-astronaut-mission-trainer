@@ -1,11 +1,11 @@
-// Ajustes de accesibilidad: texto más grande, alto contraste apto para daltónicos, movimiento
-// reducido y subtítulos de los sonidos. Se guardan en localStorage y se aplican como clases en
+// Ajustes de accesibilidad: texto más grande, movimiento reducido, subtítulos de los sonidos y el
+// tema de color (src/temas.ts; el alto contraste apto para daltónicos es uno de los temas). Se guardan en localStorage y se aplican como clases en
 // <html> (los estilos están al final de src/styles.css).
 import { create } from 'zustand'
+import { aplicarTema, esHex, esTema, type TemaId } from './temas'
 
 export interface AjustesAccesibilidad {
   textoGrande: boolean
-  contraste: boolean
   movimientoReducido: boolean
   subtitulos: boolean
 }
@@ -13,23 +13,30 @@ export interface AjustesAccesibilidad {
 const CLAVE = 'mt_accesibilidad'
 const CLASES: Record<keyof AjustesAccesibilidad, string> = {
   textoGrande: 'a11y-texto',
-  contraste: 'a11y-contraste',
   movimientoReducido: 'a11y-calma',
   subtitulos: 'a11y-subtitulos',
 }
 
-function inicial(): AjustesAccesibilidad {
+interface Guardado extends AjustesAccesibilidad {
+  tema: TemaId
+  acento: string | null
+}
+
+function inicial(): Guardado {
   let prefiereCalma = false
   try {
     prefiereCalma = window.matchMedia('(prefers-reduced-motion: reduce)').matches
   } catch {
     // sin matchMedia
   }
-  const base: AjustesAccesibilidad = { textoGrande: false, contraste: false, movimientoReducido: prefiereCalma, subtitulos: false }
+  const base: Guardado = { textoGrande: false, movimientoReducido: prefiereCalma, subtitulos: false, tema: 'mision', acento: null }
   try {
-    const guardado = JSON.parse(localStorage.getItem(CLAVE) ?? 'null') as Partial<AjustesAccesibilidad> | null
+    const guardado = JSON.parse(localStorage.getItem(CLAVE) ?? 'null') as (Partial<Guardado> & { contraste?: boolean }) | null
     if (guardado && typeof guardado === 'object') {
-      for (const k of Object.keys(base) as (keyof AjustesAccesibilidad)[]) if (typeof guardado[k] === 'boolean') base[k] = guardado[k]
+      for (const k of Object.keys(CLASES) as (keyof AjustesAccesibilidad)[]) if (typeof guardado[k] === 'boolean') base[k] = guardado[k]
+      if (esTema(guardado.tema)) base.tema = guardado.tema
+      else if (guardado.contraste === true) base.tema = 'contraste' // ajuste antiguo
+      if (esHex(guardado.acento)) base.acento = guardado.acento
     }
   } catch {
     // sin almacenamiento o dato inválido
@@ -37,33 +44,44 @@ function inicial(): AjustesAccesibilidad {
   return base
 }
 
-function aplicar(a: AjustesAccesibilidad) {
+function aplicar(a: Guardado) {
   const html = document.documentElement
+  aplicarTema(a.tema, a.acento)
   for (const k of Object.keys(CLASES) as (keyof AjustesAccesibilidad)[]) html.classList.toggle(CLASES[k], a[k])
 }
 
-interface Estado extends AjustesAccesibilidad {
+interface Estado extends Guardado {
   abierto: boolean
-  abrir: (b: boolean) => void
+  /** Sección a la que se desplaza el panel al abrirse. */
+  seccion: 'colores' | 'ajustes'
+  abrir: (b: boolean, seccion?: Estado['seccion']) => void
   cambiar: (k: keyof AjustesAccesibilidad, v: boolean) => void
+  elegirTema: (t: TemaId) => void
+  /** Acento propio (hex) o null para el del tema. */
+  elegirAcento: (hex: string | null) => void
 }
 
 export const useAccesibilidad = create<Estado>((set, get) => ({
   ...inicial(),
   abierto: false,
-  abrir: (abierto) => set({ abierto }),
-  cambiar: (k, v) => {
-    set({ [k]: v } as Partial<Estado>)
-    const { textoGrande, contraste, movimientoReducido, subtitulos } = get()
-    const ajustes = { textoGrande, contraste, movimientoReducido, subtitulos }
-    aplicar(ajustes)
-    try {
-      localStorage.setItem(CLAVE, JSON.stringify(ajustes))
-    } catch {
-      // sin almacenamiento: dura hasta recargar
-    }
-  },
+  seccion: 'ajustes',
+  abrir: (abierto, seccion = 'ajustes') => set({ abierto, seccion }),
+  cambiar: (k, v) => guardar(set, get, { [k]: v }),
+  elegirTema: (tema) => guardar(set, get, { tema }),
+  elegirAcento: (acento) => guardar(set, get, { acento }),
 }))
+
+function guardar(set: (p: Partial<Estado>) => void, get: () => Estado, cambio: Partial<Guardado>) {
+  set(cambio)
+  const { textoGrande, movimientoReducido, subtitulos, tema, acento } = get()
+  const ajustes: Guardado = { textoGrande, movimientoReducido, subtitulos, tema, acento }
+  aplicar(ajustes)
+  try {
+    localStorage.setItem(CLAVE, JSON.stringify(ajustes))
+  } catch {
+    // sin almacenamiento: dura hasta recargar
+  }
+}
 aplicar(useAccesibilidad.getState())
 
 /** Para bucles de animación (useFrame): 0 con movimiento reducido, 1 si no. */

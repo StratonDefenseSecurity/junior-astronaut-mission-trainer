@@ -48,6 +48,11 @@ export interface ParametrosAmbiente {
   altitudKm?: number
   /** 'lanzamiento' (opcional): presión dinámica normalizada, 1 = máxima (máx. Q). Golpeteo del aire. */
   presionDinamica?: number
+  /**
+   * 'lanzamiento' (opcional): distancia en km del oyente al cohete cuando la cámara está en tierra.
+   * 0 = a bordo. Desde tierra el rugido llega tarde (343 m/s) y más apagado con la distancia.
+   */
+  distanciaKm?: number
   /** 'descenso': rugido de la entrada atmosférica, 0..1. */
   calor?: number
   /** 'descenso': paracaídas abierto, 0..1. */
@@ -96,6 +101,8 @@ const NIVEL = { nave: 1, orbita: 0.5, base: 0.72, eva: 1, lanzamiento: 1, descen
 const ALTURA_ESCALA_KM = 8.5
 /** Una misma fuente suena unos 20 dB más débil en Marte (Maurice et al. 2022): factor 0.1 en amplitud. */
 const ATENUACION_MARTE = 0.1
+/** Velocidad del sonido en el aire a nivel del mar a 20 °C: 343 m/s (0.343 km/s). */
+const SONIDO_KM_S = 0.343
 
 const PARAMETROS_INICIALES: Parametros = {
   viento: 0.3,
@@ -103,6 +110,7 @@ const PARAMETROS_INICIALES: Parametros = {
   empuje: 0,
   altitudKm: 0,
   presionDinamica: 0,
+  distanciaKm: 0,
   calor: 0,
   paracaidas: 0,
   retro: 0,
@@ -596,11 +604,14 @@ function camaEva(c: Cama, p: Parametros, nivel: number) {
  * Al apagar motores solo quedan los ventiladores de la cabina.
  */
 function camaLanzamiento(c: Cama, p: Parametros, nivel: number) {
-  soporteVital(c, c.salida, 0.5 * nivel)
+  // Lo que se oye a bordo va por `cabina`; lo que se oye desde tierra, por `exterior`.
+  const cabina = c.ganancia(1)
+  cabina.connect(c.salida)
+  soporteVital(c, cabina, 0.5 * nivel)
 
   // 1) Estructura: retumbo grave con sacudidas
   const estructura = c.ganancia(0)
-  cadena(c.ruido('marron'), c.filtro('lowpass', 120, 0.9), estructura, c.salida)
+  cadena(c.ruido('marron'), c.filtro('lowpass', 120, 0.9), estructura, cabina)
   const sacudida = c.ganancia(0)
   c.osc('sine', 6.7).connect(sacudida)
   c.osc('sine', 9.3).connect(sacudida)
@@ -608,26 +619,48 @@ function camaLanzamiento(c: Cama, p: Parametros, nivel: number) {
   const sub = c.ganancia(0)
   c.osc('sine', 31).connect(sub)
   c.osc('sine', 47.5).connect(sub)
-  sub.connect(c.salida)
+  sub.connect(cabina)
 
   // 2) Aire: más brillo y más fuerza cuanto más denso es el aire
   const corteAire = c.filtro('lowpass', 1500, 0.6)
   const aire = c.ganancia(0)
-  cadena(c.ruido('rosa'), c.filtro('highpass', 35, 0.7), corteAire, aire, c.salida)
+  cadena(c.ruido('rosa'), c.filtro('highpass', 35, 0.7), corteAire, aire, cabina)
 
   // 3) Golpeteo aerodinámico cerca de la máxima presión dinámica (si el juego la manda)
   const golpeteo = c.ganancia(0)
-  cadena(c.ruido('rosa'), c.filtro('bandpass', 180, 0.7), golpeteo, c.salida)
+  cadena(c.ruido('rosa'), c.filtro('bandpass', 180, 0.7), golpeteo, cabina)
   const golpeteoLfo = c.ganancia(0)
   cadena(c.osc('sine', 4.1), golpeteoLfo, golpeteo.gain)
 
   // 4) Crepitar del chorro: viaja por el aire, así que también se apaga al subir
-  crepitar(c, c.salida, 0.8 * nivel, () => limitar(p.empuje, 0, 1) * densidadRelativa(p.altitudKm))
+  crepitar(c, cabina, 0.8 * nivel, () => limitar(p.empuje, 0, 1) * densidadRelativa(p.altitudKm))
 
+  // 5) Desde tierra: rugido grave, estruendo y crepitar del chorro tal como salen del cohete
+  // (`emision`), que llegan con el retraso del viaje por el aire y pierden agudos con la distancia.
+  const emision = c.ganancia(1)
+  const retumbo = c.ganancia(0)
+  cadena(c.ruido('marron'), c.filtro('lowpass', 90, 0.8), retumbo, emision)
+  const estruendo = c.ganancia(0)
+  cadena(c.ruido('rosa'), c.filtro('highpass', 40, 0.7), c.filtro('peaking', 260, 0.6, 6), c.filtro('lowpass', 2600, 0.6), estruendo, emision)
+  const oleaje = c.ganancia(0)
+  c.osc('sine', 2.3).connect(oleaje)
+  c.osc('sine', 3.7).connect(oleaje)
+  oleaje.connect(estruendo.gain)
+  crepitar(c, emision, 1.25 * nivel, () => limitar(p.empuje, 0, 1) * densidadRelativa(p.altitudKm) * (p.distanciaKm > 0 ? 1 : 0))
+  const retraso = c.n(c.ctx.createDelay(90))
+  const absorcion = c.filtro('lowpass', 8000, 0.6)
+  const exterior = c.ganancia(0)
+  cadena(emision, retraso, absorcion, exterior, c.salida)
+
+  let previo = NaN
+  let distanciaPrevia = 0
   c.aplicar = (q, t) => {
     const e = limitar(q.empuje, 0, 1)
     const d = densidadRelativa(q.altitudKm)
     const pd = limitar(q.presionDinamica, 0, 1)
+    const km = limitar(q.distanciaKm, 0, 30)
+    const fuera = km > 0 ? 1 : 0
+    cabina.gain.setTargetAtTime(1 - fuera, t, 0.08)
     estructura.gain.setTargetAtTime(0.75 * e * nivel, t, 0.12)
     sacudida.gain.setTargetAtTime(0.18 * e * nivel, t, 0.12)
     sub.gain.setTargetAtTime(0.06 * e * nivel, t, 0.12)
@@ -635,7 +668,49 @@ function camaLanzamiento(c: Cama, p: Parametros, nivel: number) {
     corteAire.frequency.setTargetAtTime(180 + 1400 * d, t, 0.2)
     golpeteo.gain.setTargetAtTime(0.25 * pd * nivel, t, 0.15)
     golpeteoLfo.gain.setTargetAtTime(0.1 * pd * nivel, t, 0.15)
+    // El ruido nace en el aire alrededor del chorro: arriba hay menos aire que lo lleve.
+    const fuente = e * (0.25 + 0.75 * d)
+    retumbo.gain.setTargetAtTime(0.9 * fuente * nivel, t, 0.12)
+    estruendo.gain.setTargetAtTime(0.5 * fuente * nivel, t, 0.12)
+    oleaje.gain.setTargetAtTime(0.12 * fuente * nivel, t, 0.12)
+    // Retraso del viaje: un salto (cambio de cámara) se aplica de golpe; si no, se desliza, y ese
+    // deslizamiento baja un poco el tono mientras el cohete se aleja (efecto Doppler).
+    const s = km / SONIDO_KM_S
+    if (Math.abs(km - distanciaPrevia) > 0.25) retraso.delayTime.setValueAtTime(s, t)
+    else retraso.delayTime.setTargetAtTime(s, t, 0.3)
+    distanciaPrevia = km
+    // Más lejos, más débil y sin agudos (el aire absorbe más las frecuencias altas). Curvas de diseño.
+    exterior.gain.setTargetAtTime(fuera * Math.min(1.1, 0.35 / Math.max(0.06, km) ** 0.75), t, 0.1)
+    absorcion.frequency.setTargetAtTime(Math.max(260, 9000 / (1 + km * 1.6)), t, 0.2)
+    // Encendidos: los RS-25 primero y, en T-0, los propulsores, con un estallido.
+    if (!Number.isNaN(previo)) {
+      if (previo < 0.05 && e >= 0.1) ignicion(c.f, [cabina, emision], t, 0.6 * nivel)
+      else if (e - previo > 0.3 && e > 0.6) ignicion(c.f, [cabina, emision], t, 1.4 * nivel)
+    }
+    previo = e
   }
+}
+
+/** Encendido de motores: estallido seco, golpe muy grave y un rugido que se asienta. Timbre de diseño. */
+function ignicion(f: Fabrica, destinos: AudioNode[], t: number, v: number) {
+  const d = new Disparo(f)
+  const salida = d.ganancia(1)
+  for (const x of destinos) salida.connect(x)
+  const crack = d.ganancia(0)
+  cadena(d.ruido('blanco', t, 0.15), d.filtro('highpass', 500, 0.7), d.filtro('lowpass', 5000, 0.7), crack, salida)
+  golpe(crack.gain, t, 0.55 * v, 0.002, 0.09)
+  const o = d.osc('sine', 52, t, 2.6)
+  o.frequency.setValueAtTime(52, t)
+  o.frequency.exponentialRampToValueAtTime(21, t + 1.6)
+  const g = d.ganancia(0)
+  cadena(o, g, salida)
+  golpe(g.gain, t, 0.9 * v, 0.006, 1.8)
+  const corte = d.filtro('lowpass', 2400, 0.6)
+  corte.frequency.setValueAtTime(2400, t)
+  corte.frequency.exponentialRampToValueAtTime(320, t + 2.4)
+  const r = d.ganancia(0)
+  cadena(d.ruido('rosa', t, 2.8), corte, r, salida)
+  golpe(r.gain, t, 0.7 * v, 0.02, 2.4)
 }
 
 /**

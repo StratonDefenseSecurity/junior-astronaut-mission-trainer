@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useStore } from '../store'
 import { httpAuth } from '../red'
+import { BotonAccesibilidad } from '../hud/Accesibilidad'
 
 type Modo = 'invitado' | 'ingresar' | 'registro'
 
@@ -46,6 +47,9 @@ export function AuthScreen() {
         <button className="primary" disabled={cargando || usuario.trim().length < 3 || (conClave && !clave)}>
           {modo === 'invitado' ? 'Start' : modo === 'ingresar' ? 'Log in' : 'Sign up and play'}
         </button>
+        <div className="row" style={{ gap: 6, justifyContent: "flex-end" }}>
+          <BotonAccesibilidad />
+        </div>
       </form>
     </div>
   )
