@@ -23,7 +23,8 @@ import { api } from '../red'
 import { useStore } from '../store'
 import { useVoz, voz } from '../voz'
 import { Procedimientos, Trabajo } from './Procedimiento'
-import { Barra, Dato, RolTag, diasRestantes, diasTexto, enMarte, energiaUsada, mmHg, nivel, pctTraje, roles, tiempoEnEspacio, type Nivel } from './comun'
+import * as M from '@shared/medidores'
+import { Barra, Dato, RolTag, diasRestantes, diasTexto, enMarte, energiaUsada, nivel, roles, tiempoEnEspacio, type Nivel } from './comun'
 
 interface P {
   sala: RoomState
@@ -185,7 +186,7 @@ function Puente({ sala, yo }: P) {
             <Dato etiqueta="Trip" valor={`${Math.round(v.progreso * 100)}%`} barra={{ valor: v.progreso * 100 }} />
             <Dato etiqueta="Speed" valor={`${v.velocidad} km/s`} />
             <Dato etiqueta="Distance to the Sun" valor={`${v.distSol} AU`} />
-            <Dato etiqueta="Signal delay" valor={`${Math.floor(v.retardo / 60)} min ${v.retardo % 60} s`} />
+            <Dato etiqueta="Signal delay" valor={M.retardoTexto(v.retardo)} nota="One-way light time to Earth" />
             <Dato etiqueta="Fuel" valor={`${Math.round(sala.rec.propelente)}%`} tono={nivel(sala.rec.propelente < 10, sala.rec.propelente < 30)} />
             <Dato etiqueta="In space" valor={tiempoEnEspacio(sala)} />
             <Dato etiqueta="Energy used" valor={energiaUsada(sala)} />
@@ -204,16 +205,18 @@ function Puente({ sala, yo }: P) {
 function SoporteVital({ sala, yo }: P) {
   const remoto = useContext(Remoto)
   const c = sala.cabina
-  const co2 = mmHg(c.ppCO2)
+  const o2 = M.o2Cabina(sala)
+  const co2 = M.co2Cabina(sala)
+  const temp = M.tempCabina(sala)
   return (
     <>
       <Tarea sala={sala} yo={yo} estacion="soporte" />
       <Deberes sala={sala} yo={yo} ids={['filtros']} />
       <Seccion titulo="Cabin air">
         <div className="rejilla">
-          <Dato etiqueta="Oxygen" valor={`${c.ppO2.toFixed(1)} kPa`} tono={nivel(c.ppO2 < C.PPO2_MINIMA_KPA, c.ppO2 < 19.5)} barra={{ valor: c.ppO2, max: C.PPO2_NOMINAL_KPA }} nota={`Normal is ${C.PPO2_NOMINAL_KPA} kPa`} />
-          <Dato etiqueta="CO₂" valor={`${co2.toFixed(1)} mmHg`} tono={nivel(co2 > 10, co2 > 3)} barra={{ valor: co2, max: 15 }} nota="NASA limit: 3 mmHg" />
-          <Dato etiqueta="Temperature" valor={`${c.temp.toFixed(1)} °C`} tono={nivel(c.temp < 5 || c.temp > 32, c.temp < 15 || c.temp > 28)} />
+          <Dato etiqueta="Cabin O₂" valor={o2.texto} tono={o2.tono} barra={{ valor: c.ppO2, max: C.PPO2_NOMINAL_KPA }} nota={`Normal is ${C.PPO2_NOMINAL_KPA} kPa`} />
+          <Dato etiqueta="Cabin CO₂" valor={co2.texto} tono={co2.tono} barra={{ valor: co2.valor, max: M.CO2_PELIGRO_MMHG }} nota={`NASA limit: ${M.CO2_LIMITE_MMHG} mmHg`} />
+          <Dato etiqueta="Cabin temperature" valor={temp.texto} tono={temp.tono} />
         </div>
         <p className="mini muted">The crew uses about {(sala.jugadores.filter((j) => j.rol).length * 0.84).toFixed(1)} kg of oxygen a day and breathes out almost the same mass of CO₂.</p>
         {c.fuga > 0 && <div className="help">There is a leak: {c.fuga} kg of air lost per hour.</div>}
@@ -235,16 +238,16 @@ function SoporteVital({ sala, yo }: P) {
 
 function Energia({ sala, yo }: P) {
   const e = sala.energia
-  const pct = e.capacidad ? (e.bateria / e.capacidad) * 100 : 0
+  const bat = M.bateria(sala)
   const horas = e.consumo > e.generacion && e.consumo > 0 ? e.bateria / (e.consumo - e.generacion) : null
   return (
     <>
       <Tarea sala={sala} yo={yo} estacion="energia" />
       <Seccion titulo="Power balance">
         <div className="rejilla">
-          <Dato etiqueta="Generation" valor={`${e.generacion.toFixed(1)} kW`} />
-          <Dato etiqueta="Use" valor={`${e.consumo.toFixed(1)} kW`} tono={nivel(false, e.consumo > e.generacion)} />
-          <Dato etiqueta="Batteries" valor={`${Math.round(e.bateria)} / ${e.capacidad} kWh`} tono={nivel(pct < 15, pct < 40)} barra={{ valor: pct }} />
+          <Dato etiqueta="Generation" valor={M.kw(e.generacion)} />
+          <Dato etiqueta="Use" valor={M.kw(e.consumo)} tono={nivel(false, e.consumo > e.generacion)} />
+          <Dato etiqueta="Batteries" valor={`${bat.texto} · ${M.bateriaKwh(sala)}`} tono={bat.tono} barra={{ valor: bat.valor }} />
           <Dato etiqueta="Used this mission" valor={energiaUsada(sala)} nota="Electricity used since liftoff" />
         </div>
         <p className="mini muted">
@@ -296,10 +299,10 @@ function Almacen({ sala, yo }: P) {
             <tr><th></th><th>Left</th><th>Lasts</th></tr>
           </thead>
           <tbody>
-            {fila('Drinking water', `${Math.round(r.agua)} kg`, a.agua)}
-            {fila('Water to recycle', `${Math.round(r.aguaResidual)} kg`, null)}
-            {fila('Oxygen tanks', `${Math.round(r.o2)} kg`, a.aire)}
-            {fila('Food', `${Math.round(r.comida)} kg`, a.comida)}
+            {fila('Drinking water', M.kg(r.agua), a.agua)}
+            {fila('Water to recycle', M.kg(r.aguaResidual), null)}
+            {fila('Oxygen tanks', M.kg(r.o2), a.aire)}
+            {fila('Food', M.kg(r.comida), a.comida)}
             {fila('Spare parts', `${r.repuestos} kits`, null)}
             {fila('Medical kits', `${r.botiquines}`, null)}
             {fila('LiOH cartridges', `${r.lioh}`, null)}
@@ -349,22 +352,23 @@ function Enfermeria({ sala, yo }: P) {
       <Seccion titulo="Crew vital signs">
         <table className="tabla compacta">
           <thead>
-            <tr><th></th><th>Pulse</th><th>Resp.</th><th>O₂</th><th>Water</th><th>Fatigue</th><th>Musc.</th><th>mSv</th><th>Health</th></tr>
+            <tr><th></th><th>Pulse</th><th>Resp.</th><th>SpO₂</th><th>Water</th><th>Fatigue</th><th>Musc.</th><th>mSv</th><th>Health</th></tr>
           </thead>
           <tbody>
             {crew.map((j) => {
-              const v = j.vit
+              const celda = (l: M.Lectura, texto = l.texto) => <td className={`mono ${l.tono}`}>{texto}</td>
+              const ds = M.dosis(j)
               return (
                 <tr key={j.id}>
                   <td><RolTag rol={j.rol} /> {j.nombre}{j.dolencia ? <i className="warn"> · {j.dolencia}</i> : null}</td>
-                  <td className={`mono ${nivel(v.fc > 150, v.fc > 110)}`}>{Math.round(v.fc)}</td>
-                  <td className={`mono ${nivel(v.fr > 34, v.fr > 24)}`}>{Math.round(v.fr)}</td>
-                  <td className={`mono ${nivel(v.spo2 < 88, v.spo2 < 94)}`}>{Math.round(v.spo2)}%</td>
-                  <td className={`mono ${nivel(v.hidratacion < 60, v.hidratacion < 85)}`}>{Math.round(v.hidratacion)}%</td>
-                  <td className={`mono ${nivel(v.fatiga > 85, v.fatiga > 60)}`}>{Math.round(v.fatiga)}%</td>
-                  <td className={`mono ${nivel(v.condicion < 70, v.condicion < 88)}`}>{Math.round(v.condicion)}%</td>
-                  <td className={`mono ${nivel(v.dosis > C.LIMITE_CARRERA_MSV, v.dosis > 450)}`}>{Math.round(v.dosis)}</td>
-                  <td className={`mono ${nivel(v.salud < 40, v.salud < 70)}`}>{Math.round(v.salud)}%</td>
+                  {celda(M.pulso(j), String(M.pulso(j).valor))}
+                  {celda(M.respiracion(j), String(M.respiracion(j).valor))}
+                  {celda(M.spo2(j))}
+                  {celda(M.hidratacion(j))}
+                  {celda(M.fatiga(j))}
+                  {celda(M.condicion(j))}
+                  {celda(ds, ds.texto.replace(' mSv', ''))}
+                  {celda(M.salud(j))}
                 </tr>
               )
             })}
@@ -490,11 +494,11 @@ function Gimnasio({ yo }: P) {
 }
 
 function Literas({ yo }: P) {
-  const activo = yo.manual === 'sueno'
+  const activo = yo.manual === 'sueno' || yo.actividad === 'sueno'
   return (
     <Seccion titulo="Bunks">
-      <p className="mini">Your fatigue is {Math.round(yo.vit.fatiga)}%. Sleep lowers it by about 12 points per hour. If you do not move during the night, your character sleeps on its own.</p>
-      <button className={activo ? 'small danger' : 'small primary'} onClick={() => api.actividad(activo ? null : 'sueno')}>{activo ? 'Get up' : 'Sleep'}</button>
+      <p className="mini">Your fatigue is {M.fatiga(yo).texto}. Sleep lowers it by about 12 points per hour. From 22:00 to 6:00, if you stand still and are not doing a task, you get a warning and then your character falls asleep. Moving or pressing Wake up gets you up.</p>
+      <button className={activo ? 'small danger' : 'small primary'} onClick={() => (activo ? api.despertar() : api.actividad('sueno'))}>{activo ? 'Wake up' : 'Sleep'}</button>
     </Seccion>
   )
 }
@@ -509,18 +513,19 @@ function Refugio({ sala, yo }: P) {
         Water walls with {sala.blindaje} extra shielding layer(s). They stop solar particles well, but cosmic rays only a little.{' '}
         {ts ? `There is a solar storm: outside the shelter the dose goes up.` : 'There is no solar storm right now.'}
       </p>
-      <p className="mini muted">Your dose now: {yo.vit.dosisTasa} mSv per day. You cannot work inside the shelter.</p>
-      {obligado && yo.enRefugio ? (
-        <span className="mini warn">Shelter order in effect. The Flight Surgeon or the Mission Commander can lift it.</span>
-      ) : (
-        <button className={yo.enRefugio ? 'small danger' : 'small primary'} disabled={remoto} title={remoto ? IR_HASTA_AQUI : undefined} onClick={() => api.refugio(!yo.enRefugio)}>{yo.enRefugio ? 'Leave the shelter' : 'Enter the shelter'}</button>
+      <p className="mini muted">Your dose rate now: {M.tasaTexto(yo.vit.dosisTasa)}. Inside the shelter you can rest and sleep, but not work.</p>
+      {obligado && <p className="mini">Shelter order until {etiquetaHasta(sala)}. It ends on its own when the storm is over.</p>}
+      {obligado && yo.enRefugio && (
+        <span className="mini warn">Shelter order in effect. The Flight Surgeon or the Mission Commander can propose to lift it at the Medical Bay. Leave only for urgent work: you get the cabin dose.</span>
       )}
+        <button className={yo.enRefugio ? 'small danger' : 'small primary'} disabled={remoto} title={remoto ? IR_HASTA_AQUI : undefined} onClick={() => api.refugio(!yo.enRefugio)}>{yo.enRefugio ? (obligado ? 'Leave for urgent work' : 'Leave the shelter') : 'Enter the shelter'}</button>
     </Seccion>
   )
 }
 
 function Esclusa({ sala, yo }: P) {
-  const o2 = pctTraje(yo.trajeO2)
+  const o2 = M.trajeO2(yo)
+  const bat = M.trajeBateria(yo)
   const a = sala.ambiente
   return (
     <>
@@ -528,8 +533,8 @@ function Esclusa({ sala, yo }: P) {
       <Deberes sala={sala} yo={yo} ids={['trajes']} />
       <Seccion titulo="Your suit">
         <div className="rejilla">
-          <Dato etiqueta="Oxygen" valor={`${o2}%`} tono={nivel(o2 < 20, o2 < 40)} barra={{ valor: o2 }} />
-          <Dato etiqueta="Battery" valor={`${Math.round(yo.trajeBateria * 100)}%`} tono={nivel(yo.trajeBateria < 0.2, yo.trajeBateria < 0.4)} barra={{ valor: yo.trajeBateria * 100 }} />
+          <Dato etiqueta="Suit O₂" valor={o2.texto} tono={o2.tono} barra={{ valor: o2.valor }} />
+          <Dato etiqueta="Suit battery" valor={bat.texto} tono={bat.tono} barra={{ valor: bat.valor }} />
         </div>
         <p className="mini muted">Pure oxygen at {C.TRAJE_PRESION_KPA} kPa. A full suit lasts 7 to {C.TRAJE_BATERIA_H} hours. Hard work uses it up faster. If it runs out outside, you are rescued but injured.</p>
       </Seccion>
@@ -552,10 +557,9 @@ function Esclusa({ sala, yo }: P) {
 }
 
 function EsclusaExterior({ sala, yo }: P) {
-  const o2 = pctTraje(yo.trajeO2)
   return (
-    <Seccion titulo="Back to the habitat">
-      <p className="mini">Your suit has {o2}% of its oxygen{yo.trajeFuga ? ' and it is leaking' : ''}. Inside you take off the suit and the airlock recharges it.</p>
+    <Seccion titulo="Go inside">
+      <p className="mini">Your suit has {M.trajeO2(yo).texto} of its oxygen{yo.trajeFuga ? ' and it is leaking' : ''}. Three steps: brush off the dust, close the hatch and repressurize, then take off the suit inside. The airlock recharges it.</p>
       <Trabajar sala={sala} yo={yo} procId={`entrada:${yo.id}`} motivo />
     </Seccion>
   )
@@ -661,7 +665,7 @@ function contenido(id: string, p: P): ReactNode {
         <>
           <Deberes {...p} ids={['planificacion', 'navegacion']} />
           <Seccion titulo="Link to Earth">
-            <p className="mini">A signal takes about {Math.max(1, Math.round(p.sala.vuelo.retardo / 60))} minutes to reach Earth. Every question to Mission Control waits twice that long for its answer.</p>
+            <p className="mini">{M.enlace(p.sala.vuelo).texto}. A signal takes {M.retardoTexto(p.sala.vuelo.retardo)} to reach Earth. Every question to Mission Control waits twice that long for its answer.</p>
           </Seccion>
         </>
       )
@@ -706,7 +710,8 @@ function contenido(id: string, p: P): ReactNode {
         <>
           <Tarea {...p} estacion="antena" />
           <Seccion titulo="Antenna">
-            <p className="mini">Link to Earth. A message takes about {Math.max(3, Math.round(p.sala.vuelo.retardo / 60))} minutes to arrive. That is why the crew decides on its own.</p>
+            <p className="mini">{M.enlace(p.sala.vuelo).texto}. A message takes {M.retardoTexto(p.sala.vuelo.retardo)} to arrive. That is why the crew decides on its own.</p>
+            {p.sala.vuelo.enlace === 'conjuncion' && <p className="mini warn">Solar conjunction. The Sun is between Earth and Mars. Messages from Earth wait until the link is back.</p>}
           </Seccion>
         </>
       )
@@ -735,10 +740,10 @@ function resumenOpcion(sala: RoomState, id: OpcionBase['id']): { texto: string; 
   const instalados = sala.sistemas.filter((s) => s.instalado)
   switch (id) {
     case 'controlar': {
-      const bat = e.capacidad ? Math.round((e.bateria / e.capacidad) * 100) : 0
+      const bat = M.bateria(sala).valor
       const minimo = Math.min(a.agua, a.aire, a.comida)
       return {
-        texto: `Water ${diasTexto(a.agua)}, air ${diasTexto(a.aire)}, food ${diasTexto(a.comida)}. Batteries at ${bat}%. ${Math.round(faltan)} mission days to go.`,
+        texto: `Water ${diasTexto(a.agua)}, air ${diasTexto(a.aire)}, food ${diasTexto(a.comida)}. Batteries at ${M.bateria(sala).texto}. ${Math.round(faltan)} mission days to go.`,
         tono: nivel(minimo < faltan * 0.9 || bat < 15, minimo < faltan * 1.15 || bat < 40),
       }
     }
@@ -766,7 +771,7 @@ function resumenOpcion(sala: RoomState, id: OpcionBase['id']): { texto: string; 
       const dosis = Math.max(0, ...sala.jugadores.filter((j) => j.rol).map((j) => j.vit.dosis))
       const ts = sala.ambiente.tormentaSolar
       return {
-        texto: `Highest dose: ${Math.round(dosis)} of ${C.LIMITE_CARRERA_MSV} mSv. ${ts ? 'A solar storm is in progress.' : 'No solar storm.'}${sala.refugioHasta > sala.t ? ' Shelter order in effect.' : ''}`,
+        texto: `Highest dose: ${M.dosisTexto(dosis)} of ${C.LIMITE_CARRERA_MSV}. ${ts ? 'A solar storm is in progress.' : 'No solar storm.'}${sala.refugioHasta > sala.t ? ' Shelter order in effect.' : ''}`,
         tono: nivel(dosis > C.LIMITE_CARRERA_MSV, Boolean(ts) || dosis > 450),
       }
     }
@@ -869,4 +874,10 @@ export function PanelEstacion({ sala, yo }: P) {
       </div>
     </div>
   )
+}
+
+/** Hasta cuándo dura la orden de refugio, en hora de misión. */
+function etiquetaHasta(sala: RoomState): string {
+  const h = Math.max(0, (sala.refugioHasta - sala.t) / 3600)
+  return h >= 1 ? `${Math.round(h)} h from now` : `${Math.max(1, Math.round(h * 60))} min from now`
 }

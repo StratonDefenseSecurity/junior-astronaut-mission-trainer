@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { NOTA_TEXTO, lineaAviso, quienSeOcupa, veAlerta } from '@shared/avisos'
 import { C, FUENTES, SUPUESTOS } from '@shared/ciencia'
+import * as M from '@shared/medidores'
 import { ROLE_BY_ID, type Player, type RoomState } from '@shared/types'
 import { ESTACION_BY_ID, puede } from '../mundo/mapa'
 import { palanca } from '../mundo/control'
@@ -211,9 +212,9 @@ export function Resultado({ sala }: { sala: RoomState }) {
             {crew.map((j) => (
               <tr key={j.id}>
                 <td><RolTag rol={j.rol} /> {j.nombre}</td>
-                <td className="mono">{Math.round(j.vit.salud)}</td>
-                <td className={`mono ${j.vit.dosis > C.LIMITE_CARRERA_MSV ? 'bad' : ''}`}>{Math.round(j.vit.dosis)} mSv</td>
-                <td className="mono">{Math.round(j.vit.condicion)}%</td>
+                <td className={`mono ${M.salud(j).tono}`}>{M.salud(j).texto}</td>
+                <td className={`mono ${M.dosis(j).tono}`}>{M.dosis(j).texto}</td>
+                <td className={`mono ${M.condicion(j).tono}`}>{M.condicion(j).texto}</td>
               </tr>
             ))}
           </tbody>

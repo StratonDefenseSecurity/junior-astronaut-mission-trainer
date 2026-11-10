@@ -40,7 +40,7 @@ import {
   type TrayectoriaId,
   type Zona,
 } from '../shared/types.js'
-import { conRol, conectados, jugador, limitar, log, presentes, puedeActuar, rid, rolPresente, sis, tripulacion } from './base.js'
+import { conRol, conectados, despertarJugador, jugador, limitar, log, meterEnRefugio, presentes, puedeActuar, rid, rolPresente, sis, tripulacion } from './base.js'
 import { UMBRAL_AVERIA, aplicarAlternativa } from './emergencies.js'
 import { valorarEmergencia, valorarPropuesta } from './veredictos.js'
 import { CIUDAD_BY_ID, ESCENARIOS, ESCENARIO_BY_ID, escenarioDe, fechaDeMision, type EscenarioId } from '../shared/escenarios.js'
@@ -492,11 +492,7 @@ function resolverPropuesta(room: RoomState, prop: Proposal) {
 }
 
 function ordenarRefugio(room: RoomState, horas: number) {
-  for (const j of tripulacion(room)) {
-    j.zona = 'nave'
-    j.enRefugio = true
-    j.manual = null
-  }
+  for (const j of tripulacion(room)) meterEnRefugio(room, j)
   room.refugioHasta = Math.max(room.refugioHasta, room.t + horas * 3600)
 }
 
@@ -614,6 +610,8 @@ export function cambiarZona(room: RoomState, id: string, zona: Zona): string | n
   if (j.trajeO2 < C.TRAJE_O2_KG * 0.3 || j.trajeBateria < 0.3) return 'Your suit is not charged. Wait for the Airlock to recharge it.'
   j.zona = 'exterior'
   j.manual = null
+  // Una entrada que quedó a medias de una salida anterior no debe bloquear la de esta vez.
+  if (room.procedimientos) delete room.procedimientos[`entrada:${j.id}`]
   esclusa.integridad = Math.max(0, esclusa.integridad - 0.4)
   log(room, `${j.nombre} went outside. It is ${room.ambiente.tempExt} °C out there.`)
   refrescar(room)
@@ -629,6 +627,9 @@ export function fijarActividad(room: RoomState, id: string, actividad: Actividad
     const impedido = impedimento(j)
     if (impedido) return impedido
   }
+  // Levantarse (o empezar a hacer ejercicio) cuenta como estar despierto un rato.
+  if (actividad !== 'sueno') despertarJugador(room, j, ahora())
+  else delete j.despiertoMs
   j.manual = actividad
   // Una sesión de ejercicio dura una hora; el sueño, hasta nueve.
   j.manualHasta = room.t + (actividad === 'ejercicio' ? 3600 : 9 * 3600)
@@ -639,8 +640,17 @@ export function usarRefugio(room: RoomState, id: string, entrar: boolean): strin
   const j = jugador(room, id)
   if (!j) return 'Player not found.'
   if (j.zona !== 'nave') return 'The Storm Shelter is inside the habitat.'
-  j.enRefugio = entrar
-  if (entrar) j.manual = null
+  if (entrar === j.enRefugio) return null
+  if (entrar) {
+    meterEnRefugio(room, j)
+    log(room, `${j.nombre} went into the Storm Shelter.`)
+    return null
+  }
+  j.enRefugio = false
+  // Con la orden en vigor se puede salir para un trabajo urgente (reparar una avería), pero se
+  // recibe la dosis de la cabina: queda anotado. Si no, el reloj se quedaría frenado por la avería.
+  if (room.refugioHasta > room.t) log(room, `${j.nombre} left the Storm Shelter during the shelter order for urgent work and gets the cabin dose.`, 'alerta')
+  else log(room, `${j.nombre} left the Storm Shelter.`)
   return null
 }
 
@@ -664,6 +674,17 @@ export function accion(room: RoomState, id: string, tipo: string, d: Record<stri
   const j = jugador(room, id)
   if (!j || !j.rol) return 'Player not found.'
   // Terminar antes: para clases con poco tiempo. Se ve el informe con lo que se logró.
+  // Despertar a alguien que duerme (o a uno mismo). Un compañero fuera de servicio no se despierta.
+  if (tipo === 'despertar') {
+    const otro = jugador(room, String(d.jugadorId ?? id))
+    if (!otro || !otro.rol) return 'Player not found.'
+    if (otro.incapacitado > 0) return `${otro.nombre} is out of action and needs rest or the Flight Surgeon.`
+    const dormido = otro.actividad === 'sueno' || otro.manual === 'sueno'
+    if (!dormido && !otro.suenoAvisoMs) return otro.id === id ? 'You are already awake.' : `${otro.nombre} is already awake.`
+    despertarJugador(room, otro, ahora())
+    if (dormido) log(room, otro.id === id ? `${j.nombre} woke up.` : `${j.nombre} woke ${otro.nombre} up.`)
+    return null
+  }
   if (tipo === 'terminar') {
     if (!puedeActuar(room, j, ['comandante'])) return 'Only the Mission Commander can end the mission early.'
     terminar(room, false, 'Mission Ended Early', `${j.nombre} ended the mission early. Here is what the crew achieved and learned.`)

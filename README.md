@@ -108,6 +108,8 @@ Everything runs on Cloudflare, on the free plan, with no always-on server.
 ```
 shared/types.ts       types, roles, supplies, sites, tasks, time scales
 shared/ciencia.ts     real constants, sources and assumptions
+shared/medidores.ts   one formatter for every meter: same field, units, rounding and colors in all views
+shared/misiones.ts    personal missions for each role, counted in the debrief
 shared/plan.ts        supply options and the Assistant's calculations on the cargo
 shared/procedimientos.ts  step-by-step assembly, garden and crew procedures (airlock, repairs, samples, treatments)
 server/cloudflare.ts  Worker and Durable Objects: request routing, WebSocket, storage

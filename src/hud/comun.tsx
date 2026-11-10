@@ -1,5 +1,4 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { C } from '@shared/ciencia'
 import { escenarioDe, fechaCorta, fechaDeMision } from '@shared/escenarios'
 import { ROLE_BY_ID, TRANSITO_INICIO_S, formatoHora, formatoMET, type Role, type RoomState } from '@shared/types'
 import { ahoraServidor } from '../store'
@@ -91,13 +90,5 @@ export const energiaUsada = (sala: RoomState): string => {
 export const escalaTexto = (e: number) =>
   e >= 86400 ? '1 s = 1 day' : e >= 3600 ? `1 s = ${e / 3600} h` : e >= 60 ? `1 s = ${e / 60} min` : e > 1 ? `1 s = ${e} s` : 'real time'
 
-export const diasTexto = (d: number) => (d >= 999 ? 'plenty' : `${Math.round(d)} d`)
-export const mmHg = (kPa: number) => kPa * 7.50062
-export const pctTraje = (kg: number) => Math.round((kg / C.TRAJE_O2_KG) * 100)
-
-/** Días de misión que faltan (misma cuenta que el servidor). */
-export function diasRestantes(sala: RoomState): number {
-  const estancia = (sala.mision.solesObjetivo * C.SOL_S) / 86400
-  if (enMarte(sala)) return Math.max(0, estancia - (sala.t - sala.tAterrizaje) / 86400)
-  return Math.max(0, sala.mision.diasTransito - Math.max(0, sala.t - TRANSITO_INICIO_S) / 86400) + estancia
-}
+// El formato de los medidores es uno solo para todas las vistas: shared/medidores.ts.
+export { diasRestantes, diasTexto } from '@shared/medidores'

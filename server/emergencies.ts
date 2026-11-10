@@ -3,7 +3,7 @@
 // (nota y porqué) que se muestra a quienes decidieron, una vez resuelta.
 import { C } from '../shared/ciencia.js'
 import { SISTEMA_BY_ID, nombreSistema, type Emergency, type EmergencyAlternative, type Nota, type Role, type RoomState, type SistemaId } from '../shared/types.js'
-import { hayEmergencia, jugador, limitar, log, rid, sis, tripulacion } from './base.js'
+import { hayEmergencia, jugador, limitar, log, meterEnRefugio, rid, sis, tripulacion } from './base.js'
 import { factorPlazo } from './aprendizaje.js'
 import { ahora, azar } from './reloj.js'
 import { enSuperficie } from './sim/ambiente.js'
@@ -204,9 +204,7 @@ export const EMERGENCIAS: Record<string, Definicion> = {
       if (alt === 'seguir') return 'The crew stays at their stations and builds up dose.'
       for (const j of tripulacion(room)) {
         if (alt === 'parcial' && j.rol === 'sistemas') continue
-        j.zona = 'nave'
-        j.enRefugio = true
-        j.manual = null
+        meterEnRefugio(room, j)
       }
       room.refugioHasta = Math.max(room.refugioHasta, hasta)
       return alt === 'parcial' ? 'The crew takes cover. The Systems Engineer gets the cabin dose.' : 'The whole crew is in the Storm Shelter.'

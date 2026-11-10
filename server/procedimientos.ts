@@ -27,8 +27,8 @@ import {
   type Procedimiento,
 } from '../shared/procedimientos.js'
 import { ROLE_BY_ID, TAREAS_ENSAMBLAJE, type CultivoId, type EstadoProcedimiento, type Player, type Role, type RoomState, type SistemaId, type Zona } from '../shared/types.js'
-import { jugador, limitar, log, puedeActuar, sis, tripulacion } from './base.js'
-import { anotarPaso } from './aprendizaje.js'
+import { despertarJugador, jugador, limitar, log, puedeActuar, sis, tripulacion } from './base.js'
+import { anotarFin, anotarPaso } from './aprendizaje.js'
 import { completarTarea } from './game.js'
 import { ahora, azar } from './reloj.js'
 import { refrescar } from './sim/paso.js'
@@ -260,6 +260,7 @@ function alTerminar(room: RoomState, p: Procedimiento, j: Player) {
     }
   }
   if (p.tarea) completarTarea(room, j, p.tarea)
+  anotarFin(room, j, p.id)
   const media = e.calidad.length ? e.calidad.reduce((a, b) => a + b, 0) / e.calidad.length : 1
   const expertos = e.calidad.filter((q) => q >= 0.8).length
   if (p.tarea || p.id === 'huerto') log(room, `${p.titulo}: done. ${expertos} of ${p.pasos.length} steps done like an expert.`, media < 0.8 ? 'alerta' : 'ok')
@@ -282,6 +283,8 @@ export function pasoProcedimiento(room: RoomState, jugadorId: string, procId: st
   const def = p.pasos[actual]
   if (j.incapacitado > 0) return 'You are out of action. You need rest or the Flight Surgeon.'
   if (j.enRefugio) return 'You are in the Storm Shelter. You cannot work until you leave.'
+  // Quien hace un paso está despierto: si dormía, se levanta.
+  if (j.actividad === 'sueno' || j.manual === 'sueno') despertarJugador(room, j, ahora())
   if (!puedeActuar(room, j, def.roles)) return `This step is done by: ${def.roles.map((r) => ROLE_BY_ID[r].nombre).join(' or ')}.`
   if (j.zona !== def.zona) return def.zona === 'exterior' ? 'You have to suit up and go outside to do it.' : 'This is done inside the habitat.'
   if (p.aDemanda) {
@@ -311,6 +314,7 @@ export function pasoProcedimiento(room: RoomState, jugadorId: string, procId: st
   e.paso = actual + 1
   // Cuándo se hizo el último paso: mientras alguien trabaja, el tiempo no corre tan rápido.
   ;(e.datos ??= {}).ultimo = ahora()
+  e.datos.ultimoT = room.t
   j.aportes = (j.aportes ?? 0) + 1
   // Los trabajos largos (muestras, reparaciones) suman su cansancio al terminar; cada paso, poco.
   j.vit.fatiga = limitar(j.vit.fatiga + (def.zona === 'exterior' ? (p.aDemanda ? 0.6 : 1.5) : p.aDemanda ? 0.2 : 0.5), 0, 100)

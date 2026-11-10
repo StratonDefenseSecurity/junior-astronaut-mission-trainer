@@ -1,6 +1,6 @@
 // Utilidades comunes de la lógica del juego.
 import type { LogEntry, Player, Role, RoomState, SistemaEstado, SistemaId } from '../shared/types.js'
-import { azar } from './reloj.js'
+import { ahora, azar } from './reloj.js'
 
 export const limitar = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v))
 /** Acerca `actual` a `objetivo` con una constante de tiempo `tau` (mismas unidades que dt). */
@@ -39,3 +39,62 @@ export const rendimiento = (integridad: number) => (integridad >= 50 ? 1 : Math.
 
 export const hayEmergencia = (room: RoomState) => room.emergencias.some((e) => e.estado === 'activa')
 export const nombreRoles = (roles: Role[], abreviado: Record<Role, { corto: string }>) => roles.map((r) => abreviado[r].corto).join(' + ')
+
+/** Tiempo real que alguien despierto no vuelve a dormirse solo (game value, ver SUPUESTOS). */
+export const DESPIERTO_MS = 90_000
+
+/** Despierta a `j` (se levantó, lo despertaron o empezó a trabajar). No sirve si está fuera de servicio. */
+export function despertarJugador(room: RoomState, j: Player, ahoraMs: number) {
+  if (j.manual === 'sueno') j.manual = null
+  if (j.actividad === 'sueno' && j.incapacitado <= 0) j.actividad = room.ambiente.hora >= 8 && room.ambiente.hora < 18 ? 'trabajo' : 'reposo'
+  delete j.suenoAvisoMs
+  delete j.suenoAvisoT
+  j.despiertoMs = ahoraMs + DESPIERTO_MS
+  j.despiertoT = room.t
+}
+
+/**
+ * Lleva a `j` al refugio de tormentas. Si estaba fuera, la tripulación lo mete por la esclusa:
+ * su salida o entrada a medias se cancela, así no queda en un paso sin salida.
+ */
+export function meterEnRefugio(room: RoomState, j: Player) {
+  if (j.zona === 'exterior') {
+    j.zona = 'nave'
+    log(room, `${j.nombre} came back in through the Airlock for the shelter order.`)
+  }
+  if (room.procedimientos) {
+    delete room.procedimientos[`entrada:${j.id}`]
+    delete room.procedimientos[`salida:${j.id}`]
+  }
+  j.enRefugio = true
+  // En el refugio se puede dormir; el ejercicio no.
+  if (j.manual !== 'sueno') j.manual = null
+}
+
+/**
+ * Un mensaje por radio desde la Tierra: llega cuando la luz ha recorrido la distancia (el retardo
+ * del momento, o `demora` segundos si es una respuesta de ida y vuelta). `chat` = quién firma en el chat.
+ */
+export function enviarRadio(room: RoomState, texto: string, demora?: number, chat?: string) {
+  const llega = room.t + Math.max(0, Math.round(demora ?? room.vuelo.retardo ?? 0))
+  ;(room.radio ??= []).push({ llega, texto, ...(chat ? { chat } : {}) })
+  entregarRadio(room)
+}
+
+/** Entrega los mensajes que ya llegaron. En conjunción solar esperan a que vuelva el enlace. */
+export function entregarRadio(room: RoomState) {
+  if (!room.radio?.length || room.vuelo.enlace === 'conjuncion') return
+  const quedan: NonNullable<RoomState['radio']> = []
+  for (const m of room.radio) {
+    if (room.t < m.llega) {
+      quedan.push(m)
+      continue
+    }
+    log(room, m.texto, 'radio')
+    if (m.chat) {
+      room.chat.push({ id: rid(room), de: m.chat, texto: m.texto.replace(/^Mission Control: /, ''), t: ahora(), bot: false })
+      if (room.chat.length > 40) room.chat.splice(0, room.chat.length - 40)
+    }
+  }
+  room.radio = quedan
+}

@@ -16,7 +16,8 @@ import {
   type SistemaId,
 } from '../../shared/types.js'
 import { procPorId } from '../../shared/procedimientos.js'
-import { hacia, hayEmergencia, limitar, log, rendimiento, sis, tripulacion } from '../base.js'
+import { entregarRadio, enviarRadio, hacia, hayEmergencia, limitar, log, rendimiento, sis, tripulacion } from '../base.js'
+import { diasRestantes, retardoTexto } from '../../shared/medidores.js'
 import { DOLENCIAS, UMBRAL_AVERIA, despacharCola, lanzarEmergencia } from '../emergencies.js'
 import { desgasteDeber, dosisDeber, pasoDeberes, riesgoMedicoDeber } from '../deberes.js'
 import { ahora, azar, movidos } from '../reloj.js'
@@ -24,7 +25,7 @@ import { actualizarAmbiente, enSuperficie, eventosSolaresPendientes, fraccionSol
 import { pasoTripulante } from './fisiologia.js'
 import { calcularInforme, factorAverias, factorEscasez, pasoAprendizaje } from '../aprendizaje.js'
 import { pasoHuerto } from './huerto.js'
-import { gActual, telemetriaAscenso, telemetriaCrucero, telemetriaDescenso } from './vuelo.js'
+import { gActual, telemetriaAscenso, telemetriaCrucero, telemetriaDescenso, telemetriaEnlace } from './vuelo.js'
 
 const FACTOR_RACION = { normal: 1, ahorro: 0.8, estricto: 0.6 } as const
 /** Desgaste por día de uso, en puntos de integridad. */
@@ -101,6 +102,10 @@ function entrarOrbita(room: RoomState) {
   room.tFase = room.t
   room.escalaDeseada = 60
   log(room, `Mars orbit after ${room.mision.diasTransito} days in space. ${Math.round(room.rec.propelente)}% of the fuel is left and ${Math.round(room.energia.usada ?? 0)} kWh of power were used. Time to choose where to land.`, 'ok')
+  telemetriaEnlace(room)
+  log(room, `Mars orbit insertion is done. Earth will see it in ${retardoTexto(room.vuelo.retardo)}, the time light takes to cross ${room.vuelo.distTierra} million km.`)
+  // La confirmación hace el viaje de ida y vuelta.
+  enviarRadio(room, `Signal acquired. Mission Control confirms you are in Mars orbit. Your signal took ${retardoTexto(room.vuelo.retardo)} to reach us, and this reply the same to reach you.`, 2 * room.vuelo.retardo)
 }
 
 /** Empieza la entrada en la atmósfera hacia el sitio ya elegido. */
@@ -112,6 +117,7 @@ export function iniciarDescenso(room: RoomState) {
     j.enRefugio = false
     j.manual = null
   }
+  room.refugioHasta = 0
   log(room, `Atmospheric entry toward ${SITE_BY_ID[room.sitio ?? 'gale'].nombre}. Seven minutes with no contact with Earth.`, 'alerta')
 }
 
@@ -132,6 +138,12 @@ function aterrizar(room: RoomState) {
     log(room, 'Hard landing because the trajectory was off course. Several pieces of equipment were damaged.', 'alerta')
   }
   log(room, `Touchdown at ${sitio.nombre}. The base runs on batteries until surface power is deployed and connected.`, 'ok')
+  telemetriaEnlace(room)
+  enviarRadio(
+    room,
+    `Signal acquired. Mission Control received your landing signal ${retardoTexto(room.vuelo.retardo)} after touchdown. By the time you hear this, you have been on Mars for ${retardoTexto(2 * room.vuelo.retardo)}.`,
+    2 * room.vuelo.retardo,
+  )
 }
 
 function alNuevoSol(room: RoomState) {
@@ -154,17 +166,57 @@ function alNuevoSol(room: RoomState) {
 
 // ---------- Tripulación ----------
 
+/** Aviso, en tiempo real, antes de que el personaje de una persona conectada se duerma solo. */
+export const AVISO_SUENO_MS = 15_000
+/**
+ * Tope en tiempo de misión del aviso, del rato despierto tras despertar y de «en mitad de un
+ * trabajo»: a escalas altas unos segundos reales serían días sin dormir.
+ */
+const LIMITE_VIGILIA_S = 3600
+
+/** Tiempo real tras el último paso en que alguien cuenta como «en mitad de un trabajo». */
+const EN_TRABAJO_MS = 20_000
+
+/** ¿Está `j` en mitad de un trabajo por pasos (empezado, sin terminar y con un paso reciente)? */
+function enTrabajo(room: RoomState, j: Player): boolean {
+  for (const e of Object.values(room.procedimientos ?? {})) {
+    const d = e.datos ?? {}
+    // Reciente en tiempo real y también en tiempo de misión (a ×86 400, 20 s reales son días).
+    if (!e.terminado && e.paso > 0 && e.por.includes(j.id) && ahora() - (d.ultimo ?? -Infinity) <= EN_TRABAJO_MS && room.t - (d.ultimoT ?? room.t) <= LIMITE_VIGILIA_S) return true
+  }
+  return false
+}
+
+/**
+ * Qué hace cada tripulante ahora. De noche (22:00 a 6:00) el cuerpo duerme si nadie lo mantiene
+ * despierto, pero nunca a una persona conectada que se mueve o está en un trabajo, ni a quien
+ * acaban de despertar. A una persona conectada se le avisa antes (ver AVISO_SUENO_MS).
+ */
 function actividadDe(room: RoomState, j: Player, alerta: boolean): Actividad {
   if (j.zona === 'exterior') return 'eva'
   if (j.incapacitado > 0) return 'sueno'
-  if (j.enRefugio) return 'reposo'
   if (room.fase === 'lanzamiento' || (room.fase === 'llegada' && room.subfase === 'descenso')) return 'trabajo'
-  if (j.manual) return j.manual
+  // En el refugio se puede dormir (las tripulaciones duermen en zonas blindadas), no trabajar.
+  if (j.manual && !(j.enRefugio && j.manual !== 'sueno')) return j.manual
   const h = room.ambiente.hora
-  const activo = room.escala <= 60 && movidos().has(j.id)
-  if ((h >= 22 || h < 6) && !alerta && !activo) return 'sueno'
+  const humano = !j.bot && j.conectado
+  // Moverse cuenta hasta ×600: más rápido, los 30 s reales de «se movió hace poco» serían días.
+  const ocupado = humano && ((room.escala <= ESCALA_TRABAJO && movidos().has(j.id)) || enTrabajo(room, j))
+  const desvelado = ahora() < (j.despiertoMs ?? 0) && room.t < (j.despiertoT ?? 0) + LIMITE_VIGILIA_S
+  if ((h >= 22 || h < 6) && !alerta && !ocupado && !desvelado) {
+    if (!humano) return 'sueno'
+    if (j.suenoAvisoMs === undefined) {
+      j.suenoAvisoMs = ahora() + AVISO_SUENO_MS
+      j.suenoAvisoT = room.t
+    }
+    if (ahora() >= j.suenoAvisoMs || room.t >= (j.suenoAvisoT ?? room.t) + LIMITE_VIGILIA_S) return 'sueno'
+  } else {
+    delete j.suenoAvisoMs
+    delete j.suenoAvisoT
+  }
+  if (j.enRefugio) return 'reposo'
   if (h >= 8 && h < 18) return 'trabajo'
-  return activo ? 'trabajo' : 'reposo'
+  return ocupado ? 'trabajo' : 'reposo'
 }
 
 function rescatar(room: RoomState, j: Player, motivo: string) {
@@ -420,11 +472,13 @@ function sucesos(room: RoomState, dt: number, crew: Player[], superficie: boolea
   if (ts && room.t >= ts.hasta) {
     room.ambiente.tormentaSolar = null
     log(room, 'The solar radiation storm is over.', 'ok')
+    // Sin tormenta ya no hace falta el refugio: la orden termina y todos vuelven a sus puestos.
+    if (room.refugioHasta > 0 || crew.some((j) => j.enRefugio)) room.refugioHasta = room.t
   }
   if (room.refugioHasta > 0 && room.t >= room.refugioHasta) {
     room.refugioHasta = 0
     for (const j of crew) j.enRefugio = false
-    log(room, 'The crew leaves the Storm Shelter.')
+    log(room, 'The shelter order is over. The crew leaves the Storm Shelter.', 'ok')
   }
 
   if (crew.length === 0) return
@@ -477,13 +531,8 @@ function sucesos(room: RoomState, dt: number, crew: Player[], superficie: boolea
   void superficie
 }
 
-/** Días de misión que faltan, contando el viaje y la estancia. */
-export function diasRestantes(room: RoomState): number {
-  const estancia = (room.mision.solesObjetivo * C.SOL_S) / 86400
-  if (enSuperficie(room)) return Math.max(0, estancia - (room.t - room.tAterrizaje) / 86400)
-  const viaje = Math.max(0, room.mision.diasTransito - Math.max(0, room.t - TRANSITO_INICIO_S) / 86400)
-  return viaje + estancia
-}
+/** Días de misión que faltan, contando el viaje y la estancia (la misma cuenta que muestra la interfaz). */
+export { diasRestantes }
 
 /** Sucesos preparados de la situación (y los que se sortearon al despegar). */
 function sucesosDelGuion(room: RoomState, crew: Player[], superficie: boolean) {
@@ -524,7 +573,7 @@ function transmisiones(room: RoomState, crew: Player[]) {
   const una = (clave: string, texto: string) => {
     if (room.avisos[clave]) return
     room.avisos[clave] = room.t
-    log(room, texto, 'radio')
+    enviarRadio(room, texto)
   }
   const mision = room.nombreMision || 'the crew'
   const v = room.vuelo
@@ -543,8 +592,7 @@ function transmisiones(room: RoomState, crew: Player[]) {
       if (j) una('msgCasa2', `Message from home for ${j.nombre}${ciudad ? `, from ${ciudad.nombre}` : ''}: "Today we went outside to look at the sky. They told us Mars is that red dot. That is where you are." It took ${minutosSenal(room)} to arrive.`)
     }
   }
-  if (room.fase === 'llegada' && room.subfase === 'orbita') una('msgOrbita', `Mission Control: we confirm you are in Mars orbit. Choose your landing site well. We will see the result ${minutosSenal(room)} after you do.`)
-  if (room.tAterrizaje > 0 && room.t > room.tAterrizaje + 3600) una('msgAterrizaje', `Mission Control: we received the landing signal from ${mision}. By the time we heard it, you had already been on the ground of Mars for ${minutosSenal(room)}.`)
+  if (room.fase === 'llegada' && room.subfase === 'orbita') una('msgOrbita', `Mission Control: choose your landing site well. We will see the result ${minutosSenal(room)} after you do.`)
 }
 
 function evaluar(room: RoomState, crew: Player[]) {
@@ -725,12 +773,21 @@ export function pasoSimulacion(room: RoomState) {
   const dt = escala / n
   const fase = room.fase + room.subfase
   const alerta = hayEmergencia(room)
+  const conjuncion = room.vuelo.enlace === 'conjuncion'
   for (let i = 0; i < n && !room.resultado; i++) {
     subpaso(room, dt)
     // Si salta una emergencia o cambia la fase, el tiempo frena ya: el resto del paso no corre a
     // la escala anterior (a ×86 400 un paso es un día entero sin poder reaccionar ni dormir).
     if (room.fase + room.subfase !== fase || (!alerta && (hayEmergencia(room) || room.cola.length > 0))) break
   }
+  // En Marte, el enlace con la Tierra sale de la distancia real del día (astronomy-engine).
+  if (room.fase === 'llegada' || room.fase === 'ensamblaje' || room.fase === 'base') telemetriaEnlace(room)
+  if (!conjuncion && room.vuelo.enlace === 'conjuncion') {
+    log(room, `Solar conjunction: the Sun is less than ${C.CONJUNCION_GRADOS} degrees from Mars in Earth's sky. Mission Control stops sending commands. Messages wait until the link is back.`, 'alerta')
+  } else if (conjuncion && room.vuelo.enlace !== 'conjuncion') {
+    log(room, `The Sun moved away from Mars in Earth's sky. The DSN link is back, with a delay of ${retardoTexto(room.vuelo.retardo)}.`, 'ok')
+  }
+  entregarRadio(room)
   const crew = tripulacion(room)
   calcularAutonomia(room, crew)
   room.puntosCriticos = puntosCriticos(room, crew)

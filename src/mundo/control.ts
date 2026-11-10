@@ -3,7 +3,7 @@
 import { useEffect } from 'react'
 import type { Zona } from '@shared/types'
 import { useStore } from '../store'
-import { ENTRADA } from './mapa'
+import { ENTRADA, llegadaLibre } from './mapa'
 
 export const local = {
   x: ENTRADA.nave.x,
@@ -31,14 +31,21 @@ export const palanca = { x: 0, y: 0 }
 const teclas = new Set<string>()
 export const tecla = (codigo: string) => teclas.has(codigo)
 
-/** Coloca al personaje en la entrada de una zona (al cruzar la esclusa). */
-export function entrarEnZona(zona: Zona) {
-  const e = ENTRADA[zona]
+/**
+ * Cuerpos de los compañeros en la zona propia, tal como se dibujan (los actualiza cada
+ * compañero en su fotograma). Sirven para no atravesarlos.
+ */
+export const cuerpos = new Map<string, { x: number; z: number }>()
+
+/** Coloca al personaje en la entrada de una zona (al cruzar la esclusa), en un sitio libre. */
+export function entrarEnZona(zona: Zona, ocupados: { x: number; z: number }[] = []) {
+  const e = llegadaLibre(zona, ocupados)
   local.zona = zona
   local.x = e.x
   local.z = e.z
   local.giro = e.giro
   local.vel = 0
+  local.vx = local.vz = 0
   // Dentro, la cámara va detrás. Fuera, detrás quedaría metida en la esclusa: se coloca en
   // diagonal, de modo que se vean el astronauta, el hábitat y el terreno.
   local.camGiro = zona === 'nave' ? e.giro + Math.PI : e.giro - Math.PI / 4

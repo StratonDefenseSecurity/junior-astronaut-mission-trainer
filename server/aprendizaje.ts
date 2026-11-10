@@ -2,6 +2,8 @@
 // final ("qué aprendimos") que se calcula al terminar y se guarda en la sala.
 import { C } from '../shared/ciencia.js'
 import { DEMO, DIFICULTAD_BY_ID, bitacoraVacia, dificultadDe, habilidadDe, type Bitacora, type Dificultad, type Informe, type ParteInforme } from '../shared/informe.js'
+import { CO2_LIMITE_MMHG, co2Cabina, dosisTexto } from '../shared/medidores.js'
+import { familiaDe, misionesDe } from '../shared/misiones.js'
 import { DEBERES } from '../shared/procedimientos.js'
 import { ESCALA_MAXIMA, type Nota, type Player, type RoomState } from '../shared/types.js'
 import { log, tripulacion } from './base.js'
@@ -45,6 +47,27 @@ export function anotarPaso(room: RoomState, j: Player, procId: string, calidad: 
   if (!p.h.includes(h)) p.h.push(h)
 }
 
+/** Un trabajo por pasos que `j` terminó (cuenta para sus misiones personales). */
+export function anotarFin(room: RoomState, j: Player, procId: string) {
+  const p = (bit(room).porJugador[j.id] ??= { p: 0, c: 0, h: [] })
+  const f = (p.f ??= {})
+  const k = familiaDe(procId)
+  f[k] = (f[k] ?? 0) + 1
+}
+
+/** Misiones personales recién cumplidas: se guardan, se anuncian y no se vuelven a contar. */
+function revisarMisiones(room: RoomState) {
+  const b = bit(room)
+  for (const j of tripulacion(room)) {
+    for (const a of misionesDe(room, j)) {
+      const p = (b.porJugador[j.id] ??= { p: 0, c: 0, h: [] })
+      if (!a.hecha || p.m?.includes(a.mision.id)) continue
+      ;(p.m ??= []).push(a.mision.id)
+      log(room, `${j.nombre} completed a personal mission: ${a.mision.titulo.charAt(0).toLowerCase() + a.mision.titulo.slice(1)}.`, 'ok')
+    }
+  }
+}
+
 /** Una decisión valorada (emergencia o propuesta). */
 export function anotarDecision(room: RoomState, tipo: string, titulo: string, nota: Nota, porque: string, decisores: string[]) {
   const b = bit(room)
@@ -53,6 +76,7 @@ export function anotarDecision(room: RoomState, tipo: string, titulo: string, no
   for (const id of decisores) {
     const p = (b.porJugador[id] ??= { p: 0, c: 0, h: [] })
     if (!p.h.includes('decision')) p.h.push('decision')
+    p.d = (p.d ?? 0) + 1
   }
   const d = { t: Math.round(room.t), tipo, titulo, nota, porque: porque.slice(0, 160) }
   if (b.decisiones.length < 16) b.decisiones.push(d)
@@ -86,6 +110,7 @@ const PISTAS: [RegExp, string][] = [
 export function pasoAprendizaje(room: RoomState) {
   const b = bit(room)
   b.retardoMax = Math.max(b.retardoMax, Math.round(room.vuelo.retardo || 0))
+  revisarMisiones(room)
   // Demostración: cada fase empieza a la escala más alta permitida. El comandante puede bajarla.
   if (room.demo && b.faseDemo !== room.fase && ['transito', 'ensamblaje', 'base'].includes(room.fase)) {
     b.faseDemo = room.fase
@@ -109,6 +134,7 @@ const r = (v: number) => Math.round(v)
 const limitar = (v: number, a: number, z: number) => Math.min(z, Math.max(a, v))
 
 export function calcularInforme(room: RoomState) {
+  revisarMisiones(room)
   const b = bit(room)
   const crew = tripulacion(room)
   const m = room.mision
@@ -141,8 +167,12 @@ export function calcularInforme(room: RoomState) {
   const hechos = deberes.reduce((s, d) => s + d.hechos, 0)
   const saltados = deberes.reduce((s, d) => s + d.saltados, 0)
   const conAporte = crew.filter((j) => (j.aportes ?? 0) > 0).length
-  const equipo = (hechos + saltados ? (hechos / (hechos + saltados)) * 6 : 3) + (crew.length ? (conAporte / crew.length) * 4 : 0)
-  partes.push({ id: 'equipo', nombre: 'Teamwork and duties', puntos: r(equipo), max: 10, detalle: `${hechos} duties done, ${saltados} skipped. ${conAporte} of ${crew.length} crew members contributed.` })
+  // Misiones personales de cada tripulante (shared/misiones.ts).
+  const misiones = crew.flatMap((j) => misionesDe(room, j))
+  const cumplidas = misiones.filter((a) => a.hecha).length
+  const equipo =
+    (hechos + saltados ? (hechos / (hechos + saltados)) * 4 : 2) + (crew.length ? (conAporte / crew.length) * 3 : 0) + (misiones.length ? (cumplidas / misiones.length) * 3 : 0)
+  partes.push({ id: 'equipo', nombre: 'Teamwork, duties and personal missions', puntos: r(equipo), max: 10, detalle: `${hechos} duties done, ${saltados} skipped. ${conAporte} of ${crew.length} crew members contributed. ${cumplidas} of ${misiones.length} personal missions completed.` })
   const puntos = limitar(partes.reduce((s, p) => s + p.puntos, 0), 0, 100)
 
   // Decisiones clave: las arriesgadas y las buenas primero, como mucho 8, en orden de tiempo.
@@ -154,7 +184,7 @@ export function calcularInforme(room: RoomState) {
 
   const personas = crew.map((j) => {
     const p = b.porJugador[j.id] ?? { p: 0, c: 0, h: [] }
-    return { id: j.id, nombre: j.nombre, rol: j.rol, aportes: j.aportes ?? 0, pasos: p.p, calidad: p.p ? r((p.c / p.p) * 100) : null, deberes: deberesDe(room, j), habilidades: p.h.slice(0, 8) }
+    return { id: j.id, nombre: j.nombre, rol: j.rol, aportes: j.aportes ?? 0, pasos: p.p, calidad: p.p ? r((p.c / p.p) * 100) : null, deberes: deberesDe(room, j), habilidades: p.h.slice(0, 8), misiones: misionesDe(room, j).map((a) => ({ titulo: a.mision.titulo, hecha: a.hecha })) }
   })
 
   const llego = room.tAterrizaje > 0
@@ -162,12 +192,12 @@ export function calcularInforme(room: RoomState) {
   const salieron = Object.values(b.porJugador).some((p) => p.h.includes('eva'))
   const radiacionMal = b.decisiones.some((d) => (d.tipo === 'particulas' || d.tipo === 'refugio') && d.nota === 'riesgosa')
   const objetivos = [
-    { id: 'soporte', nombre: 'Life support balance', logrado: !muerto && !agotado && room.cabina.ppCO2 <= C.PPCO2_LIMITE_KPA, detalle: !muerto && !agotado ? `Oxygen, water and food lasted. Cabin CO2 ended at ${(room.cabina.ppCO2 * 7.5).toFixed(1)} mmHg.` : 'A reserve ran out or someone died.' },
-    { id: 'radiacion', nombre: 'Radiation protection', logrado: bajoLimite && !radiacionMal, detalle: `Highest dose ${r(Math.max(0, ...crew.map((j) => j.vit.dosis)))} mSv of ${C.LIMITE_CARRERA_MSV}.${radiacionMal ? ' A storm decision exposed the crew.' : ''}` },
+    { id: 'soporte', nombre: 'Life support balance', logrado: !muerto && !agotado && room.cabina.ppCO2 <= C.PPCO2_LIMITE_KPA, detalle: !muerto && !agotado ? `Oxygen, water and food lasted. Cabin CO2 ended at ${co2Cabina(room).texto}, limit ${CO2_LIMITE_MMHG} mmHg.` : 'A reserve ran out or someone died.' },
+    { id: 'radiacion', nombre: 'Radiation protection', logrado: bajoLimite && !radiacionMal, detalle: `Highest dose ${dosisTexto(Math.max(0, ...crew.map((j) => j.vit.dosis)))} of ${C.LIMITE_CARRERA_MSV}.${radiacionMal ? ' A storm decision exposed the crew.' : ''}` },
     { id: 'marte', nombre: 'The Mars environment', logrado: llego && soles >= 1 && salieron, detalle: llego ? `${soles} sol${soles === 1 ? '' : 's'} on the surface${salieron ? ', with walks outside in real Curiosity weather' : ', but nobody went outside'}.` : 'The crew did not reach the surface.' },
     { id: 'ciencia', nombre: 'The scientific method', logrado: m.muestrasAnalizadas >= 1, detalle: `${m.muestrasAnalizadas} sample${m.muestrasAnalizadas === 1 ? '' : 's'} collected, analyzed and read in the lab.` },
     { id: 'retardo', nombre: 'Communication delay', logrado: b.retardoMax >= 60, detalle: b.retardoMax >= 60 ? `Signals took up to ${r(b.retardoMax / 60)} min each way, so the crew decided on its own.` : 'The ship never got far enough for a long delay.' },
-    { id: 'equipo', nombre: 'Teamwork', logrado: crew.length > 0 && conAporte === crew.length && hechos >= saltados, detalle: `${conAporte} of ${crew.length} contributed. ${hechos} duties done, ${saltados} skipped.` },
+    { id: 'equipo', nombre: 'Teamwork', logrado: crew.length > 0 && conAporte === crew.length && hechos >= saltados, detalle: `${conAporte} of ${crew.length} contributed. ${hechos} duties done, ${saltados} skipped. ${cumplidas} of ${misiones.length} personal missions completed.` },
   ]
   const informe: Informe = { puntos, partes, decisiones, personas, objetivos }
   room.informe = informe

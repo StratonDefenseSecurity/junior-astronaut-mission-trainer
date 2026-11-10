@@ -231,7 +231,9 @@ comprobar(sala.jugadores[1].manual === null && sala.jugadores[1].incapacitado ==
   comprobar(vista.status === 200 && vista.d.sala?.codigo === codigo && vista.d.observador === true, 'el docente observa la sala por su código')
   comprobar(vista.d.sala?.jugadores.length === tripulantes, 'el observador no cuenta como jugador')
   const msj = await llamar('controlMensaje', { codigo, texto: 'Check your oxygen levels.' }, O)
-  comprobar(msj.d.sala?.registro.some((l) => l.texto === 'Mission Control: Check your oxygen levels.' && l.tipo === 'radio'), 'el mensaje de Mission Control llega al registro por radio')
+  const llegado = msj.d.sala?.registro.some((l) => l.texto === 'Mission Control: Check your oxygen levels.' && l.tipo === 'radio')
+  const enCamino = (msj.d.sala?.radio ?? []).find((m) => m.texto === 'Mission Control: Check your oxygen levels.')
+  comprobar(llegado || (enCamino && enCamino.llega >= msj.d.sala.t + msj.d.sala.vuelo.retardo - 1), `el mensaje de Mission Control viaja con el retardo de la señal (${msj.d.sala?.vuelo.retardo} s)`)
   const pausa = await llamar('controlPausa', { codigo, pausa: true }, O)
   comprobar(pausa.d.sala?.pausa === true, 'el docente pausa la misión para comentarla en clase')
   const sigue = await llamar('controlPausa', { codigo, pausa: false }, O)
@@ -255,6 +257,8 @@ if (!corto) {
     for (const s of sala.sistemas) {
       // Los repuestos se guardan para el soporte vital: el huerto no se repara en el viaje.
       if (s.instalado && s.integridad < 50 && sala.rec.repuestos >= 2 && s.id !== 'huerto' && !(sala.tAterrizaje > 0 && (s.id === 'energia' || s.id === 'isru'))) {
+        // Con orden de refugio, el ingeniero sale para la reparación urgente (recibe la dosis de cabina).
+        if (sala.jugadores[1].enRefugio) await paso(B, 'refugio', { entrar: false }, 'B sale del refugio para una reparación urgente')
         await trabajo(B, `reparar:${s.id}`, `B cambia la unidad gastada de ${s.id} paso a paso`)
       }
     }
@@ -276,7 +280,8 @@ if (!corto) {
     await atender()
   }
   comprobar(sala.fase === 'llegada' && sala.subfase === 'orbita', `órbita de Marte tras ${Math.round(sala.t / 86400)} días`)
-  comprobar(sala.registro.some((l) => l.tipo === 'radio' && /Mission Control/.test(l.texto)), 'llegan transmisiones del centro de control durante el viaje')
+  // Las de órbita viajan con el retardo real: pueden estar aún en camino (sala.radio).
+  comprobar(sala.registro.some((l) => l.tipo === 'radio' && /Mission Control/.test(l.texto)) || (sala.radio ?? []).some((m) => /Mission Control/.test(m.texto) && m.llega > sala.t), 'llegan transmisiones del centro de control durante el viaje, con su retardo')
   comprobar(sala.registro.some((l) => /Logbook: \d+ days in space/.test(l.texto)), 'la bitácora registra los días en el espacio, el combustible y la energía')
   comprobar(sala.registro.some((l) => /Mars orbit.*fuel.*kWh/.test(l.texto)), `al llegar se anota lo gastado: ${Math.round(sala.rec.propelente)}% de combustible, ${Math.round(sala.energia.usada)} kWh`)
   comprobar(emergencias.size >= 3, `hubo ${emergencias.size} emergencias en el viaje: ${[...new Set([...emergencias].map((e) => e.split(':')[0]))].join(', ')}`)
@@ -306,6 +311,28 @@ if (!corto) {
   const amb = sala.ambiente
   comprobar(amb.sol === 1 && amb.tempExt < 10 && amb.presion > 600 && amb.presion < 900, `clima real: ${amb.tempExt} °C, ${amb.presion} Pa (sol ${amb.solCuriosity} de Curiosity)`)
   comprobar(sala.energia.generacion === 0, 'sin energía de superficie hasta desplegar los paneles')
+
+  // Enlace con la Tierra en Marte: distancia real del día (astronomy-engine) y su retardo.
+  const vl = sala.vuelo
+  comprobar(['bueno', 'cerca', 'conjuncion'].includes(vl.enlace) && Math.abs(vl.retardo - (vl.distTierra * 1e6) / 299792) <= 2 && vl.retardo > 180 && vl.retardo < 1340, `enlace DSN ${vl.enlace}: ${vl.distTierra} M km, ${vl.retardo} s de retardo, Sol a ${vl.elongacion}°`)
+  const senal = sala.registro.find((l) => l.tipo === 'radio' && /^Signal acquired.*landing/.test(l.texto)) ?? (sala.radio ?? []).find((m) => /^Signal acquired.*landing/.test(m.texto))
+  comprobar(senal && (senal.llega === undefined || senal.llega >= sala.tAterrizaje + 2 * vl.retardo - 2), '"Signal acquired" del aterrizaje llega tras el retardo de ida y vuelta')
+
+  // Medidores: con la misión en pausa, los dos jugadores y el Asistente dan las mismas cifras.
+  await paso(A, 'pausa', { pausa: true }, 'A pausa para comparar los medidores')
+  const vistaA = sala
+  const vistaB2 = (await llamar('estado', { codigo, v: 0, h: '' }, B)).d.sala
+  comprobar(vistaB2 && JSON.stringify(vistaB2.cabina) === JSON.stringify(vistaA.cabina) && JSON.stringify(vistaB2.rec) === JSON.stringify(vistaA.rec) && JSON.stringify(vistaB2.jugadores.map((j) => j.vit)) === JSON.stringify(vistaA.jugadores.map((j) => j.vit)), 'A y B reciben los mismos valores del servidor')
+  const o2txt = `${vistaA.cabina.ppO2.toFixed(1)} kPa`
+  const aire = (await llamar('bot', { codigo, v: sala.version, texto: 'how much air is left?' }, B)).d.respuesta ?? ''
+  comprobar(aire.includes(`Cabin oxygen: ${o2txt}`) && aire.includes(`${Math.round(vistaA.rec.o2)} kg`), `el Asistente da el O2 de cabina y de tanques como los paneles (${o2txt})`, aire.slice(0, 160))
+  const co2txt = `${(vistaA.cabina.ppCO2 * 7.50062).toFixed(1)} mmHg`
+  const resumen = (await llamar('bot', { codigo, v: sala.version, texto: 'status summary' }, A)).d.respuesta ?? ''
+  comprobar(resumen.includes(co2txt) && resumen.includes(o2txt), `el Asistente da el CO2 de cabina en las mismas unidades (${co2txt})`, resumen.slice(0, 160))
+  const yoB = vistaA.jugadores[1]
+  const salud = (await llamar('bot', { codigo, v: sala.version, texto: 'how am i?' }, B)).d.respuesta ?? ''
+  comprobar(salud.includes(`blood oxygen ${Math.round(yoB.vit.spo2)}%`) && salud.includes(`Your pulse ${Math.round(yoB.vit.fc)} bpm`), 'el Asistente da el pulso y la SpO2 propios con el mismo redondeo', salud.slice(0, 160))
+  await paso(A, 'pausa', { pausa: false }, 'A reanuda la misión')
 
   // Montaje por procedimientos, paso a paso, con los valores que daría un experto en Gale (4.6° S).
   const proc = (quien, id, n, valor, msg, esperado = 200) => paso(quien, 'procedimiento', { proc: id, paso: n, valor }, msg, esperado)
@@ -363,9 +390,17 @@ if (!corto) {
   await paso(B, 'accion', { id: 'muestra', payload: { sitio: 'muestra1' } }, 'la muestra de un clic ya no existe', 400)
   await trabajo(B, 'muestra:muestra1', 'B toma una muestra como Perseverance (no hay científico: puede cualquiera)')
   comprobar(sala.jugadores[1].muestras === 1 && sala.muestreos.includes('muestra1'), 'B carga la muestra sellada')
-  await trabajo(B, `entrada:${idB}`, 'B vuelve al hábitat por la esclusa')
+  await proc(B, `entrada:${idB}`, 0, 'cepillar', 'B se cepilla el polvo antes de entrar')
+  await proc(B, `entrada:${idB}`, 1, 6, 'B cierra la escotilla y represuriza')
+  comprobar(sala.jugadores[1].zona === 'nave' && sala.procedimientos[`entrada:${idB}`]?.paso === 2, 'B ya está dentro aunque no terminó de quitarse el traje')
   await trabajo(B, `analizar:${idB}`, 'B tamiza, analiza y lee la muestra en el laboratorio')
   comprobar(sala.mision.muestrasAnalizadas === 1, 'la muestra cuenta para el objetivo')
+  await trabajo(B, `salida:${idB}`, 'B vuelve a salir con la entrada anterior a medias')
+  comprobar(sala.jugadores[1].zona === 'exterior' && !sala.procedimientos?.[`entrada:${idB}`], 'la entrada a medias no deja a B sin poder volver')
+  await trabajo(B, `entrada:${idB}`, 'B vuelve al hábitat por la esclusa, desde el primer paso')
+  comprobar(sala.jugadores[1].zona === 'nave', 'B termina dentro')
+  const f = sala.bitacora?.porJugador?.[idB]?.f ?? {}
+  comprobar(f.muestra >= 1 && f.analizar >= 1 && f.entrada >= 1, `los trabajos terminados cuentan para las misiones personales de B: ${JSON.stringify(f)}`)
   await estado(A) // A sigue conectado: un cliente real consulta sin parar (sin esto, más de 12 s quieto = desconectado).
   await paso(B, 'accion', { id: 'racionComida', payload: { nivel: 'ahorro' } }, 'sistemas no decide las raciones si hay comandante', 400)
   await paso(A, 'accion', { id: 'racionComida', payload: { nivel: 'ahorro' } }, 'el comandante propone ración de ahorro')
@@ -373,8 +408,20 @@ if (!corto) {
   await paso(A, 'accion', { id: 'refugio', payload: { horas: 6 } }, 'el comandante ordena refugio 6 horas')
   comprobar(sala.jugadores.every((x) => x.enRefugio), 'toda la tripulación entra al refugio')
   await proc(B, `salida:${idB}`, 0, { orden: ['lcvg', 'inferior', 'superior', 'gorro', 'casco', 'guantes'], errores: 0 }, 'en el refugio no se puede trabajar', 400)
+  await paso(B, 'refugio', { entrar: false }, 'con la orden en vigor se puede salir para un trabajo urgente')
+  comprobar(!sala.jugadores[1].enRefugio && sala.registro.some((l) => /during the shelter order/.test(l.texto)), 'salir durante la orden queda anotado (dosis de cabina)')
+  await paso(B, 'refugio', { entrar: true }, 'B vuelve al refugio')
   await paso(A, 'accion', { id: 'refugio', payload: { salir: true } }, 'desde el refugio el comandante sí puede levantar la orden')
-  comprobar(sala.jugadores.every((x) => !x.enRefugio), 'la tripulación sale del refugio')
+  comprobar(sala.jugadores.every((x) => !x.enRefugio) && sala.refugioHasta === 0, 'la tripulación sale del refugio')
+  if (sala.jugadores[0].actividad !== 'sueno' && !sala.jugadores[0].suenoAvisoMs) await paso(B, 'accion', { id: 'despertar', payload: { jugadorId: idA } }, 'no se despierta a quien ya está despierto', 400)
+  await paso(A, 'actividad', { actividad: 'sueno' }, 'A se acuesta')
+  comprobar(sala.jugadores[0].manual === 'sueno', 'A duerme')
+  await paso(B, 'accion', { id: 'despertar', payload: { jugadorId: idA } }, 'B despierta a A')
+  const jA = sala.jugadores[0]
+  comprobar(jA.manual === null && jA.actividad !== 'sueno' && jA.despiertoMs > 0 && sala.registro.some((l) => /woke .* up/.test(l.texto)), 'A queda despierto y el registro lo cuenta')
+  await paso(A, 'actividad', { actividad: 'sueno' }, 'A se vuelve a acostar')
+  await paso(A, 'accion', { id: 'despertar', payload: {} }, 'A se despierta con Wake up')
+  comprobar(sala.jugadores[0].manual === null && sala.jugadores[0].actividad !== 'sueno', 'A se levanta solo')
   const clima = await llamar('bot', { codigo, v: sala.version, texto: 'what is the weather outside?' }, A)
   comprobar(/Curiosity/.test(clima.d.respuesta ?? ''), 'el asistente cita el clima medido por Curiosity')
 
@@ -388,6 +435,8 @@ if (!corto) {
   comprobar(inf?.personas.some((p) => p.habilidades.includes('eva') && p.habilidades.includes('muestra')), 'las habilidades salen de lo que hizo cada uno (salir y tomar muestras)')
   comprobar(inf?.objetivos.length === 6 && inf.objetivos.find((o) => o.id === 'ciencia')?.logrado === true, 'objetivos de aprendizaje: el método científico se logró con la muestra analizada')
   comprobar(inf?.decisiones.length <= 8 && inf.decisiones.every((d) => d.titulo && d.nota), `decisiones clave valoradas: ${inf?.decisiones.length}`)
+  comprobar(inf?.personas.every((p) => Array.isArray(p.misiones) && p.misiones.length >= 2), `misiones personales en el informe: ${inf?.personas.map((p) => `${p.nombre} ${p.misiones?.filter((m) => m.hecha).length}/${p.misiones?.length}`).join(', ')}`)
+  comprobar(/personal missions completed/.test(inf?.partes.find((x) => x.id === 'equipo')?.detalle ?? ''), 'el trabajo en equipo cuenta las misiones personales')
   comprobar(JSON.stringify(inf).length < 6000, `el informe es pequeño: ${JSON.stringify(inf).length} bytes`)
   await paso(A, 'accion', { id: 'terminar', payload: {} }, 'una misión terminada no se termina otra vez', 400)
 }

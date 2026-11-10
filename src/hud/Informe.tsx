@@ -83,6 +83,12 @@ export function Informe({ sala }: { sala: RoomState }) {
             <div className="mini muted">
               Skills practiced: {p.habilidades.length ? p.habilidades.map((h) => HABILIDADES[h] ?? h).join(', ') : 'none yet'}.
             </div>
+            {p.misiones && p.misiones.length > 0 && (
+              <div className="mini">
+                Personal missions: {p.misiones.filter((m) => m.hecha).length} of {p.misiones.length} done.{' '}
+                <span className="muted">{p.misiones.map((m) => `${m.hecha ? '✓' : '○'} ${m.titulo}`).join(' · ')}</span>
+              </div>
+            )}
           </div>
         ))}
       </div>

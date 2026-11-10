@@ -399,6 +399,14 @@ export interface Player {
   bot?: boolean
   /** Estación donde está trabajando ahora (los bots caminan hasta ella). */
   estacion?: string | null
+  /** ms reales en que se dormirá solo si sigue quieto de noche (aviso previo). Sin valor = sin aviso. */
+  suenoAvisoMs?: number
+  /** Segundo de misión en que empezó ese aviso. */
+  suenoAvisoT?: number
+  /** ms reales hasta los que no se duerme solo: lo despertaron o se despertó. */
+  despiertoMs?: number
+  /** Segundo de misión en que se despertó (el rato despierto también tiene tope en tiempo de misión). */
+  despiertoT?: number
 }
 
 export interface Recursos {
@@ -486,6 +494,10 @@ export interface Vuelo {
   distSol: number
   /** Segundos que tarda una señal en llegar a la Tierra. */
   retardo: number
+  /** Ángulo Sol–Tierra–Marte visto desde la Tierra, grados (en Marte, con efemérides reales). */
+  elongacion?: number
+  /** Estado del enlace: bueno, ruidoso (Sol cerca) o conjunción solar (sin órdenes). */
+  enlace?: 'bueno' | 'cerca' | 'conjuncion'
 }
 
 export interface Ajustes {
@@ -651,6 +663,8 @@ export interface RoomState {
   avisos: Record<string, number>
   /** Emergencias que esperan a que se resuelva la que está activa. */
   cola: { tipo: string; datos: Record<string, unknown> }[]
+  /** Mensajes por radio en camino: llegan en el segundo de misión `llega` (retardo real de la señal). */
+  radio?: { llega: number; texto: string; chat?: string }[]
 
   propuestas: Proposal[]
   emergencias: Emergency[]

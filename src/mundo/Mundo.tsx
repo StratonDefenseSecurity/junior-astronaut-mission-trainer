@@ -14,10 +14,10 @@ import { voz } from '../voz'
 import { useState } from 'react'
 import { Astronauta, avanzarPaso, type Accion, type Pose } from './Astronauta'
 import { Descenso, Lanzamiento } from './Cinematicas'
-import { controlesDeCamara, entrarEnZona, local, palanca, tecla, useTeclado } from './control'
+import { controlesDeCamara, cuerpos, entrarEnZona, local, palanca, tecla, useTeclado } from './control'
 import { Exterior } from './Exterior'
 import { Interior, enMicrogravedad } from './Interior'
-import { ALCANCE, ENTRADA, ESTACIONES, ESTACION_BY_ID, EXTERIOR, INTERIOR, PUESTO, PUESTO_REFUGIO, PUNTOS, estacionVisible, estacionesDestacadas, limitarPosicion } from './mapa'
+import { ALCANCE, ENTRADA, ESTACIONES, ESTACION_BY_ID, EXTERIOR, INTERIOR, PUESTO, PUNTOS, apartarDeCuerpos, estacionVisible, estacionesDestacadas, limitarPosicion } from './mapa'
 
 /** Ondas junto al nombre mientras esa persona habla por el chat de voz. */
 function Habla({ id }: { id: string }) {
@@ -63,16 +63,25 @@ const banderaDe = (j: Player) => {
 type Gravedad = 'tierra' | 'marte' | 'cero'
 const gravedadDe = (sala: RoomState): Gravedad => (enMicrogravedad(sala) ? 'cero' : sala.tAterrizaje > 0 ? 'marte' : 'tierra')
 
-/** Puesto fijo y animación de quien está haciendo algo concreto (ejercicio, dormir, refugio). */
+/**
+ * Puesto fijo y animación de quien está haciendo algo concreto (ejercicio, dormir, refugio).
+ * `indice` es su lugar en la tripulación: cada uno tiene su saco, su litera y su sitio en el
+ * refugio, así que nadie se amontona.
+ */
 function puestoDeActividad(sala: RoomState, j: Player, indice: number): { x: number; z: number; giro: number; y: number; accion: Accion } | null {
   const micro = enMicrogravedad(sala)
   if (j.zona !== 'nave') return null
-  if (j.enRefugio) return { x: PUESTO_REFUGIO.x + (indice % 3) * 0.7 - 0.7, z: PUESTO_REFUGIO.z - Math.floor(indice / 3) * 0.6 + 0.3, giro: Math.PI, y: 0, accion: 'refugio' }
+  if (j.enRefugio) {
+    const p = PUNTOS.refugio[indice % PUNTOS.refugio.length]
+    return { x: p.x, z: p.z, giro: p.giro, y: 0, accion: 'refugio' }
+  }
   if (j.manual === 'ejercicio') {
-    // El primero en la cinta, el siguiente en la bicicleta.
+    // Por orden: el primero en la cinta, el siguiente en la bicicleta y los demás esperan turno.
     const antes = sala.jugadores.filter((o) => o.manual === 'ejercicio' && o.zona === 'nave' && o.id < j.id).length
-    const p = antes % 2 === 0 ? PUNTOS.cinta : PUNTOS.bici
-    return { x: p.x, z: p.z, giro: p.giro, y: p === PUNTOS.cinta ? 0.15 : 0.16, accion: p === PUNTOS.cinta ? 'correr' : 'bici' }
+    if (antes === 0) return { ...PUNTOS.cinta, y: 0.15, accion: 'correr' }
+    if (antes === 1) return { ...PUNTOS.bici, y: 0.16, accion: 'bici' }
+    const p = PUNTOS.esperaGimnasio[(antes - 2) % PUNTOS.esperaGimnasio.length]
+    return { x: p.x, z: p.z, giro: p.giro, y: micro ? 0.38 : 0, accion: micro ? 'flotar' : 'pie' }
   }
   if (j.manual === 'sueno') {
     if (micro) {
@@ -162,7 +171,8 @@ function Jugador({ sala, yo }: { sala: RoomState; yo: Player }) {
         local.vx *= maxima / v
         local.vz *= maxima / v
       }
-      const [x, z] = limitarPosicion(local.zona, local.x + local.vx * dt, local.z + local.vz * dt, visible)
+      const [ax, az] = apartarDeCuerpos(local.x + local.vx * dt, local.z + local.vz * dt, cuerpos.values())
+      const [x, z] = limitarPosicion(local.zona, ax, az, visible, { x: local.x, z: local.z, gravedad: false })
       if (x !== local.x + local.vx * dt) local.vx *= -0.3
       if (z !== local.z + local.vz * dt) local.vz *= -0.3
       local.x = x
@@ -176,7 +186,9 @@ function Jugador({ sala, yo }: { sala: RoomState; yo: Player }) {
       if (local.zona === 'exterior') v *= 0.8
       if (j.vit.fatiga > 85) v *= 0.7
       v *= fuerza
-      const [x, z] = limitarPosicion(local.zona, local.x + dx * v * dt, local.z + dz * v * dt, visible)
+      // Los compañeros ocupan sitio: se rodea a quien está delante en vez de atravesarlo.
+      const [ax, az] = apartarDeCuerpos(local.x + dx * v * dt, local.z + dz * v * dt, cuerpos.values())
+      const [x, z] = limitarPosicion(local.zona, ax, az, visible, { x: local.x, z: local.z, gravedad: true })
       local.x = x
       local.z = z
       local.giro = Math.atan2(dx, dz)
@@ -186,10 +198,6 @@ function Jugador({ sala, yo }: { sala: RoomState; yo: Player }) {
     } else {
       local.vel = 0
       local.y += (0 - local.y) * Math.min(1, dt * 8)
-    }
-    if (j.enRefugio) {
-      local.x = PUESTO_REFUGIO.x
-      local.z = PUESTO_REFUGIO.z
     }
 
     // ¿Trabaja en una consola? Mira hacia la estación cuyo panel tiene abierto.
@@ -282,6 +290,8 @@ function Companero({ sala, j, indice }: { sala: RoomState; j: Player; indice: nu
   salaRef.current = sala
   const indiceCrew = Math.max(0, sala.jugadores.filter((x) => x.rol).findIndex((x) => x.id === j.id))
   const gravedad = gravedadDe(sala)
+  // Su cuerpo ocupa sitio para el jugador propio mientras está en esta zona.
+  useEffect(() => () => void cuerpos.delete(j.id), [j.id])
   const calcular = (dt: number): Pose => {
     const x = jRef.current
     const s = salaRef.current
@@ -304,15 +314,23 @@ function Companero({ sala, j, indice }: { sala: RoomState; j: Player; indice: nu
       tx = a.x
       tz = a.z
       giro = a.giro
-      if (a.trabajando) accion = 'consola'
+      if (a.trabajando) {
+        accion = 'consola'
+        // Un bot que usa el gimnasio se sube a la máquina de su sitio.
+        const maquina = x.zona !== 'nave' ? null : Math.hypot(a.x - PUNTOS.cinta.x, a.z - PUNTOS.cinta.z) < 0.2 ? 'correr' : Math.hypot(a.x - PUNTOS.bici.x, a.z - PUNTOS.bici.z) < 0.2 ? 'bici' : null
+        if (maquina) {
+          accion = maquina
+          ty = maquina === 'correr' ? 0.15 : 0.16
+        }
+      }
     } else if (x.zona === 'nave') {
       const p = PUESTO[x.rol ?? 'comandante']
       tx = p.x
       tz = p.z
-      giro = p.z < 0 ? Math.PI : 0
+      giro = p.giro
       // Quien no está jugando ahora descansa en su puesto, o duerme si es de noche.
       if (!x.conectado && x.actividad === 'sueno') {
-        const d = puestoDeActividad(s, { ...x, manual: 'sueno' }, indice)
+        const d = puestoDeActividad(s, { ...x, manual: 'sueno' }, indiceCrew)
         if (d) {
           tx = d.x
           tz = d.z
@@ -326,8 +344,13 @@ function Companero({ sala, j, indice }: { sala: RoomState; j: Player; indice: nu
       tz = ENTRADA.exterior.z + 2.5
     }
     if (sinGravedad && accion === 'flotar') ty = 0.38
+    if (accion === 'correr' || accion === 'bici') giro = PUNTOS.cinta.giro
     const actual = pose.current
-    if (!actual) return (pose.current = { x: tx, z: tz, giro, andando: 0, paso: 0, y: ty, accion })
+    if (!actual) {
+      pose.current = { x: tx, z: tz, giro, andando: 0, paso: 0, y: ty, accion }
+      cuerpos.set(x.id, pose.current)
+      return pose.current
+    }
     const k = 1 - Math.exp(-dt * 7)
     const dx = (tx - actual.x) * k
     const dz = (tz - actual.z) * k
@@ -402,7 +425,14 @@ export function Mundo({ sala, yo }: { sala: RoomState; yo: Player }) {
 
   // Al cruzar la esclusa (o si el servidor lo mueve), el personaje aparece en la otra zona.
   useEffect(() => {
-    if (yo.zona !== local.zona) entrarEnZona(yo.zona)
+    if (yo.zona === local.zona) return
+    // Se aparece en un sitio de llegada libre: los que acaban de cruzar no se pisan.
+    const ocupados = sala.jugadores.filter((j) => j.id !== yo.id && j.zona === yo.zona).flatMap((j) => {
+      const a = ajenos.get(j.id)
+      return a ? [a] : []
+    })
+    entrarEnZona(yo.zona, ocupados)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [yo.zona])
   // Tras una escena de vuelo, cada uno aparece en su puesto.
   const fase = sala.fase === 'llegada' ? `llegada-${sala.subfase}` : sala.fase
@@ -412,7 +442,8 @@ export function Mundo({ sala, yo }: { sala: RoomState; yo: Player }) {
       local.zona = 'nave'
       local.x = p.x
       local.z = p.z
-      local.camGiro = Math.PI / 2
+      local.giro = p.giro
+      local.camGiro = p.giro + Math.PI
       local.camDistancia = 4.4
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

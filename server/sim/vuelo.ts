@@ -1,7 +1,9 @@
 // Telemetría de vuelo: ascenso, crucero Tierra–Marte y descenso.
 // El ascenso sigue el de Artemis I y el descenso el de Perseverance; el crucero es un perfil
 // aproximado con órdenes de magnitud reales, no una integración orbital.
-import { C, distanciaTierraAlLlegar } from '../../shared/ciencia.js'
+import { C } from '../../shared/ciencia.js'
+import { enlaceTierraMarte } from '../../shared/astronomia.js'
+import { escenarioDe, fechaDeMision } from '../../shared/escenarios.js'
 import { ASCENSO, altitudAscenso, etapaAscenso, gAscenso, propelenteCentral, velocidadAscenso } from '../../shared/ascenso.js'
 import { EDL, estadoEDL } from '../../shared/edl.js'
 import { TRANSITO_INICIO_S, type RoomState } from '../../shared/types.js'
@@ -31,12 +33,39 @@ export function telemetriaCrucero(room: RoomState) {
   v.g = 0
   v.altitud = 0
   v.distSol = Math.round((1 + (C.DISTANCIA_SOL_MARTE_UA - 1) * p) * 1000) / 1000
-  // Al llegar, la Tierra ya se ha adelantado en su órbita: quedan unos 250 millones de km.
-  const finalTierra = distanciaTierraAlLlegar(room.mision.diasTransito)
+  // Al llegar, la Tierra ya se ha adelantado en su órbita: la curva termina en la distancia real
+  // Tierra–Marte del día de llegada, así no hay salto al entrar en órbita.
+  const finalTierra = distanciaAlLlegar(room)
   v.distTierra = Math.round(finalTierra * Math.pow(p, 1.5) * 100) / 100
   v.distMarte = Math.round(220 * Math.pow(1 - p, 1.25) * 100) / 100
   v.velocidad = Math.round((32.7 - 10.5 * p) * 10) / 10
   v.retardo = Math.round((v.distTierra * 1e6) / C.VELOCIDAD_LUZ_KM_S)
+}
+
+const llegadas = new Map<string, number>()
+/** Millones de km entre la Tierra y Marte el día de llegada (efemérides reales). */
+function distanciaAlLlegar(room: RoomState): number {
+  const t = TRANSITO_INICIO_S + room.mision.diasTransito * 86400
+  const clave = `${room.escenario}|${t}`
+  let d = llegadas.get(clave)
+  if (d === undefined) {
+    d = enlaceTierraMarte(fechaDeMision(escenarioDe(room.escenario), t)).km / 1e6
+    llegadas.set(clave, d)
+  }
+  return d
+}
+
+/**
+ * En Marte (órbita y superficie): distancia real a la Tierra en la fecha de la misión, retardo de
+ * la señal en un sentido y estado del enlace. Con el Sol a menos de 2° de Marte, conjunción solar.
+ */
+export function telemetriaEnlace(room: RoomState) {
+  const v = room.vuelo
+  const { km, elongacion } = enlaceTierraMarte(fechaDeMision(escenarioDe(room.escenario), Math.max(0, room.t)))
+  v.distTierra = Math.round(km / 1e4) / 100
+  v.retardo = Math.round(km / C.VELOCIDAD_LUZ_KM_S)
+  v.elongacion = Math.round(elongacion * 100) / 100
+  v.enlace = elongacion < C.CONJUNCION_GRADOS ? 'conjuncion' : elongacion < C.ENLACE_RUIDOSO_GRADOS ? 'cerca' : 'bueno'
 }
 
 /**

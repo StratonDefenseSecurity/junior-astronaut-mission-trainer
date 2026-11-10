@@ -278,6 +278,8 @@ export const api = {
   actividad: (actividad: 'ejercicio' | 'sueno' | null) => llamar('actividad', { actividad }),
   refugio: (entrar: boolean) => llamar('refugio', { entrar }),
   accion: (id: string, payload?: Record<string, unknown>) => llamar('accion', { id, payload }),
+  /** Despierta a un tripulante dormido (o a uno mismo, sin id). */
+  despertar: (jugadorId?: string) => llamar('accion', { id: 'despertar', payload: jugadorId ? { jugadorId } : {} }),
   // Si otro ya la decidió o venció justo antes del clic, no hace falta avisar con un error.
   votar: async (id: string, aprueba: boolean) => {
     const d = await llamar('votar', { id, aprueba }, true)

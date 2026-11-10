@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import { create } from 'zustand'
 import { NOTA_TEXTO } from '@shared/avisos'
 import { C } from '@shared/ciencia'
+import * as M from '@shared/medidores'
 import { escenarioDe } from '@shared/escenarios'
 import { ROLE_BY_ID, etiquetaTiempo, type Player, type Role, type RoomState } from '@shared/types'
 import { BotonAccesibilidad } from '../hud/Accesibilidad'
@@ -89,7 +90,9 @@ export function ObservadorScreen() {
     if (d.sala) {
       setSala(d.sala)
       setAhora(d.ahora ?? ahora)
-      setAviso(op === 'controlMensaje' ? 'Message sent to the crew.' : '')
+      const v = d.sala.vuelo
+      const viaje = v.enlace === 'conjuncion' ? ' Solar conjunction: it waits until the link is back.' : v.retardo >= 1 ? ` It travels at the speed of light and arrives in ${M.retardoTexto(v.retardo)} of mission time.` : ''
+      setAviso(op === 'controlMensaje' ? `Message sent to the crew.${viaje}` : '')
       if (op === 'controlMensaje') setMensaje('')
     } else setAviso(d.error ?? 'Could not send it.')
   }
@@ -139,7 +142,9 @@ export function ObservadorScreen() {
                         <MarcaIA bot={j.bot} /> <small className="muted">{j.conectado ? '' : '(away)'}</small>
                         <small className="muted" style={{ display: 'block' }}>{ubicacion(j)}</small>
                       </span>
-                      <span className="mini">Health <Estado valor={j.vit.salud} malo={40} regular={70} /></span>
+                      <span className="mini">
+                        SpO₂ <b className={`mono ${M.spo2(j).tono}`}>{M.spo2(j).texto}</b> · Health <Estado valor={j.vit.salud} malo={40} regular={70} />
+                      </span>
                     </div>
                   ))}
               </section>
@@ -147,15 +152,23 @@ export function ObservadorScreen() {
               <section className="panel">
                 <h3>Resources</h3>
                 <div className="obs-recursos mini">
-                  <span>Water</span><b className="mono">{Math.round(sala.rec.agua)} kg</b>
-                  <span>Oxygen</span><b className="mono">{Math.round(sala.rec.o2)} kg</b>
-                  <span>Food</span><b className="mono">{Math.round(sala.rec.comida)} kg</b>
+                  <span>Water</span><b className="mono">{M.kg(sala.rec.agua)}</b>
+                  <span>Oxygen tanks</span><b className="mono">{M.kg(sala.rec.o2)}</b>
+                  <span>Food</span><b className="mono">{M.kg(sala.rec.comida)}</b>
+                  <span>Cabin O₂</span><b className={`mono ${M.o2Cabina(sala).tono}`}>{M.o2Cabina(sala).texto}</b>
+                  <span>Cabin CO₂</span><b className={`mono ${M.co2Cabina(sala).tono}`}>{M.co2Cabina(sala).texto}</b>
+                  <span>Batteries</span><b className={`mono ${M.bateria(sala).tono}`}>{M.bateria(sala).texto}</b>
+                  {sala.fase !== 'lobby' && sala.fase !== 'contexto' && sala.fase !== 'lanzamiento' && (
+                    <>
+                      <span>Earth link</span><b className={`mono ${M.enlace(sala.vuelo).tono}`}>{M.enlace(sala.vuelo).texto.replace('DSN link: ', '')}</b>
+                    </>
+                  )}
                   <span>Spare parts</span><b className="mono">{sala.rec.repuestos}</b>
                   <span>Medical kits</span><b className="mono">{sala.rec.botiquines}</b>
                   <span>Samples analyzed</span><b className="mono">{sala.mision.muestrasAnalizadas}/{sala.mision.muestrasObjetivo}</b>
                   <span>Days of water, air, food</span>
                   <b className="mono">
-                    {[sala.autonomia.agua, sala.autonomia.aire, sala.autonomia.comida].map((d) => (d >= 999 ? 'plenty' : Math.round(d))).join(', ')}
+                    {[sala.autonomia.agua, sala.autonomia.aire, sala.autonomia.comida].map(M.diasTexto).join(', ')}
                   </b>
                 </div>
                 <h3 style={{ marginTop: 10 }}>Critical points</h3>

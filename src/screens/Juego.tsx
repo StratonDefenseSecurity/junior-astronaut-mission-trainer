@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import { Emergencia, Interaccion, Resultado, Transmision, VotoRapido } from '../hud/Avisos'
 import { PanelEstacion } from '../hud/Estacion'
 import { Lateral } from '../hud/Lateral'
+import { AvisoSueno, EntrarHabitat } from '../hud/Personal'
 import { Tutorial } from '../hud/Tutorial'
 import { BarraSuperior, MiEstado, PuntosCriticos, Registro, Telemetria, Tripulacion } from '../hud/Paneles'
 import { Mundo } from '../mundo/Mundo'
@@ -59,6 +60,8 @@ function JuegoConJugador({ sala, yo, ocultos, cinematica }: { sala: RoomState; y
       {cinematica && <Telemetria sala={sala} yo={yo} />}
       {!cinematica && <PanelEstacion sala={sala} yo={yo} />}
       {!cinematica && !sala.resultado && <Interaccion />}
+      {!cinematica && !sala.resultado && <AvisoSueno yo={yo} />}
+      {!cinematica && !sala.resultado && <EntrarHabitat sala={sala} yo={yo} />}
       <Transmision sala={sala} />
       <VotoRapido sala={sala} yo={yo} />
       <Emergencia sala={sala} yo={yo} />

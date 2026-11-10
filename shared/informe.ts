@@ -43,8 +43,12 @@ export interface Bitacora {
   notas: Record<Nota, number>
   /** Decisiones valoradas, como mucho 16. `t` es el segundo de misión. */
   decisiones: { t: number; tipo: string; titulo: string; nota: Nota; porque: string }[]
-  /** Por jugador: pasos, suma de calidad y habilidades practicadas (ids de HABILIDADES). */
-  porJugador: Record<string, { p: number; c: number; h: string[] }>
+  /**
+   * Por jugador: pasos, suma de calidad, habilidades practicadas (ids de HABILIDADES), trabajos
+   * terminados por familia (`f`, ver shared/misiones.ts), decisiones en las que participó (`d`)
+   * y misiones personales cumplidas (`m`).
+   */
+  porJugador: Record<string, { p: number; c: number; h: string[]; f?: Record<string, number>; d?: number; m?: string[] }>
   /** Retardo máximo de la señal con la Tierra, en segundos. */
   retardoMax: number
   /** Emergencias de escasez que hubo. */
@@ -60,7 +64,7 @@ export const bitacoraVacia = (): Bitacora => ({ pasos: 0, calidad: 0, notas: { b
 
 export interface ParteInforme { id: string; nombre: string; puntos: number; max: number; detalle: string }
 export interface DecisionInforme { t: number; tipo: string; titulo: string; nota: Nota; porque: string }
-export interface PersonaInforme { id: string; nombre: string; rol: Role | null; aportes: number; pasos: number; calidad: number | null; deberes: number; habilidades: string[] }
+export interface PersonaInforme { id: string; nombre: string; rol: Role | null; aportes: number; pasos: number; calidad: number | null; deberes: number; habilidades: string[]; misiones?: { titulo: string; hecha: boolean }[] }
 export interface ObjetivoInforme { id: string; nombre: string; logrado: boolean; detalle: string }
 export interface Informe {
   puntos: number

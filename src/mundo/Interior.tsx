@@ -13,7 +13,7 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import type { Almohadilla, CultivoId, RoomState } from '@shared/types'
 import { useGraficos } from '../graficos'
-import { ESTACION_BY_ID, ESTACIONES, INTERIOR, PUNTOS } from './mapa'
+import { ESTACION_BY_ID, ESTACIONES, INTERIOR, PUNTOS, REFUGIO } from './mapa'
 import { azar, texturaBastidor, texturaCTB, texturaDesgaste, texturaFranjas, texturaLuz, texturaPortatil, texturaRejilla, texturaRotulo } from './procedural'
 import { Ventana } from './Ventana'
 
@@ -417,15 +417,9 @@ function Estaciones({ sala, cerca, destacadas, micro }: { sala: RoomState; cerca
       </Puesto>
 
       <Puesto id="refugio" color="#38bdf8" {...comun}>
-        {/* paredes de agua del refugio: una capa visible por cada capa de blindaje */}
-        {Array.from({ length: 1 + sala.blindaje }, (_, i) => (
-          <mesh key={i} position={[0, 1.1, 0.1 + i * 0.14]}>
-            <boxGeometry args={[2.3 - i * 0.08, 2.0, 0.1]} />
-            <meshStandardMaterial color="#1d4ed8" transparent opacity={0.32} roughness={0.15} metalness={0.2} />
-          </mesh>
-        ))}
         <Pantalla x={0} y={1.75} ancho={0.7} alto={0.3} color={tono(Boolean(sala.ambiente.tormentaSolar), false)} />
       </Puesto>
+      <Refugio capas={1 + sala.blindaje} />
 
       <Puesto id="comms" color="#38bdf8" ancho={ANCHO_ESTRECHO} {...comun}>
         {/* consola de comunicaciones y navegación: dos pantallas, auriculares y el reloj de la señal */}
@@ -500,7 +494,7 @@ function Gimnasio({ micro }: { micro: boolean }) {
   return (
     <group>
       {/* cinta: base, banda, barandillas y consola */}
-      <group position={[cinta.x, 0, cinta.z]} rotation={[0, cinta.giro + Math.PI / 2, 0]}>
+      <group position={[cinta.x, 0, cinta.z]} rotation={[0, cinta.giro + Math.PI, 0]}>
         <RoundedBox args={[0.7, 0.14, 1.7]} radius={0.04} smoothness={2} position={[0, 0.07, 0]} castShadow>
           <meshStandardMaterial color="#3b4048" roughness={0.6} metalness={0.3} />
         </RoundedBox>
@@ -524,7 +518,7 @@ function Gimnasio({ micro }: { micro: boolean }) {
           ))}
       </group>
       {/* bicicleta: cuadro, sillín (en Marte), manillar y pedales */}
-      <group position={[bici.x, 0, bici.z]} rotation={[0, bici.giro + Math.PI / 2, 0]}>
+      <group position={[bici.x, 0, bici.z]} rotation={[0, bici.giro + Math.PI, 0]}>
         <mesh position={[0, 0.06, 0]} material={MAT.oscuro}>
           <boxGeometry args={[0.45, 0.12, 0.9]} />
         </mesh>
@@ -803,6 +797,49 @@ const MAT_EXTRA = {
   cableGris: new THREE.MeshStandardMaterial({ color: '#2f343b', roughness: 0.6 }),
   palanca: new THREE.MeshStandardMaterial({ color: '#d5d8dc', roughness: 0.3, metalness: 0.8 }),
   cincha: new THREE.MeshStandardMaterial({ color: '#3a4458', roughness: 0.9 }),
+}
+
+/** Bolsa de agua de tela blanca (como las de la Estación Espacial), que frena la radiación. */
+const MAT_AGUA = new THREE.MeshStandardMaterial({ color: '#d4dde6', roughness: 0.92 })
+
+/**
+ * Refugio de tormenta: alcoba contra la pared sur con paredes y techo de bolsas de agua (una
+ * capa por capa de blindaje) y la estiba del bastidor al fondo. Seis sitios dentro, en dos filas.
+ */
+function Refugio({ capas }: { capas: number }) {
+  const { bolsas, cinchas } = useMemo(() => {
+    const bolsas: THREE.Matrix4[] = []
+    const cinchas: THREE.Matrix4[] = []
+    const fondo = INTERIOR.z1 - 0.6
+    const largo = fondo - REFUGIO.z0
+    for (let i = 0; i < capas; i++) {
+      // Paredes laterales: dos bolsas a lo largo y tres de alto por capa.
+      for (const [borde, hacia] of [[REFUGIO.dentroX0, -1], [REFUGIO.dentroX1, 1]] as const) {
+        const x = borde + hacia * (0.05 + i * 0.1)
+        for (let a = 0; a < 2; a++) {
+          for (let h = 0; h < 3; h++) {
+            bolsas.push(matriz(x, 0.35 + h * 0.7, REFUGIO.z0 + largo * (a + 0.5) / 2, [0, 0, 0], [0.095, 0.66, largo / 2 - 0.04]))
+          }
+        }
+        if (i === capas - 1) for (const y of [0.7, 1.4]) cinchas.push(matriz(x + hacia * 0.05, y, REFUGIO.z0 + largo / 2, [0, 0, 0], [0.012, 0.05, largo]))
+      }
+      // Techo: una capa de bolsas sobre el hueco y las paredes.
+      const x0 = REFUGIO.dentroX0 - capas * 0.1
+      const ancho = REFUGIO.dentroX1 - REFUGIO.dentroX0 + capas * 0.2
+      for (let a = 0; a < 4; a++) {
+        for (let b = 0; b < 2; b++) {
+          bolsas.push(matriz(x0 + ancho * (a + 0.5) / 4, REFUGIO.techo + 0.05 + i * 0.1, REFUGIO.z0 + largo * (b + 0.5) / 2, [0, 0, 0], [ancho / 4 - 0.03, 0.095, largo / 2 - 0.03]))
+        }
+      }
+    }
+    return { bolsas, cinchas }
+  }, [capas])
+  return (
+    <group>
+      <Instancias geo={CAJA} mat={MAT_AGUA} m={bolsas} />
+      <Instancias geo={CAJA} mat={MAT_EXTRA.cincha} m={cinchas} />
+    </group>
+  )
 }
 
 /** Cable que cuelga entre dos puntos, con su comba. */

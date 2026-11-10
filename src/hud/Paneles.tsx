@@ -13,7 +13,8 @@ import { sonido, useSonido } from '../sonido'
 import { BotonAccesibilidad } from './Accesibilidad'
 import { ChipConexion } from './Conexion'
 import { BotonesVoz, IndicadorVoz } from './Voz'
-import { Barra, Dato, MarcaIA, RolTag, enMarte, energiaUsada, escalaTexto, mmHg, nivel, pctTraje, relojMision, tiempoEnEspacio } from './comun'
+import * as M from '@shared/medidores'
+import { Barra, Dato, MarcaIA, RolTag, enMarte, energiaUsada, escalaTexto, nivel, relojMision, tiempoEnEspacio } from './comun'
 
 const FASES: Record<RoomState['fase'], string> = {
   lobby: 'Room',
@@ -106,11 +107,12 @@ export function BarraSuperior({ sala }: { sala: RoomState }) {
           <Dato etiqueta="Dust" valor={a.tau.toFixed(1)} tono={nivel(a.tau > 2.5, a.tau > 1.2)} nota="Sky opacity (game model)" />
           <Dato etiqueta="Sunlight" valor={`${a.flujoSolar} W/m²`} />
           <Dato etiqueta="Site" valor={SITE_BY_ID[sala.sitio ?? 'gale'].nombre} />
+          <Enlace sala={sala} />
         </div>
       ) : sala.fase === 'transito' || sala.fase === 'llegada' ? (
         <div className="bloque datos">
           <Dato etiqueta="To Mars" valor={`${v.distMarte} M km`} barra={{ valor: v.progreso * 100 }} nota={`${Math.round(v.progreso * 100)}% of the trip done`} />
-          <Dato etiqueta="Signal" valor={`${Math.floor(v.retardo / 60)} min ${v.retardo % 60} s`} nota={`How long a message takes to reach Earth, ${v.distTierra} million km away`} />
+          <Enlace sala={sala} />
           <Dato etiqueta="In space" valor={tiempoEnEspacio(sala)} nota="Days and hours since you reached orbit" />
           <Dato etiqueta="Fuel" valor={`${Math.round(sala.rec.propelente)}%`} tono={nivel(sala.rec.propelente < 10, sala.rec.propelente < 30)} nota="Propellant left to correct course and land" />
           <Dato etiqueta="Energy used" valor={energiaUsada(sala)} nota="Electricity used since liftoff" />
@@ -128,7 +130,7 @@ export function BarraSuperior({ sala }: { sala: RoomState }) {
 
       <div className="bloque datos">
         {enMarte(sala) && <Dato etiqueta="Samples" valor={`${sala.mision.muestrasAnalizadas}/${sala.mision.muestrasObjetivo}`} />}
-        <Dato etiqueta="Radiation" valor={`${a.radiacion} mSv/d`} tono={a.tormentaSolar ? 'bad' : undefined} nota="Background dose from cosmic rays" />
+        <Dato etiqueta="Space radiation" valor={M.tasaTexto(a.radiacion)} tono={a.tormentaSolar ? 'bad' : undefined} nota="Unshielded dose outside the ship. Your own dose rate is in your status panel." />
       </div>
 
       <div className="grow" />
@@ -174,44 +176,45 @@ const ACTIVIDAD: Record<Player['actividad'], string> = { sueno: 'Sleeping', repo
 export function MiEstado({ sala, yo }: { sala: RoomState; yo: Player }) {
   const v = yo.vit
   const fuera = yo.zona === 'exterior'
-  const o2 = pctTraje(yo.trajeO2)
-  const aire = fuera ? `suit air: ${C.TRAJE_PRESION_KPA} kPa of pure oxygen` : `cabin air: ${sala.cabina.ppO2.toFixed(1)} kPa of O₂, ${mmHg(sala.cabina.ppCO2).toFixed(1)} mmHg of CO₂`
+  const o2 = M.trajeO2(yo)
+  const bat = M.trajeBateria(yo)
+  const aire = fuera ? `suit air: ${C.TRAJE_PRESION_KPA} kPa of pure oxygen` : `cabin air. Cabin O₂ ${M.o2Cabina(sala).texto}, cabin CO₂ ${M.co2Cabina(sala).texto}`
+  const d = (l: M.Lectura) => ({ valor: l.texto, tono: l.tono })
   return (
     <div className="panel estado">
       <div className="row" style={{ gap: 6 }}>
         <RolTag rol={yo.rol} />
         <strong className="grow">{yo.nombre}</strong>
-        <span className="mini muted">{yo.incapacitado > 0 ? 'Out of action' : yo.enRefugio ? 'In the shelter' : ACTIVIDAD[yo.actividad]}</span>
+        <span className="mini muted">{yo.incapacitado > 0 ? 'Out of action' : yo.enRefugio ? (yo.actividad === 'sueno' ? 'Sleeping in the shelter' : 'In the shelter') : ACTIVIDAD[yo.actividad]}</span>
       </div>
       <div className="vitales">
-        <Dato etiqueta="Pulse" valor={`${Math.round(v.fc)} bpm`} tono={nivel(v.fc > 150, v.fc > 110)} nota="Heartbeats per minute" />
-        <Dato etiqueta="Breathing" valor={`${Math.round(v.fr)} /min`} tono={nivel(v.fr > 34, v.fr > 24)} nota="Breaths per minute" />
-        <Dato etiqueta="Blood O₂" valor={`${Math.round(v.spo2)}%`} tono={nivel(v.spo2 < 88, v.spo2 < 94)} nota={`You breathe ${aire}`} />
+        <Dato etiqueta="Your pulse" {...d(M.pulso(yo))} nota="Heartbeats per minute" />
+        <Dato etiqueta="Your breathing" {...d(M.respiracion(yo))} nota="Breaths per minute" />
+        <Dato etiqueta="Your SpO₂" {...d(M.spo2(yo))} nota={`Oxygen in your blood. You breathe ${aire}`} />
       </div>
       <div className="medidores">
-        <Dato etiqueta="Health" valor={Math.round(v.salud)} tono={nivel(v.salud < 40, v.salud < 70)} barra={{ valor: v.salud }} />
-        <Dato etiqueta="Hydration" valor={`${Math.round(v.hidratacion)}%`} tono={nivel(v.hidratacion < 60, v.hidratacion < 85)} barra={{ valor: v.hidratacion }} />
-        <Dato etiqueta="Energy" valor={`${Math.round(v.reservas)}%`} tono={nivel(v.reservas < 50, v.reservas < 80)} barra={{ valor: v.reservas }} nota="Body reserves, based on what you eat and burn" />
-        <Dato etiqueta="Fatigue" valor={`${Math.round(v.fatiga)}%`} tono={nivel(v.fatiga > 85, v.fatiga > 60)} barra={{ valor: v.fatiga }} />
-        <Dato etiqueta="Muscle and bone" valor={`${Math.round(v.condicion)}%`} tono={nivel(v.condicion < 70, v.condicion < 88)} barra={{ valor: v.condicion }} nota="Lost without gravity and exercise" />
+        <Dato etiqueta="Health" {...d(M.salud(yo))} barra={{ valor: v.salud }} />
+        <Dato etiqueta="Hydration" {...d(M.hidratacion(yo))} barra={{ valor: v.hidratacion }} />
+        <Dato etiqueta="Energy" {...d(M.reservas(yo))} barra={{ valor: v.reservas }} nota="Body reserves, based on what you eat and burn" />
+        <Dato etiqueta="Fatigue" {...d(M.fatiga(yo))} barra={{ valor: v.fatiga }} />
+        <Dato etiqueta="Muscle and bone" {...d(M.condicion(yo))} barra={{ valor: v.condicion }} nota="Lost without gravity and exercise" />
         <Dato
-          etiqueta="Radiation"
-          valor={`${v.dosis.toFixed(v.dosis < 10 ? 2 : 0)} mSv`}
-          tono={nivel(v.dosis > C.LIMITE_CARRERA_MSV, v.dosis > 450)}
+          etiqueta="Your dose"
+          {...d(M.dosis(yo))}
           barra={{ valor: v.dosis, max: C.LIMITE_CARRERA_MSV }}
-          nota={`Now: ${v.dosisTasa} mSv per day. NASA career limit: ${C.LIMITE_CARRERA_MSV} mSv`}
+          nota={`Your dose rate now: ${M.tasaTexto(v.dosisTasa)}. NASA career limit: ${C.LIMITE_CARRERA_MSV} mSv`}
         />
       </div>
       <div className="traje">
         <span className="mini muted">{fuera ? 'Suit in use' : 'Suit (charging in the airlock)'}</span>
         <div className="row" style={{ gap: 8 }}>
           <div className="grow">
-            <div className="mini">Oxygen {o2}%</div>
-            <Barra valor={o2} tono={nivel(o2 < 20, o2 < 40)} />
+            <div className="mini">Suit O₂ {o2.texto}</div>
+            <Barra valor={o2.valor} tono={o2.tono} />
           </div>
           <div className="grow">
-            <div className="mini">Battery {Math.round(yo.trajeBateria * 100)}%</div>
-            <Barra valor={yo.trajeBateria * 100} tono={nivel(yo.trajeBateria < 0.2, yo.trajeBateria < 0.4)} />
+            <div className="mini">Suit battery {bat.texto}</div>
+            <Barra valor={bat.valor} tono={bat.tono} />
           </div>
         </div>
       </div>
@@ -234,6 +237,10 @@ export function Tripulacion({ sala }: { sala: RoomState }) {
       {crew.map((j) => {
         const v = j.vit
         const puedoIr = j.ayuda && yo && j.id !== yo.id && (yo.rol === j.ayuda.paraRol || yo.rol === 'comandante')
+        const dormido = j.actividad === 'sueno' && j.incapacitado <= 0
+        const sp = M.spo2(j)
+        const sa = M.salud(j)
+        const pu = M.pulso(j)
         return (
           <div key={j.id} className={`crew-card ${j.id === yo?.id ? 'me' : ''} ${j.conectado ? '' : 'offline'}`}>
             <div className="row" style={{ gap: 6 }}>
@@ -243,26 +250,31 @@ export function Tripulacion({ sala }: { sala: RoomState }) {
                 <MarcaIA bot={j.bot} />
                 <IndicadorVoz id={j.id} yo={j.id === yo?.id} />
               </strong>
-              <span className="mini muted">{j.incapacitado > 0 ? 'out of action' : j.enRefugio ? 'shelter' : j.zona === 'exterior' ? 'outside' : !j.conectado ? 'away' : j.manual === 'sueno' ? 'asleep' : ''}</span>
+              <span className="mini muted">{j.incapacitado > 0 ? 'out of action' : dormido ? 'asleep' : j.enRefugio ? 'shelter' : j.zona === 'exterior' ? 'outside' : !j.conectado ? 'away' : ''}</span>
             </div>
             <div className="tres">
               <div>
-                <span>Oxygen</span>
-                <b className={nivel(v.spo2 < 88, v.spo2 < 94)}>{Math.round(v.spo2)}%</b>
+                <span>SpO₂</span>
+                <b className={sp.tono}>{sp.texto}</b>
               </div>
               <div>
                 <span>Health</span>
-                <b className={nivel(v.salud < 40, v.salud < 70)}>{Math.round(v.salud)}</b>
+                <b className={sa.tono}>{sa.texto}</b>
               </div>
               <div>
                 <span>Pulse</span>
-                <b className={nivel(v.fc > 150, v.fc > 110)}>{Math.round(v.fc)}</b>
+                <b className={pu.tono}>{pu.valor}</b>
               </div>
             </div>
-            <Barra valor={v.salud} tono={nivel(v.salud < 40, v.salud < 70)} />
+            <Barra valor={v.salud} tono={sa.tono} />
             <div className="mini muted progreso">
               {ACTIVIDAD[j.actividad]} · {j.aportes ?? 0} {(j.aportes ?? 0) === 1 ? 'task done' : 'tasks done'}
             </div>
+            {dormido && yo && j.id !== yo.id && j.zona === yo.zona && (
+              <button className="small" style={{ marginTop: 5 }} onClick={() => api.despertar(j.id)}>
+                Wake {j.nombre} up
+              </button>
+            )}
             {j.ayuda && (
               <div className="help">
                 <strong>Asks the {ROLE_BY_ID[j.ayuda.paraRol].nombre} for help:</strong> {j.ayuda.motivo}
@@ -357,7 +369,7 @@ export function Telemetria({ sala, yo }: { sala: RoomState; yo: Player }) {
         <div><span>Altitude</span><b>{v.altitud} km</b></div>
         <div><span>Speed</span><b>{sala.fase === 'lanzamiento' ? `${v.velocidad} km/s` : `${Math.round(v.velocidad * 3600).toLocaleString('en-US')} km/h`}</b></div>
         <div><span>Acceleration</span><b className={nivel(v.g > 4, v.g > 2.5)}>{v.g} g</b></div>
-        <div><span>Your pulse</span><b className={nivel(yo.vit.fc > 150, yo.vit.fc > 110)}>{Math.round(yo.vit.fc)} bpm</b></div>
+        <div><span>Your pulse</span><b className={M.pulso(yo).tono}>{M.pulso(yo).texto}</b></div>
       </div>
       <div className="fila gasto">
         <div><span>{lanzamiento ? (sala.t >= ASCENSO.separacionCentral ? 'Fuel (upper stage)' : 'Fuel (core stage)') : 'Fuel'}</span><b className={nivel(false, !lanzamiento && sala.rec.propelente < 25)}>{Math.round(sala.rec.propelente)}%</b></div>
@@ -374,3 +386,14 @@ export function Telemetria({ sala, yo }: { sala: RoomState; yo: Player }) {
 }
 
 export const horaLocal = (sala: RoomState) => formatoHora(sala.ambiente.hora)
+
+/** Enlace con la Tierra: estado y retardo real de la señal en un sentido. */
+function Enlace({ sala }: { sala: RoomState }) {
+  const l = M.enlace(sala.vuelo)
+  const v = sala.vuelo
+  const nota =
+    l.estado === 'conjuncion'
+      ? `Solar conjunction: the Sun is ${v.elongacion ?? 0}° from Mars in Earth's sky. NASA sends no commands below ${C.CONJUNCION_GRADOS}°. Messages wait.`
+      : `One-way light time to Earth, ${v.distTierra} million km away.${v.elongacion !== undefined ? ` Sun to Mars angle seen from Earth: ${v.elongacion}°.` : ''}`
+  return <Dato etiqueta="Earth link" valor={l.texto.replace('DSN link: ', 'DSN ')} tono={l.tono === 'ok' ? undefined : l.tono} nota={nota} />
+}

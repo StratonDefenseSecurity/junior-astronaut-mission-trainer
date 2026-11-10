@@ -176,6 +176,15 @@ input.nombre-mision { border-color: rgba(var(--warn-rgb), 0.5); }
 .transmision .cabeza { font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em; color: var(--accent); text-transform: uppercase; display: flex; gap: 8px; align-items: center; }
 .transmision .cabeza i { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 8px var(--ok); animation: parpadeo 1s infinite; }
 .transmision p { margin: 6px 0 2px; font-size: 13.5px; line-height: 1.45; }
+/* Avisos personales (sueño, volver a entrar) y la tarjeta "My missions": ver src/hud/Personal.tsx. */
+.aviso-personal { position: absolute; bottom: 132px; left: 50%; transform: translateX(-50%); width: min(380px, calc(100vw - 32px)); z-index: 6; background: rgba(var(--panel-rgb), 0.95); border: 1px solid rgba(var(--accent-rgb), 0.6); border-radius: 12px; padding: 10px 14px; text-align: center; }
+.aviso-personal.warn { border-color: var(--warn); }
+.aviso-personal.entrar { bottom: auto; top: calc(var(--alto-superior, 90px) + 12px); text-align: left; }
+.aviso-personal p { margin: 4px 0 8px; }
+.aviso-personal ol { margin: 6px 0 8px; padding-left: 20px; }
+.mis-misiones h3 { display: flex; justify-content: space-between; align-items: baseline; }
+.mi-mision { padding: 5px 0; border-bottom: 1px solid rgba(var(--accent-rgb), 0.12); }
+.mi-mision.hecha strong { color: var(--ok); }
 @keyframes llega { from { opacity: 0; transform: translate(-50%, -10px); } to { opacity: 1; transform: translate(-50%, 0); } }
 @keyframes parpadeo { 50% { opacity: 0.3; } }
 

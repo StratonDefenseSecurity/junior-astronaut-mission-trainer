@@ -102,6 +102,10 @@ export const C = {
   UA_KM: 149_597_871,
   DISTANCIA_SOL_MARTE_UA: 1.524,
   VELOCIDAD_LUZ_KM_S: 299_792,
+  /** Conjunción solar: NASA no envía órdenes a Marte con el Sol a menos de 2° de Marte en el cielo de la Tierra (JPL). */
+  CONJUNCION_GRADOS: 2,
+  /** Diseño del juego: por debajo de este ángulo el enlace se muestra como ruidoso. */
+  ENLACE_RUIDOSO_GRADOS: 3.5,
 
   // ---- Energía (diseño del juego, salvo el reactor) ----
   /** Potencia de un campo solar de 50 m² al mediodía marciano con cielo limpio, kW. */
@@ -638,10 +642,26 @@ export const FUENTES: Fuente[] = [
     fuente: 'NASA, "Glove Inspection Technology Lends a Helping Hand to Future Spacewalks".',
     url: 'https://www.nasa.gov/missions/station/glove-inspection-technology-lends-a-helping-hand-to-future-spacewalks',
   },
+  {
+    tema: 'Mars solar conjunction',
+    dato: 'About every 26 months Mars passes behind the Sun as seen from Earth. NASA Mars missions stop sending commands while the Sun is within 2 degrees of Mars in Earth\'s sky, because the Sun\'s plasma can corrupt the radio signal. In 2015 that was from about June 7 to June 21.',
+    fuente: 'NASA JPL, "Mars Missions to Pause Commanding in June Due to Sun" (2015).',
+    url: 'https://www.jpl.nasa.gov/news/mars-missions-to-pause-commanding-in-june-due-to-sun/',
+  },
+  {
+    tema: 'Signal delay from Mars',
+    dato: 'The one-way light time is the Earth to Mars distance divided by the speed of light, 299,792 km/s. On Mars the game takes that distance for the mission date from the astronomy-engine ephemeris, validated against JPL Horizons, so the delay goes from about 3 to 22 minutes.',
+    fuente: 'Cosinekitty, astronomy-engine (VSOP87 planetary model), checked against NASA JPL Horizons.',
+    url: 'https://github.com/cosinekitty/astronomy',
+  },
 ]
 
 /** Lo que el juego simplifica o inventa para poder jugarse. Se muestra junto a las fuentes. */
 export const SUPUESTOS: string[] = [
+  'Personal missions follow the real work of each role, but which ones there are and how many times each has to be done (once or twice) are game values.',
+  'During a shelter order a crew member can still leave for urgent work, such as a repair, and gets the cabin dose. The crew decides; the game only logs it.',
+  'The character sleeps on its own at night only if its player stands still and is not in the middle of a task. A warning comes 15 real seconds before, and after waking up a player stays awake for 90 real seconds. At fast time scales both are capped at one mission hour, and walking keeps a player awake only up to ×600. These times are game values; the sleep and fatigue rates are not changed.',
+  'During the cruise the distance to Earth follows a smooth game curve that ends at the real Earth to Mars distance on arrival day. The "noisy link" warning below 3.5 degrees from the Sun is a game value. In a solar conjunction every message from Earth waits until the link is back, while real missions still get some data.',
   'Routine duties follow ISS practice, but how often they come (every 2 to 4 mission days, and never more than once every 2.5 real minutes) and what they give or cost are game values: 4 fatigue points from the planning conference, 0.2% or 1% of propellant for a drift, 1.5 kg of food found or expired, 5% less radiation while sleeping behind the stowage, +2% for the CO2 Scrubber, 50% more wear or illness risk when skipped, and 10% more chance of a suit leak.',
   'The course drift, glove wear, inventory gaps and filter pressure drops shown in the routine duties are game readings, not real data. The 60% glove wear limit and the 180 Pa filter limit are game values.',
   'The missions in the Mission Briefing are training situations. The premises and the messages from Mission Control or from home are fiction. The data that comes with them is real.',

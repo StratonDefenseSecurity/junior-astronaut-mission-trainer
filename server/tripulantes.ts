@@ -124,15 +124,15 @@ const ESTACIONES: Record<string, { zona: Zona; nombre: string; x: number; z: num
   muestra8: { zona: 'exterior', nombre: 'Sample Site 8', x: -31, z: -27, radio: 0 },
 }
 /** Puesto habitual de cada rol y punto de aparición al cruzar la esclusa (como en mapa.ts). */
-const PUESTO: Record<Role, { x: number; z: number }> = {
-  comandante: { x: -6.2, z: 0.9 },
-  piloto: { x: -6.2, z: -0.9 },
-  medico: { x: -4.6, z: 1.5 },
-  logistica: { x: 1.6, z: -1.5 },
-  cientifico: { x: 4.7, z: -1.5 },
-  sistemas: { x: -1.5, z: -1.5 },
+const PUESTO: Record<Role, { x: number; z: number; giro: number }> = {
+  comandante: { x: -6.25, z: 0.9, giro: -Math.PI / 2 },
+  piloto: { x: -6.25, z: -0.9, giro: -Math.PI / 2 },
+  medico: { x: -4.6, z: 1.85, giro: 0 },
+  logistica: { x: 1.6, z: -1.85, giro: Math.PI },
+  cientifico: { x: 4.7, z: -1.85, giro: Math.PI },
+  sistemas: { x: -1.5, z: -1.85, giro: Math.PI },
 }
-const ENTRADA: Record<Zona, { x: number; z: number }> = { nave: { x: 6.9, z: 0 }, exterior: { x: 12.4, z: 0 } }
+const ENTRADA: Record<Zona, { x: number; z: number }> = { nave: { x: 6.65, z: 0 }, exterior: { x: 12.4, z: 0 } }
 /** Bloque del hábitat visto desde fuera: no se puede atravesar. */
 const HABITAT = { x: 9.7, z: 3.9 }
 
@@ -1270,6 +1270,9 @@ export interface Andar {
   zona: Zona
   giro: number
   t: number
+  /** Estación y plaza que ocupa (las últimas plazas de cada estación hacen de cola). */
+  estacion?: string
+  plaza?: number
 }
 
 const FASES_CON_MUNDO = ['transito', 'llegada', 'ensamblaje', 'base']
@@ -1303,64 +1306,293 @@ function rodeo(x: number, z: number, tx: number, tz: number): [number, number] {
   return mejor
 }
 
+// Los cuerpos ocupan sitio (como RADIO_PERSONA, CAJAS, LLEGADA y PUNTOS en src/mundo/mapa.ts).
+const RADIO = 0.35
+const SEPARACION = 2 * RADIO
+const PASILLO = { x0: -8.2, x1: 8.3, z: 1.95 }
+/** Bloques contra la pared sur: el refugio de bolsas de agua y las literas. */
+const CAJAS = [
+  { x0: 3.2, x1: 6.2, z0: 1.0 },
+  { x0: 0.15, x1: 3.05, z0: 1.5 },
+]
+/**
+ * Puntos de paso para rodear la mesa común y los bloques de la pared sur: por el lado de la
+ * esclusa (z 0.4), por el pasillo norte de la mesa y pasado el refugio.
+ */
+const PASO: [number, number][] = [[-1.25, 0.4], [-1.25, -1.15], [1.35, -1.15], [1.35, 0.4], [6.9, 0.4]]
+const MESA = { x: 0.05, r: 1 }
+/** Sitios despejados al pasar la esclusa, para que varios lleguen sin pisarse. */
+const LLEGADA: Record<Zona, [number, number][]> = {
+  nave: [[6.65, 0], [6.65, -0.75], [6.65, 0.75], [5.9, -0.4], [5.9, 0.35], [5.9, -1.15]],
+  exterior: [[12.4, 0], [12.4, 0.8], [12.4, -0.8], [13.2, 0.4], [13.2, -0.4], [13.2, 1.2]],
+}
+/** Cinta, bicicleta y la cola del gimnasio. */
+const GIMNASIO: [number, number][] = [[-2.15, 1.72], [-0.75, 1.72], [-2.95, 1.0], [-3.7, 1.0], [-3.3, 0.3]]
+
+const enCaja = (x: number, z: number) => CAJAS.some((c) => x > c.x0 - RADIO && x < c.x1 + RADIO && z > c.z0 - RADIO)
+const enMesa = (x: number, z: number) => Math.hypot(x - MESA.x, z) < MESA.r - 0.03
+function tapado(x: number, z: number, tx: number, tz: number) {
+  for (let k = 1; k <= 16; k++) {
+    const px = x + ((tx - x) * k) / 16
+    const pz = z + ((tz - z) * k) / 16
+    if (enCaja(px, pz) || enMesa(px, pz)) return true
+  }
+  return false
+}
+/** Dentro: si el camino recto choca con la mesa o un bloque, el primer punto de paso del camino más corto. */
+function rutaNave(x: number, z: number, tx: number, tz: number): [number, number] {
+  if (!tapado(x, z, tx, tz)) return [tx, tz]
+  // Camino más corto por los puntos de paso (son pocos: se prueban todos).
+  const n = PASO.length
+  const dist = PASO.map(([px, pz]) => (tapado(x, z, px, pz) ? Infinity : Math.hypot(px - x, pz - z)))
+  const primero = PASO.map((_, i) => i)
+  const hecho = new Array(n).fill(false)
+  for (let vuelta = 0; vuelta < n; vuelta++) {
+    let i = -1
+    for (let k = 0; k < n; k++) if (!hecho[k] && (i < 0 || dist[k] < dist[i])) i = k
+    if (i < 0 || dist[i] === Infinity) break
+    hecho[i] = true
+    for (let k = 0; k < n; k++) {
+      if (hecho[k] || tapado(PASO[i][0], PASO[i][1], PASO[k][0], PASO[k][1])) continue
+      const d = dist[i] + Math.hypot(PASO[k][0] - PASO[i][0], PASO[k][1] - PASO[i][1])
+      if (d < dist[k]) [dist[k], primero[k]] = [d, primero[i]]
+    }
+  }
+  let mejor = -1
+  let largo = Infinity
+  for (let k = 0; k < n; k++) {
+    if (dist[k] === Infinity || tapado(PASO[k][0], PASO[k][1], tx, tz)) continue
+    const l = dist[k] + Math.hypot(tx - PASO[k][0], tz - PASO[k][1])
+    if (l < largo) [largo, mejor] = [l, k]
+  }
+  return mejor < 0 ? [tx, tz] : PASO[primero[mejor]]
+}
+
+/** Sitio para una persona: dónde se para y qué punto mira. */
+interface Plaza {
+  x: number
+  z: number
+  mx: number
+  mz: number
+}
+
+/** Sitios de una estación, del mejor al peor: los últimos hacen de cola. */
+function candidatas(id: string): Plaza[] {
+  const e = ESTACIONES[id]
+  const p = (x: number, z: number, mx = e.x, mz = e.z): Plaza => ({ x, z, mx, mz })
+  if (e.zona === 'exterior') {
+    // Junto al equipo, de lado y un paso más atrás, mirándolo.
+    const q = puntoDe(id)!
+    let ux = q.x - e.x
+    let uz = q.z - e.z
+    if (Math.hypot(ux, uz) < 0.01) [ux, uz] = [11 - e.x, -e.z]
+    const d = Math.hypot(ux, uz) || 1
+    ux /= d
+    uz /= d
+    return [[0, 0], [1, 0], [-1, 0], [0, 1], [1, 1], [-1, 1]].map(([a, b]) => p(q.x - uz * a * 0.8 + ux * b * 0.8, q.z + ux * a * 0.8 + uz * b * 0.8))
+  }
+  switch (id) {
+    case 'puente': // los dos asientos ante la consola y, detrás, de pie
+      return [[-6.25, 0.9], [-6.25, -0.9], [-5.45, 0.45], [-5.45, -0.45], [-4.7, 0.9], [-4.7, -0.9]].map(([x, z]) => p(x, z, -7.6, z))
+    case 'comedor': // seis sitios alrededor de la mesa, mirándola
+      return [0, 1, 2, 3, 4, 5].map((k) => p(e.x + Math.sin((k * Math.PI) / 3), Math.cos((k * Math.PI) / 3)))
+    case 'ejercicio': // las dos máquinas, mirando al puente, y la cola mirando a las máquinas
+      return GIMNASIO.map(([x, z], k) => (k < 2 ? p(x, z, x - 1, z) : p(x, z, x, 2.6)))
+    case 'esclusa':
+      return [[7.6, 0], [7.6, 0.75], [7.6, -0.75], [6.85, 0.4], [6.85, -0.4]].map(([x, z]) => p(x, z, 8.4, z))
+  }
+  // Bastidor de pared: tres de frente y la cola a los lados (el pasillo queda libre). El refugio y las literas se atienden
+  // desde fuera de su bloque.
+  const lado = Math.sign(e.z)
+  const filas = id === 'refugio' ? [0.45, -0.3] : id === 'literas' ? [1.1, 0.4] : [1.85]
+  return filas.flatMap((f) => [0, -0.75, 0.75, -1.5, 1.5].map((c) => p(e.x + c, lado * f, e.x + c, e.z)))
+}
+
+/**
+ * Plazas de cada estación. Se aceptan por turnos (primero el mejor sitio de cada una, con los
+ * muebles compartidos delante) y se descarta el que pisa a otro, un bloque o la mesa.
+ */
+const PLAZAS: Record<string, Plaza[]> = (() => {
+  const primero = ['puente', 'comedor', 'ejercicio', 'esclusa']
+  const orden = [...primero, ...Object.keys(ESTACIONES).filter((id) => !primero.includes(id))]
+  const listas = Object.fromEntries(orden.map((id) => [id, candidatas(id)]))
+  const res: Record<string, Plaza[]> = Object.fromEntries(orden.map((id) => [id, []]))
+  const max = Math.max(...orden.map((id) => listas[id].length))
+  for (let i = 0; i < max; i++) {
+    for (const id of orden) {
+      const q = listas[id][i]
+      if (!q) continue
+      const zona = ESTACIONES[id].zona
+      if (zona === 'nave' && (enCaja(q.x, q.z) || q.x < PASILLO.x0 || q.x > PASILLO.x1 || Math.abs(q.z) > PASILLO.z)) continue
+      if (zona === 'nave' && id !== 'comedor' && Math.hypot(q.x - 0.05, q.z) < 1) continue
+      if (zona === 'exterior' && dentroDelHabitat(q.x, q.z)) continue
+      if (orden.some((o) => ESTACIONES[o].zona === zona && res[o].some((r) => Math.hypot(r.x - q.x, r.z - q.z) < SEPARACION))) continue
+      res[id].push(q)
+    }
+  }
+  return res
+})()
+
+/** Plaza número k de una estación; si hay más gente que sitios, la cola sigue hacia el centro del pasillo. */
+function plazaN(id: string, k: number): Plaza {
+  const l = PLAZAS[id]
+  if (k < l.length) return l[k]
+  const u = l[0]
+  const m = k - l.length + 1
+  if (ESTACIONES[id].zona !== 'nave') return { ...u, x: u.x + (u.x - u.mx >= 0 ? 0.8 : -0.8) * (m + 1) }
+  return { ...u, x: limitar(u.x + (m % 2 ? 0.4 : -0.4) * m, PASILLO.x0, PASILLO.x1), z: u.z * 0.45 }
+}
+
 /**
  * Posición de cada bot [x, z, giro, animación] para enviarla como la de una persona: camina a
- * 1.4 m/s hasta la estación donde trabaja y se queda mirándola (animación 2); sin trabajo vuelve
- * a su puesto.
+ * 1.4 m/s hasta su plaza en la estación donde trabaja y se queda mirándola (animación 2); sin
+ * trabajo vuelve a su puesto. Cada uno ocupa sitio: las plazas no se comparten (quien llega
+ * después espera en la cola) y al andar se aparta de los demás, bots y personas (`personas`:
+ * las últimas posiciones enviadas por cada jugador).
  */
-export function posicionesBots(room: RoomState, estados: Map<string, Andar>, t: number): Record<string, number[]> {
+export function posicionesBots(room: RoomState, estados: Map<string, Andar>, t: number, personas?: Map<string, number[]>): Record<string, number[]> {
   const salida: Record<string, number[]> = {}
   if (!FASES_CON_MUNDO.includes(room.fase)) return salida
+  const bots = room.jugadores.filter((j) => j.bot && j.rol)
+  const gente: { x: number; z: number; zona: Zona }[] = []
   for (const j of room.jugadores) {
-    if (!j.bot || !j.rol) continue
-    let s = estados.get(j.id)
-    if (!s || s.zona !== j.zona) {
-      const inicio = s ? ENTRADA[j.zona] : j.zona === 'nave' ? PUESTO[j.rol] : ENTRADA.exterior
-      s = { x: inicio.x, z: inicio.z, zona: j.zona, giro: 0, t }
-      estados.set(j.id, s)
+    const p = !j.bot && j.conectado ? personas?.get(j.id) : undefined
+    if (p) gente.push({ x: p[0], z: p[1], zona: j.zona })
+  }
+  const estado = (j: Player) => estados.get(j.id)!
+
+  // Quien cruza la esclusa aparece en un sitio de llegada libre.
+  for (const j of bots) {
+    const s = estados.get(j.id)
+    if (s && s.zona === j.zona) continue
+    const ocupados = [...gente, ...bots.flatMap((o) => (o.id !== j.id && estados.has(o.id) ? [estado(o)] : []))].filter((o) => o.zona === j.zona)
+    const libre = LLEGADA[j.zona].find(([x, z]) => ocupados.every((o) => Math.hypot(o.x - x, o.z - z) >= SEPARACION)) ?? LLEGADA[j.zona][0]
+    const inicio = !s && j.zona === 'nave' ? PUESTO[j.rol!] : { x: libre[0], z: libre[1] }
+    estados.set(j.id, { x: inicio.x, z: inicio.z, zona: j.zona, giro: j.zona === 'nave' ? -Math.PI / 2 : Math.PI / 2, t })
+  }
+
+  // Quien duerme o se refugia lo coloca el cliente en su saco, litera o sitio del refugio; quien
+  // hace ejercicio va a su máquina o a la cola del gimnasio (el mismo orden que en el cliente).
+  const apartado = (j: Player) => j.zona === 'nave' && (j.enRefugio || j.manual === 'sueno')
+  const objetivo = new Map<string, { x: number; z: number; mx?: number; mz?: number }>()
+  const fuera: Player[] = []
+  const porEstacion = new Map<string, Player[]>()
+  for (const j of bots) {
+    if (apartado(j)) continue
+    if (j.zona === 'nave' && j.manual === 'ejercicio') {
+      const antes = room.jugadores.filter((o) => o.manual === 'ejercicio' && o.zona === 'nave' && o.id < j.id).length
+      const [x, z] = GIMNASIO[antes < 2 ? antes : 2 + ((antes - 2) % 3)]
+      objetivo.set(j.id, { x, z })
+      Object.assign(estado(j), { x, z, giro: -Math.PI / 2 })
+      continue
     }
+    const id = j.estacion && ESTACIONES[j.estacion]?.zona === j.zona && PLAZAS[j.estacion]?.length ? j.estacion : null
+    if (id) porEstacion.set(id, [...(porEstacion.get(id) ?? []), j])
+    else if (j.zona === 'nave') objetivo.set(j.id, PUESTO[j.rol!])
+    else fuera.push(j)
+  }
+  fuera.forEach((j, k) => objetivo.set(j.id, { x: ENTRADA.exterior.x + 1 + k * 0.8, z: ENTRADA.exterior.z + 2.5 }))
+
+  // Reparto de plazas: quien ya tiene una la conserva; quien llega (o espera en la cola fuera de
+  // las plazas) toma la libre más cercana, así nadie cruza entre los que ya trabajan. No se da
+  // una plaza que pisa una persona o un bot quieto en su puesto.
+  const parados = [...gente, ...bots.filter((j) => objetivo.has(j.id)).map((j) => ({ ...objetivo.get(j.id)!, zona: j.zona }))]
+  for (const [id, lista] of porEstacion) {
+    const zona = ESTACIONES[id].zona
+    const n = PLAZAS[id].length
+    const previa = (j: Player) => (estado(j).estacion === id ? (estado(j).plaza ?? 99) : 99)
+    const tomadas = new Set<number>()
+    PLAZAS[id].forEach((q, k) => {
+      const suya = lista.some((j) => previa(j) === k && Math.hypot(estado(j).x - q.x, estado(j).z - q.z) < 0.3)
+      if (!suya && parados.some((o) => o.zona === zona && Math.hypot(o.x - q.x, o.z - q.z) < 0.5)) tomadas.add(k)
+    })
+    const dar = (j: Player, k: number) => {
+      tomadas.add(k)
+      Object.assign(estado(j), { estacion: id, plaza: k })
+      objetivo.set(j.id, plazaN(id, k))
+    }
+    const nuevos: Player[] = []
+    for (const j of lista) {
+      const k = previa(j)
+      if (k < n && !tomadas.has(k)) dar(j, k)
+      else nuevos.push(j)
+    }
+    while (nuevos.length) {
+      let mejor: [number, number, number] = [0, 0, Infinity]
+      nuevos.forEach((j, i) => {
+        for (let k = 0; k < n + lista.length; k++) {
+          if (tomadas.has(k)) continue
+          const q = plazaN(id, k)
+          const d = Math.hypot(q.x - estado(j).x, q.z - estado(j).z) + k * 0.6 + (k >= n ? 30 : 0)
+          if (d < mejor[2]) mejor = [i, k, d]
+        }
+      })
+      dar(nuevos.splice(mejor[0], 1)[0], mejor[1])
+    }
+  }
+
+  // Cada uno camina hacia su sitio, de uno en uno: nadie atraviesa a nadie (bots y personas).
+  // Si el paso pisa a alguien, rodea con un paso de lado o en diagonal; si no cabe, espera.
+  const cuerpos = [...gente, ...bots.filter((j) => !apartado(j)).map(estado)]
+  const previo = new Map<string, [number, number]>()
+  const llegado = new Set<string>()
+  for (const j of bots) {
+    const s = estado(j)
     const dt = limitar((t - s.t) / 1000, 0, 1.5)
     s.t = t
-    const p = j.estacion ? puntoDe(j.estacion) : null
-    let tx: number
-    let tz: number
-    let mira: [number, number] | null = null
-    if (p && p.zona === j.zona) {
-      tx = p.x
-      tz = p.z
-      mira = [p.cx, p.cz]
-    } else if (j.zona === 'nave') {
-      tx = PUESTO[j.rol].x
-      tz = PUESTO[j.rol].z
-    } else {
-      tx = ENTRADA.exterior.x + 1
-      tz = ENTRADA.exterior.z + 2.5
-    }
-    const [wx, wz] = j.zona === 'exterior' ? rodeo(s.x, s.z, tx, tz) : [tx, tz]
-    const dx = wx - s.x
-    const dz = wz - s.z
-    const d = Math.hypot(dx, dz)
-    let anim = 0
+    const o = objetivo.get(j.id)
+    if (!o || (j.zona === 'nave' && j.manual === 'ejercicio')) continue
+    if (s.estacion && !porEstacion.get(s.estacion)?.includes(j)) s.estacion = undefined
+    const antes: [number, number] = [s.x, s.z]
+    previo.set(j.id, antes)
+    const paso = VELOCIDAD * dt
+    const pisa = (x: number, z: number) => cuerpos.some((c) => c !== s && c.zona === s.zona && Math.hypot(x - c.x, z - c.z) < SEPARACION - 0.02)
+    const cabe = (x: number, z: number) =>
+      !pisa(x, z) &&
+      (j.zona === 'nave'
+        ? !enCaja(x, z) && !enMesa(x, z) && x >= PASILLO.x0 && x <= PASILLO.x1 && Math.abs(z) <= PASILLO.z
+        : !dentroDelHabitat(x, z))
+    const [wx, wz] = j.zona === 'exterior' ? rodeo(s.x, s.z, o.x, o.z) : rutaNave(s.x, s.z, o.x, o.z)
+    const d = Math.hypot(wx - s.x, wz - s.z)
     if (d > 0.05) {
-      const avance = Math.min(d, VELOCIDAD * dt)
-      s.x += (dx / d) * avance
-      s.z += (dz / d) * avance
-      s.giro = Math.atan2(dx, dz)
-      anim = 1
-    }
-    // No atraviesa la mesa común.
-    if (j.zona === 'nave') {
-      const cx = s.x - 0.05
-      const dm = Math.hypot(cx, s.z)
-      if (dm < 1 && dm > 0.001) {
-        s.x = 0.05 + (cx / dm) * 1
-        s.z = (s.z / dm) * 1
+      const [ux, uz] = [(wx - s.x) / d, (wz - s.z) / d]
+      const avance = Math.min(d, paso)
+      let [x, z] = [s.x + ux * avance, s.z + uz * avance]
+      if (j.zona === 'nave') {
+        // La mesa se rodea por su borde; contra un bloque se desliza por el eje que no choca.
+        const cx = x - MESA.x
+        const dm = Math.hypot(cx, z)
+        if (dm < MESA.r && dm > 0.001) [x, z] = [MESA.x + (cx / dm) * MESA.r, (z / dm) * MESA.r]
+        if (enCaja(x, z)) {
+          if (!enCaja(x, antes[1])) z = antes[1]
+          else if (!enCaja(antes[0], z)) x = antes[0]
+        }
+      }
+      const opciones: [number, number][] = [[x, z]]
+      for (const lado of [1, -1]) {
+        opciones.push([s.x + (ux * 0.7 - uz * lado * 0.7) * avance, s.z + (uz * 0.7 + ux * lado * 0.7) * avance])
+        opciones.push([s.x - uz * lado * avance, s.z + ux * lado * avance])
+      }
+      // Quien ya estaba encimado (al aparecer) puede seguir andando para separarse.
+      const libre = pisa(s.x, s.z) ? opciones[0] : (cabe(x, z) ? opciones[0] : opciones.slice(1).filter(([a, b]) => cabe(a, b)).sort((p, q) => Math.hypot(o.x - p[0], o.z - p[1]) - Math.hypot(o.x - q[0], o.z - q[1]))[0])
+      if (libre) {
+        s.giro = Math.atan2(libre[0] - s.x, libre[1] - s.z)
+        ;[s.x, s.z] = libre
       }
     }
-    if (Math.hypot(tx - s.x, tz - s.z) < 0.1) {
-      anim = mira ? 2 : 0
-      s.giro = mira ? Math.atan2(mira[0] - s.x, mira[1] - s.z) : PUESTO[j.rol].z < 0 ? Math.PI : 0
-    }
+    if (Math.hypot(o.x - s.x, o.z - s.z) < 0.1) llegado.add(j.id)
+  }
+
+  for (const j of bots) {
+    const s = estado(j)
+    const o = objetivo.get(j.id)
+    const antes = previo.get(j.id)
+    let anim = 0
+    if (o && llegado.has(j.id)) {
+      // En su sitio: mira el equipo (animación de trabajo) o, en su puesto, hacia donde toca.
+      anim = o.mx !== undefined ? 2 : 0
+      s.giro = o.mx !== undefined ? Math.atan2(o.mx - s.x, (o.mz ?? 0) - s.z) : j.zona === 'nave' ? PUESTO[j.rol!].giro : Math.PI / 2
+    } else if (antes && Math.hypot(s.x - antes[0], s.z - antes[1]) > 0.01) anim = 1
     salida[j.id] = [Math.round(s.x * 100) / 100, Math.round(s.z * 100) / 100, Math.round(s.giro * 100) / 100, anim]
   }
   return salida

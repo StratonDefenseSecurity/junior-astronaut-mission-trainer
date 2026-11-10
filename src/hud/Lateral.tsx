@@ -6,11 +6,12 @@ import { ESTACION_BY_ID, deberesPendientes, estacionesDestacadas, puede } from '
 import { api } from '../red'
 import { useStore } from '../store'
 import { MarcaIA, diasRestantes, diasTexto, enMarte, roles, useAhora } from './comun'
+import { MisMisiones } from './Personal'
 
 function consejo(sala: RoomState, yo: Player): string {
   const sup = enMarte(sala)
   if (yo.incapacitado > 0) return 'You are out of action. Rest. The Flight Surgeon can treat you in the Medical Bay.'
-  if (yo.enRefugio) return 'You are in the Storm Shelter. The solar storm dose is much lower here, but you cannot work.'
+  if (yo.enRefugio) return 'You are in the Storm Shelter. The solar storm dose is much lower here. You can rest and sleep, but not work. The crew leaves when the storm ends.'
   if (sala.fase === 'llegada' && sala.subfase === 'orbita') {
     return puede(sala, yo, ['piloto', 'comandante']) ? 'Go to the Bridge and propose the landing site.' : 'The Pilot and the Mission Commander choose the landing site on the Bridge.'
   }
@@ -57,6 +58,7 @@ export function Mision({ sala, yo }: { sala: RoomState; yo: Player }) {
       <div className="assistant">
         <strong>{yo.rol ? ROLE_BY_ID[yo.rol].nombre : 'Crew member'}:</strong> {consejo(sala, yo)}
       </div>
+      {!cinematica && <MisMisiones sala={sala} yo={yo} />}
 
       {sala.fase === 'ensamblaje' && (
         <div className="steps">

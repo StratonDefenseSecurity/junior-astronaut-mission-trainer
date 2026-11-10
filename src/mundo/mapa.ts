@@ -58,38 +58,111 @@ export const ESTACION_BY_ID = Object.fromEntries(ESTACIONES.map((e) => [e.id, e]
 /** Distancia a la que se puede usar una estación. */
 export const ALCANCE = 2.1
 
-/** Dónde aparece cada uno al entrar en una zona. */
-export const ENTRADA: Record<Zona, { x: number; z: number; giro: number }> = {
-  nave: { x: 6.9, z: 0, giro: -Math.PI / 2 },
-  exterior: { x: 12.4, z: 0, giro: Math.PI / 2 },
+/** Cada persona ocupa un círculo de este radio: los cuerpos no se atraviesan. */
+export const RADIO_PERSONA = 0.35
+/** Distancia mínima entre los centros de dos personas. */
+export const SEPARACION = 2 * RADIO_PERSONA
+
+/** Sitio para una persona: dónde se coloca y hacia dónde mira. */
+export interface Plaza {
+  x: number
+  z: number
+  giro: number
+}
+const plaza = (x: number, z: number, giro: number): Plaza => ({ x, z, giro })
+
+/**
+ * Sitios despejados justo al pasar la esclusa, para que varios lleguen a la vez sin pisarse.
+ * Dentro se mira hacia el módulo (-x); fuera, hacia el terreno (+x).
+ */
+export const LLEGADA: Record<Zona, Plaza[]> = {
+  nave: [[6.65, 0], [6.65, -0.75], [6.65, 0.75], [5.9, -0.4], [5.9, 0.35], [5.9, -1.15]].map(([x, z]) => plaza(x, z, -Math.PI / 2)),
+  exterior: [[12.4, 0], [12.4, 0.8], [12.4, -0.8], [13.2, 0.4], [13.2, -0.4], [13.2, 1.2]].map(([x, z]) => plaza(x, z, Math.PI / 2)),
+}
+/** Dónde aparece cada uno al entrar en una zona (el primer sitio de llegada). */
+export const ENTRADA: Record<Zona, Plaza> = { nave: LLEGADA.nave[0], exterior: LLEGADA.exterior[0] }
+
+/** Primer sitio de llegada sin nadie encima. */
+export function llegadaLibre(zona: Zona, ocupados: { x: number; z: number }[]): Plaza {
+  return LLEGADA[zona].find((p) => ocupados.every((o) => Math.hypot(o.x - p.x, o.z - p.z) >= SEPARACION)) ?? LLEGADA[zona][0]
 }
 
-/** Puesto habitual de cada rol: donde se ve a quien no está moviendo su personaje. */
-export const PUESTO: Record<Role, { x: number; z: number }> = {
-  comandante: { x: -6.2, z: 0.9 },
-  piloto: { x: -6.2, z: -0.9 },
-  medico: { x: -4.6, z: 1.5 },
-  logistica: { x: 1.6, z: -1.5 },
-  cientifico: { x: 4.7, z: -1.5 },
-  sistemas: { x: -1.5, z: -1.5 },
+/**
+ * Puesto habitual de cada rol: donde se ve a quien no está moviendo su personaje. Comandante y
+ * piloto en los asientos del puente, mirando a la consola; el resto ante su estación.
+ */
+export const PUESTO: Record<Role, Plaza> = {
+  comandante: plaza(-6.25, 0.9, -Math.PI / 2),
+  piloto: plaza(-6.25, -0.9, -Math.PI / 2),
+  medico: plaza(-4.6, 1.85, 0),
+  logistica: plaza(1.6, -1.85, Math.PI),
+  cientifico: plaza(4.7, -1.85, Math.PI),
+  sistemas: plaza(-1.5, -1.85, Math.PI),
 }
-export const PUESTO_REFUGIO = { x: 4.7, z: 1.7 }
+
+/**
+ * Refugio de tormenta: alcoba contra la pared sur rodeada de bolsas de agua (como los camarotes
+ * de la Estación Espacial). Hueco interior de 2.2 × 1.5 m para seis personas en dos filas.
+ */
+export const REFUGIO = { x0: 3.2, x1: 6.2, z0: 1.0, dentroX0: 3.6, dentroX1: 5.8, techo: 2.1 }
+
+/** Bloques sólidos contra la pared sur. `gravedad`: solo existe con gravedad (las literas). */
+export interface Caja {
+  x0: number
+  x1: number
+  z0: number
+  z1: number
+  gravedad?: boolean
+}
+export const CAJAS: Caja[] = [
+  { x0: REFUGIO.x0, x1: REFUGIO.x1, z0: REFUGIO.z0, z1: INTERIOR.z1 },
+  // Literas de Marte: sobresalen de la pared hasta z 1.5.
+  { x0: 0.15, x1: 3.05, z0: 1.5, z1: INTERIOR.z1, gravedad: true },
+]
 
 /** Dónde se coloca cada uno para hacer ejercicio, dormir o refugiarse. */
 export const PUNTOS = {
   /** Cinta de correr y bicicleta del gimnasio, mirando hacia el puente. */
   cinta: { x: -2.15, z: 1.72, giro: -Math.PI / 2 },
   bici: { x: -0.75, z: 1.72, giro: -Math.PI / 2 },
+  /** Cola del gimnasio cuando las dos máquinas están ocupadas: a un lado, sin tapar el paso. */
+  esperaGimnasio: [plaza(-2.95, 1.0, 0), plaza(-3.7, 1.0, 0), plaza(-3.3, 0.3, 0)],
   /** Sacos de dormir sujetos a la pared (sin gravedad) y literas (en Marte). */
-  sacos: [-0.1, 0.52, 1.14, 1.76, 2.38, 3.0].map((x) => ({ x, z: 2.28, giro: Math.PI })),
+  sacos: [-0.2, 0.42, 1.04, 1.66, 2.28, 2.9].map((x) => ({ x, z: 2.28, giro: Math.PI })),
   literas: [0.6, 1.6, 2.6].flatMap((x) => [0.42, 1.32].map((y) => ({ x, z: 2.35, y, giro: Math.PI }))),
+  /** Seis sitios dentro del refugio, en dos filas de tres, mirando a la abertura. */
+  refugio: [2.1, 1.4].flatMap((z) => [4.0, 4.7, 5.4].map((x) => plaza(x, z, Math.PI))),
 }
 
-/** Corrige una posición para que no atraviese paredes ni objetos. */
-export function limitarPosicion(zona: Zona, x: number, z: number, visibles: (id: string) => boolean): [number, number] {
+const enCaja = (c: Caja, x: number, z: number) =>
+  x > c.x0 - RADIO_PERSONA && x < c.x1 + RADIO_PERSONA && z > c.z0 - RADIO_PERSONA && z < c.z1 + RADIO_PERSONA
+const dentroDeCajas = (x: number, z: number, gravedad: boolean) => CAJAS.some((c) => (gravedad || !c.gravedad) && enCaja(c, x, z))
+
+/**
+ * Corrige una posición para que no atraviese paredes ni objetos. `desde` es la posición anterior:
+ * contra un bloque se desliza (se conserva el eje que no choca).
+ */
+export function limitarPosicion(
+  zona: Zona,
+  x: number,
+  z: number,
+  visibles: (id: string) => boolean,
+  desde?: { x: number; z: number; gravedad: boolean },
+): [number, number] {
   if (zona === 'nave') {
     x = Math.min(INTERIOR.pasilloX1, Math.max(INTERIOR.pasilloX0, x))
     z = Math.min(INTERIOR.pasilloZ, Math.max(-INTERIOR.pasilloZ, z))
+    const g = desde?.gravedad ?? true
+    if (dentroDeCajas(x, z, g)) {
+      if (desde && !dentroDeCajas(desde.x, desde.z, g)) {
+        if (!dentroDeCajas(x, desde.z, g)) z = desde.z
+        else if (!dentroDeCajas(desde.x, z, g)) x = desde.x
+        else [x, z] = [desde.x, desde.z]
+      } else {
+        // Ya estaba dentro (al salir del refugio, por ejemplo): se sale hacia el pasillo.
+        for (const c of CAJAS) if ((g || !c.gravedad) && enCaja(c, x, z)) z = Math.min(z, c.z0 - RADIO_PERSONA)
+      }
+    }
   } else {
     const d = Math.hypot(x, z)
     if (d > EXTERIOR.radio) {
@@ -109,11 +182,28 @@ export function limitarPosicion(zona: Zona, x: number, z: number, visibles: (id:
     const dx = x - e.x
     const dz = z - e.z
     const d = Math.hypot(dx, dz)
-    const minimo = e.radio + 0.35
+    const minimo = e.radio + RADIO_PERSONA
     if (d < minimo && d > 0.0001) {
       x = e.x + (dx / d) * minimo
       z = e.z + (dz / d) * minimo
     }
+  }
+  return [x, z]
+}
+
+/** Aparta una posición de los cuerpos de los demás: nadie atraviesa a nadie. */
+export function apartarDeCuerpos(x: number, z: number, cuerpos: Iterable<{ x: number; z: number }>): [number, number] {
+  for (const c of cuerpos) {
+    const dx = x - c.x
+    const dz = z - c.z
+    const d = Math.hypot(dx, dz)
+    if (d >= SEPARACION) continue
+    if (d < 1e-4) {
+      x += SEPARACION
+      continue
+    }
+    x = c.x + (dx / d) * SEPARACION
+    z = c.z + (dz / d) * SEPARACION
   }
   return [x, z]
 }

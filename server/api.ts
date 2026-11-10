@@ -46,7 +46,7 @@ import {
   votar,
 } from './game.js'
 import { fijarDificultad } from './aprendizaje.js'
-import { log } from './base.js'
+import { enviarRadio, log } from './base.js'
 import { pasoProcedimiento } from './procedimientos.js'
 import { anotarSiTermino, leerRanking, MOSTRADAS } from './ranking.js'
 import { fijarAhora, fijarMovidos } from './reloj.js'
@@ -209,7 +209,7 @@ function presenciaDe(codigo: string): Presencia {
 /** Posiciones de los demás personajes vistos hace poco, y de los bots, que caminan solos. */
 function posiciones(codigo: string, room: RoomState, yo: string, t: number): string {
   const p = presenciaDe(codigo)
-  const salida: Record<string, number[]> = room.jugadores.some((j) => j.bot) ? posicionesBots(room, p.bots, t) : {}
+  const salida: Record<string, number[]> = room.jugadores.some((j) => j.bot) ? posicionesBots(room, p.bots, t, p.pos) : {}
   for (const [id, pos] of p.pos) if (id !== yo && t - (p.ultimo.get(id) ?? 0) < 6000) salida[id] = pos
   return JSON.stringify(salida)
 }
@@ -485,10 +485,9 @@ function controlMensaje(codigo: string, usuario: Usuario, mensaje: string): Prom
     codigo,
     usuario,
     0,
-    (room, t) => {
-      log(room, `Mission Control: ${mensaje}`, 'radio')
-      room.chat.push({ id: crypto.randomUUID(), de: 'Mission Control', texto: mensaje, t, bot: false })
-      if (room.chat.length > 40) room.chat.splice(0, room.chat.length - 40)
+    (room) => {
+      // Viaja a la velocidad de la luz: llega con el retardo real (y espera si hay conjunción solar).
+      enviarRadio(room, `Mission Control: ${mensaje}`, undefined, 'Mission Control')
       return null
     },
     { observador: true, noExiste: 'There is no room with that code.' },
