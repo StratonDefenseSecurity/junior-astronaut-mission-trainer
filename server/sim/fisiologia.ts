@@ -83,7 +83,8 @@ export function pasoTripulante(j: Player, c: Contexto): Consumo {
   if (fuera) {
     j.trajeO2 = Math.max(0, j.trajeO2 - o2 - (0.004 * c.dt) / 3600)
     j.trajeBateria = Math.max(0, j.trajeBateria - c.dt / (C.TRAJE_BATERIA_H * 3600))
-    trajeAgotado = j.trajeO2 <= 0 || j.trajeBateria <= 0
+    j.trajeCO2 = Math.max(0, (j.trajeCO2 ?? 1) - c.dt / (C.TRAJE_CO2_H * 3600))
+    trajeAgotado = j.trajeO2 <= 0 || j.trajeBateria <= 0 || j.trajeCO2 <= 0
     ppO2 = trajeAgotado ? 6 : C.TRAJE_PRESION_KPA
     ppCO2 = trajeAgotado ? 3 : 0.1
     presion = C.TRAJE_PRESION_KPA

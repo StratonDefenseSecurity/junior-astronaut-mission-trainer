@@ -374,6 +374,10 @@ export interface Player {
   trajeO2: number
   /** 0 a 1. */
   trajeBateria: number
+  /** Absorbente de CO2 que le queda al traje, 0 a 1 (sin valor = lleno). */
+  trajeCO2?: number
+  /** La salida en curso: plan elegido, compañero, cuándo salió y qué avisos ya se dieron. */
+  eva?: { plan: string; companero: string | null; inicio: number; objetivo: string; avisos: number }
   enRefugio: boolean
   /** Segundos de misión que le quedan fuera de servicio. */
   incapacitado: number
@@ -613,6 +617,8 @@ export interface RoomState {
   rellenarBots?: boolean
   /** Deberes de rutina de cada rol (ver DEBERES en shared/procedimientos.ts), por id. */
   deberes?: Record<string, EstadoDeber>
+  /** Basura a bordo (kg), comida al despegar (kg) y comida que caducó y se tiró (kg). */
+  logistica?: { basura: number; comidaInicial: number; caducada: number; t: number }
   /** Memoria de los tripulantes bot, por id (ver server/tripulantes.ts). */
   bots?: Record<string, MemoriaBot>
   /** Avance de cada procedimiento por pasos (ver shared/procedimientos.ts), por id. */

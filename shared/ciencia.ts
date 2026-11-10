@@ -121,6 +121,30 @@ export const C = {
   // ---- Ejercicio en microgravedad ----
   /** Horas de ejercicio programadas cada día para la tripulación de la ISS. */
   EJERCICIO_ISS_H: 2.5,
+
+  // ---- Día a bordo (ESA, Outpost 42) ----
+  /** Horas de sueño programadas cada noche en la ISS. */
+  SUENO_ISS_H: 8.5,
+
+  // ---- Salidas al exterior ----
+  /** Horas que dura el absorbente de CO2 del traje (juego: igual a la duración de diseño del EMU). */
+  TRAJE_CO2_H: 8,
+  /** Ventana que se planifica para una salida en la ISS. */
+  EVA_VENTANA_H: 6.5,
+  /** Reserva de consumibles con que se vuelve (Apollo: 30 min; el SOP del EMU da 30 min). */
+  EVA_RESERVA_MIN: 30,
+  /** Minutos para volver y cruzar la esclusa (juego). */
+  EVA_REGRESO_MIN: 15,
+  /** Distancia máxima al compañero de salida antes de avisar (juego). */
+  EVA_COMPANERO_M: 25,
+
+  // ---- Logística ----
+  /** kg de basura por persona y día (estimación de la NASA para misiones largas). */
+  BASURA_KG_DIA: 1,
+  /** kg de basura por persona que caben en la zona de basura antes de que huela (juego). */
+  BASURA_LIMITE_KG: 7,
+  /** Días de vida útil de la comida envasada: el extremo bajo de los 2 a 3 años de la ISS. */
+  COMIDA_VIDA_UTIL_DIAS: 730,
 } as const
 
 /**
@@ -607,6 +631,48 @@ export const FUENTES: Fuente[] = [
     url: 'https://www.mayoclinic.org/healthy-lifestyle/fitness/expert-answers/heart-rate/faq-20057979',
   },
   {
+    tema: 'A day on the space station',
+    dato: 'A standard ISS crew day starts with about 1 hour of post-sleep time, then the morning Daily Planning Conference. It has 6.5 hours of work, a 1-hour midday meal, 2.5 hours of exercise and 8.5 hours of sleep. The evening conference is the goodnight call.',
+    fuente: 'ESA, Outpost 42 blog, "The astronaut daily schedule".',
+    url: 'https://outpost42.esa.int/blog/the-astronaut-daily-schedule/',
+  },
+  {
+    tema: 'Saturday cleaning',
+    dato: 'On the ISS the alarm rings at 06:00 UTC and the plan runs to 21:30. Saturday mornings are for cleaning: everyone vacuums the air vents, wipes the surfaces and finds lost items. Weekends are for calls with family and friends.',
+    fuente: 'DLR blog, "Always on Saturday: everyday life on the ISS" (2018).',
+    url: 'https://www.dlr.de/en/blog/archive/2018/always-on-saturday-everyday-life-on-the-iss',
+  },
+  {
+    tema: 'Planning a spacewalk',
+    dato: 'An ISS spacewalk is planned to fit about 6.5 hours. Oxygen, battery power and cooling water limit it, and CO2 removal limits it most. Crews wear a cuff checklist on the wrist, with a page for each suit warning.',
+    fuente: 'NASA, Houston We Have a Podcast, "How to Plan a Spacewalk".',
+    url: 'https://www.nasa.gov/johnson/HWHAP/how-to-plan-a-spacewalk',
+  },
+  {
+    tema: 'Turn-back rule',
+    dato: 'On the Moon, Apollo crews could only go as far as the suit consumables allowed them to walk back to the lander, after keeping a 30-minute reserve.',
+    fuente: 'Bellcomm, Apollo 15 lunar surface traverse planning, NASA Apollo Lunar Surface Journal.',
+    url: 'https://www.nasa.gov/wp-content/uploads/static/history/alsj/19790073512_1979073512.pdf',
+  },
+  {
+    tema: 'Emergency oxygen in the suit',
+    dato: 'The EMU suit has a Secondary Oxygen Pack, two tanks with a 30-minute emergency supply.',
+    fuente: 'NASA, "Extravehicular Mobility Unit" fact sheet.',
+    url: 'https://www.nasa.gov/wp-content/uploads/2009/07/188963main_extravehicular_mobility_unit.pdf',
+  },
+  {
+    tema: 'Food shelf life',
+    dato: 'The ISS shelf-stable food system has a shelf life of about 2 to 3 years. Foods for Mars missions are expected to need 5 years.',
+    fuente: 'NASA Human Research Program, Food and Nutrition risk strategy (2024); Perchonok and Catauro, Thermostabilized Shelf Life Study, NASA (2009).',
+    url: 'https://ntrs.nasa.gov/api/citations/20240010162/downloads/FN%20Risk%20Strategy%20ISLSWG%20Sep%202024.pdf',
+  },
+  {
+    tema: 'Trash',
+    dato: 'Long missions are estimated to make about 1 kg of trash per crew member per day. On the ISS the crew compacts it by hand into bags that leave in a cargo ship and burn up on reentry.',
+    fuente: 'NASA Ames, "What is NASA’s Heat Melt Compactor?".',
+    url: 'https://www.nasa.gov/ames/space-biosciences/what-is-nasas-heat-melt-compactor',
+  },
+  {
     tema: 'Daily Planning Conference',
     dato: 'ISS crews start and end each day with a Daily Planning Conference with the flight control teams to go over the plan, the changes and any questions.',
     fuente: 'ESA, Outpost 42 blog, "The astronaut daily schedule".',
@@ -658,6 +724,10 @@ export const FUENTES: Fuente[] = [
 
 /** Lo que el juego simplifica o inventa para poder jugarse. Se muestra junto a las fuentes. */
 export const SUPUESTOS: string[] = [
+  'The Today schedule uses the real ISS durations, but the clock time of each block is a game choice. On the ISS, exercise and conferences shift from person to person and the family conference is usually weekly. On Mars the same plan is spread over the 24 Mars hours of a sol, and the crew keeps a 7-sol week counted from landing day.',
+  'The suit CO2 absorbent lasts 8 hours in the game, the same as the EMU design length. The 15 minutes to walk back and cycle the airlock and the 25 m buddy distance are game values. Real ISS spacewalks usually go out in pairs; here the buddy can also stay inside on the radio.',
+  'Food is packed in four lots 3, 6, 9 and 12 months before launch, each with a quarter of the food, and is eaten oldest first. The shelf life is 2 years, the low end of the ISS range. These lots are a game model.',
+  'The trash limit (7 kg per person before it smells), the cleaning, menu and trash effects (a little health, fatigue or filter wear) and the duty that does each one are game values.',
   'Personal missions follow the real work of each role, but which ones there are and how many times each has to be done (once or twice) are game values.',
   'During a shelter order a crew member can still leave for urgent work, such as a repair, and gets the cabin dose. The crew decides; the game only logs it.',
   'The character sleeps on its own at night only if its player stands still and is not in the middle of a task. A warning comes 15 real seconds before, and after waking up a player stays awake for 90 real seconds. At fast time scales both are capped at one mission hour, and walking keeps a player awake only up to ×600. These times are game values; the sleep and fatigue rates are not changed.',

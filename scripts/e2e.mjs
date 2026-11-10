@@ -112,7 +112,7 @@ const paso = async (quien, op, datos, msg, esperado = 200) => {
  * función recibe los datos que preparó el servidor para leer el instrumento.
  */
 const EXPERTO = {
-  salida: [{ orden: ['lcvg', 'inferior', 'superior', 'gorro', 'casco', 'guantes'], errores: 0 }, (d) => (d.fuga ? 'falla' : 'pasa'), 'isle', 8, 6, 'radio'],
+  salida: ['pareja', { orden: ['lcvg', 'inferior', 'superior', 'gorro', 'casco', 'guantes'], errores: 0 }, (d) => (d.fuga ? 'falla' : 'pasa'), 'isle', 8, 6, 'radio'],
   entrada: ['cepillar', 6, { orden: ['guantes', 'casco', 'gorro', 'superior', 'inferior', 'lcvg'], errores: 0 }],
   reparar: ['bloqueo', { orden: ['valvulas', 'conectores', 'pernos', 'extraer'], errores: 0 }, 8, { orden: ['fluidos', 'datos', 'energia', 'bloqueo'], errores: 0 }, (d) => (d.fallo ? 'falla' : 'pasa')],
   muestra: [6, 'capas', 6, 'escanear', 8, { orden: ['revisar', 'foto', 'sellar', 'etiqueta'], errores: 0 }],
@@ -342,10 +342,16 @@ if (!corto) {
   await proc(A, 'paneles', 0, 'norte', 'el paso exterior exige salir', 400)
   await paso(A, 'zona', { zona: 'exterior' }, 'la esclusa no se cruza de un salto', 400)
   await paso(A, 'accion', { id: 'reparar', payload: { sistema: 'oga' } }, 'reparar de un clic ya no existe', 400)
-  await proc(A, `salida:${idA}`, 0, { orden: ['inferior', 'lcvg', 'superior', 'gorro', 'casco', 'guantes'], errores: 0 }, 'el traje no se pone en cualquier orden', 400)
-  await proc(B, `salida:${idA}`, 0, { orden: ['lcvg', 'inferior', 'superior', 'gorro', 'casco', 'guantes'], errores: 0 }, 'nadie se pone el traje de otro', 400)
+  await proc(A, `salida:${idA}`, 0, { orden: ['lcvg', 'inferior', 'superior', 'gorro', 'casco', 'guantes'], errores: 0 }, 'antes del traje va el plan de la salida', 400)
+  await proc(B, `salida:${idA}`, 0, 'pareja', 'nadie planifica la salida de otro', 400)
+  await proc(A, `salida:${idA}`, 0, 'pareja', 'A planifica la salida: compañero, objetivos y horario con reserva')
+  await proc(A, `salida:${idA}`, 1, { orden: ['inferior', 'lcvg', 'superior', 'gorro', 'casco', 'guantes'], errores: 0 }, 'el traje no se pone en cualquier orden', 400)
+  await proc(B, `salida:${idA}`, 1, { orden: ['lcvg', 'inferior', 'superior', 'gorro', 'casco', 'guantes'], errores: 0 }, 'nadie se pone el traje de otro', 400)
+  comprobar(sala.logistica && sala.logistica.comidaInicial > 0 && typeof sala.logistica.basura === 'number', `la logística lleva la comida inicial y la basura (${JSON.stringify(sala.logistica)})`)
   await trabajo(A, `salida:${idA}`, 'A se pone el traje, revisa fugas, prerrespira y sale')
   comprobar(sala.jugadores[0].zona === 'exterior' && sala.registro.some((l) => /went outside/.test(l.texto)), 'A está fuera tras la esclusa')
+  const evaA = sala.jugadores[0].eva
+  comprobar(evaA?.plan === 'pareja' && evaA.companero && evaA.companero !== idA && typeof evaA.inicio === 'number' && evaA.objetivo, `A sale con plan, compañero y objetivo (${JSON.stringify(evaA)})`)
   await proc(A, 'paneles', 1, { orden: ['no', 'se', 'ne', 'so'], errores: 0 }, 'no se salta el orden de los pasos', 400)
   await proc(A, 'paneles', 0, 'norte', 'A orienta los paneles hacia el ecuador, al norte')
   await proc(A, 'paneles', 1, { orden: ['no', 'ne', 'so', 'se'], errores: 0 }, 'apretar dos esquinas del mismo lado se rechaza', 400)
@@ -360,6 +366,7 @@ if (!corto) {
   comprobar(sala.ensamblaje.hechas.carga && sala.ensamblaje.paso === 2, sala.cargamento.reactor > 0 ? 'carga descargada y reactor enterrado' : 'sin reactor, el paso de dónde dejarlo se salta solo y el montaje avanza')
   await trabajo(A, `entrada:${idA}`, 'A se quita el polvo, represuriza y se quita el traje')
   comprobar(sala.jugadores[0].zona === 'nave', 'A vuelve al hábitat')
+  comprobar(!sala.jugadores[0].eva, 'al volver se cierra el plan de la salida')
   await proc(B, 'energia', 0, 'caliente', 'conectar en caliente se rechaza y se explica', 400)
   await proc(B, 'energia', 0, 'bloqueo', 'B bloquea y etiqueta el interruptor')
   await proc(B, 'energia', 1, { orden: ['fuente', 'primario', 'baterias', 'convertidor', 'cargas'], errores: 0 }, 'B energiza de la fuente hacia las cargas')

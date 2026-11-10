@@ -10,6 +10,8 @@
 import { C } from '../shared/ciencia.js'
 import { CIUDADES, escenarioDe } from '../shared/escenarios.js'
 import { analizarCarga } from '../shared/plan.js'
+import { esHoraDeDormir } from '../shared/horario.js'
+import { minutosHastaVolver } from '../shared/eva.js'
 import { deberPendiente, deberesDeFase, disponible, estacionSistema, pasoActual, procPorId } from '../shared/procedimientos.js'
 import {
   PEINADOS,
@@ -728,7 +730,8 @@ function puedeSalir(room: RoomState, j: Player): boolean {
     (room.fase === 'ensamblaje' || room.fase === 'base') &&
     sis(room, 'esclusa').integridad > UMBRAL_AVERIA &&
     j.trajeO2 >= C.TRAJE_O2_KG * 0.35 &&
-    j.trajeBateria >= 0.35
+    j.trajeBateria >= 0.35 &&
+    (j.trajeCO2 ?? 1) >= 0.35
   )
 }
 
@@ -1006,8 +1009,8 @@ function decidir(room: RoomState, j: Player, m: MemoriaBot): Plan | null {
     return etapas ? { que, etapas } : null
   }
   const persona = humano(room)
-  // Con el traje bajo, primero vuelve a entrar.
-  if (j.zona === 'exterior' && (j.trajeO2 < C.TRAJE_O2_KG * 0.35 || j.trajeBateria < 0.35)) return null
+  // Con el traje bajo o a la hora de volver (regla de vuelta con reserva), primero vuelve a entrar.
+  if (j.zona === 'exterior' && (j.trajeO2 < C.TRAJE_O2_KG * 0.35 || j.trajeBateria < 0.35 || (j.trajeCO2 ?? 1) < 0.35 || minutosHastaVolver(room, j) <= 0)) return null
 
   // Alguien pidió ayuda a su rol.
   if (persona?.ayuda && (persona.ayuda.paraRol === j.rol || (j.rol === 'comandante' && !botDeRol(room, persona.ayuda.paraRol))) && madura(room, m, `ayuda:${persona.ayuda.desde}`, 2000, 4000)) {
@@ -1248,7 +1251,7 @@ function vida(room: RoomState, j: Player, m: MemoriaBot) {
   if (j.zona !== 'nave' || j.enRefugio || j.incapacitado > 0 || j.manual) return
   if (room.escala > 3600 || room.fase === 'llegada') return
   const h = room.ambiente.hora
-  if ((h >= 22.5 || h < 5.5) && j.vit.fatiga > 12) {
+  if (esHoraDeDormir(h) && j.vit.fatiga > 12) {
     fijarActividad(room, j.id, 'sueno')
     return
   }

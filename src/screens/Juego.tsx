@@ -6,6 +6,7 @@ import { PanelEstacion } from '../hud/Estacion'
 import { Lateral } from '../hud/Lateral'
 import { AvisoSueno, EntrarHabitat } from '../hud/Personal'
 import { Tutorial } from '../hud/Tutorial'
+import { ListaPuno } from '../hud/Rutina'
 import { BarraSuperior, MiEstado, PuntosCriticos, Registro, Telemetria, Tripulacion } from '../hud/Paneles'
 import { Mundo } from '../mundo/Mundo'
 import { useSonidoJuego } from '../mundo/Sonidos'
@@ -62,6 +63,7 @@ function JuegoConJugador({ sala, yo, ocultos, cinematica }: { sala: RoomState; y
       {!cinematica && !sala.resultado && <Interaccion />}
       {!cinematica && !sala.resultado && <AvisoSueno yo={yo} />}
       {!cinematica && !sala.resultado && <EntrarHabitat sala={sala} yo={yo} />}
+      {!cinematica && !sala.resultado && <ListaPuno sala={sala} yo={yo} />}
       <Transmision sala={sala} />
       <VotoRapido sala={sala} yo={yo} />
       <Emergencia sala={sala} yo={yo} />

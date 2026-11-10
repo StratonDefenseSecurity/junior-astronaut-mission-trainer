@@ -6,6 +6,7 @@
 // y la pantalla (que da la respuesta inmediata, src/hud/Procedimiento.tsx). Los datos reales
 // tienen su fuente en FUENTES de shared/ciencia.ts; lo que es del juego está en SUPUESTOS.
 import { C } from './ciencia.js'
+import { companeroEva, objetivoEva } from './eva.js'
 import { SISTEMA_BY_ID, SITE_BY_ID, TAREAS_ENSAMBLAJE, type CultivoId, type Player, type Role, type RoomState, type SistemaId, type Zona } from './types.js'
 
 export type TipoPaso = 'mantener' | 'secuencia' | 'ajustar' | 'elegir' | 'comprobar'
@@ -913,7 +914,7 @@ const enLaSuperficie = (room: RoomState) => room.tAterrizaje > 0 && room.t >= ro
 const jugadorDe = (room: RoomState, id: string): Player | undefined => room.jugadores.find((j) => j.id === id)
 const datosDe = (room: RoomState, id: string) => room.procedimientos?.[id]?.datos ?? {}
 const valoresDe = (room: RoomState, id: string) => room.procedimientos?.[id]?.valores ?? []
-const trajeCargado = (j: Player) => j.trajeO2 >= C.TRAJE_O2_KG * 0.3 && j.trajeBateria >= 0.3
+const trajeCargado = (j: Player) => j.trajeO2 >= C.TRAJE_O2_KG * 0.3 && j.trajeBateria >= 0.3 && (j.trajeCO2 ?? 1) >= 0.3
 /** Número estable a partir de un texto, para ordenar opciones sin azar. */
 const hash = (s: string) => {
   let h = 7
@@ -994,6 +995,25 @@ function salida(pid: string): Procedimiento {
       return 'You cannot go outside right now.'
     },
     pasos: [
+      {
+        id: 'plan',
+        tipo: 'elegir',
+        titulo: 'EVA plan',
+        instruccion: (room) => {
+          const c = companeroEva(room, pid)
+          return `Objective: ${objetivoEva(room)}. ${c ? `Buddy available: ${c.nombre}${c.zona === 'exterior' ? ', already outside' : ', on the radio from inside'}.` : 'Nobody else can watch you.'} How do you plan the walk?`
+        },
+        porque: 'A spacewalk is planned before anyone suits up: who goes with whom, what gets done and when to turn back. An ISS walk is planned to fit about 6.5 hours, and Apollo crews kept a 30-minute reserve to walk back.',
+        segundos: 8,
+        opciones: (room) => {
+          const c = companeroEva(room, pid)
+          return [
+            { id: 'pareja', texto: `Brief the plan: ${c ? `${c.nombre} as buddy` : 'a crewmate on the radio'}, the objectives and a 6.5-hour timeline that turns back with a 30-minute reserve`, calidad: 1, consecuencia: 'Everyone knows the plan. You get a warning when it is time to turn back, and your buddy watches you.' },
+            { id: 'sinreserva', texto: 'Plan the objectives and work until the suit runs low', calidad: 0.4, consecuencia: 'The warning only comes when you are already using the reserve.' },
+            { id: 'solo', texto: 'Go out alone without a plan', calidad: 0.2, consecuencia: 'Nobody is watching you and nobody knows when you should be back.' },
+          ]
+        },
+      },
       {
         id: 'vestir',
         tipo: 'secuencia',
@@ -1852,6 +1872,8 @@ export interface InfoDeber {
   /** Lo que gana la tripulación y lo que pasa si se salta, para mostrarlo. */
   beneficio: string
   penalizacion: string
+  /** Si es semanal: el día de la semana en que toca (6 = sábado). */
+  semanal?: number
 }
 
 /** Tiempo real mínimo entre dos veces del mismo deber, para que a ×86 400 no aparezca a cada momento. */
@@ -1867,6 +1889,9 @@ export const DEBERES: InfoDeber[] = [
   { id: 'inventario', rol: 'logistica', fases: ['transito', 'base'], cadaDias: 3, plazoDias: 3, beneficio: 'Misplaced food is found and the oldest food is eaten first.', penalizacion: 'Some food passes its shelf life in a forgotten bag.' },
   { id: 'experimento', rol: 'cientifico', fases: ['transito', 'base'], cadaDias: 3, plazoDias: 3, beneficio: 'The dosimeter map shows where to sleep: the crew gets a bit less radiation.', penalizacion: 'The radiation data has a gap and the crew loses the lower dose.' },
   { id: 'filtros', rol: 'sistemas', fases: ['transito', 'base'], cadaDias: 4, plazoDias: 3, beneficio: 'Clean filters ease the load on the CO2 Scrubber and Thermal Control.', penalizacion: 'Clogged filters make the CO2 Scrubber and Thermal Control wear out faster.' },
+  { id: 'limpieza', rol: 'medico', fases: ['transito', 'base'], cadaDias: 7, plazoDias: 1, semanal: 6, beneficio: 'A clean habitat keeps microbes and dust out of the air and the filters.', penalizacion: 'Microbes and dust build up: illness is more likely and the CO2 Scrubber wears faster.' },
+  { id: 'menu', rol: 'logistica', fases: ['transito', 'base'], cadaDias: 5, plazoDias: 3, beneficio: 'A varied menu keeps the crew eating, and old food is eaten before its date.', penalizacion: 'A lot close to its date may expire and be thrown away.' },
+  { id: 'basura', rol: 'piloto', fases: ['transito', 'base'], cadaDias: 3, plazoDias: 3, beneficio: 'Bagged trash keeps the cabin clean.', penalizacion: 'Loose trash smells and grows microbes: illness is more likely.' },
 ]
 export const DEBER_BY_ID = Object.fromEntries(DEBERES.map((d) => [d.id, d])) as Record<string, InfoDeber>
 /** ¿Toca ahora este deber? */
@@ -1876,6 +1901,29 @@ export const deberAtrasado = (room: RoomState, id: string) => Boolean(room.deber
 /** Deberes que existen en esta fase de la misión para un rol (o para todos). */
 export const deberesDeFase = (room: RoomState, rol?: Role | null) =>
   DEBERES.filter((d) => d.fases.includes(room.fase) && (!rol || d.rol === rol) && room.jugadores.some((j) => j.rol === d.rol))
+
+/** Días antes de la fecha en que un lote de comida pasa al frente (juego). */
+export const DIAS_AVISO_COMIDA = 90
+/** Basura suelta (kg) a partir de la que huele: depende de cuántos son. */
+export const limiteBasura = (r: RoomState) => C.BASURA_LIMITE_KG * Math.max(1, r.jugadores.filter((j) => j.rol).length)
+/**
+ * Lotes de comida a bordo: cuatro, con un cuarto de la comida cada uno, envasados 12, 9, 6 y 3
+ * meses antes del despegue, y se come primero el más antiguo (modelo del juego, ver SUPUESTOS).
+ */
+export function lotesComida(r: RoomState): { nombre: string; kg: number; dias: number }[] {
+  const L = r.logistica
+  if (!L || L.comidaInicial <= 0) return []
+  const cuarto = L.comidaInicial / 4
+  const comido = Math.max(0, L.comidaInicial - r.rec.comida - L.caducada)
+  const hoy = Math.max(0, r.t) / 86400
+  const lotes: { nombre: string; kg: number; dias: number }[] = []
+  for (let k = 0; k < 4; k++) {
+    const kg = limitar(cuarto - Math.max(0, comido - k * cuarto), 0, cuarto)
+    const edad = (12 - 3 * k) * 30.4
+    if (kg > 0.05) lotes.push({ nombre: `Lot ${k + 1}`, kg: r1(kg), dias: C.COMIDA_VIDA_UTIL_DIAS - edad - hoy })
+  }
+  return lotes
+}
 
 const minutosSenal = (r: RoomState) => Math.max(1, Math.round((r.vuelo?.retardo ?? 0) / 60))
 const datosDeber = (r: RoomState, id: string) => datosDe(r, `deber:${id}`)
@@ -2267,6 +2315,159 @@ const PROC_DEBER: Record<string, Procedimiento> = {
           }
         },
       },
+    ],
+  }),
+
+  limpieza: crearDeber(DEBER_BY_ID.limpieza, {
+    titulo: 'Saturday cleaning',
+    estacion: 'soporte',
+    resumen: 'Clean the habitat with the whole crew, as ISS crews do on Saturday morning.',
+    intro:
+      'On the ISS, Saturday morning is for cleaning and everyone helps. The crew vacuums the air vents, wipes all the surfaces and pulls out the small lost items that the airflow carries to the vent screens. In a closed cabin, dust, crumbs and microbes do not fall to the floor. They float and end up in the air filters.',
+    pasos: [
+      {
+        id: 'quien',
+        tipo: 'elegir',
+        titulo: 'Plan the cleaning',
+        instruccion: 'It is Saturday morning. Who cleans?',
+        porque: 'With everyone helping, the cleaning takes one morning and the weekend stays free for rest and calls home.',
+        segundos: 8,
+        opciones: () => [
+          { id: 'todos', texto: 'The whole crew, together, this morning', calidad: 1, consecuencia: 'It is done in one morning and the habitat is clean for the week.' },
+          { id: 'uno', texto: 'Only the Flight Surgeon, all day', calidad: 0.5, consecuencia: 'It gets done, but one person loses the whole day and gets tired.' },
+          { id: 'saltar', texto: 'Skip it. Nothing looks dirty', calidad: 0, consecuencia: 'Dust and microbes build up in the vents and filters where nobody looks.' },
+        ],
+      },
+      {
+        id: 'orden',
+        tipo: 'secuencia',
+        titulo: 'Clean the station',
+        instruccion: 'Tap the jobs in the order you do them.',
+        porque: 'Lost items stuck on a vent screen get sucked into the vacuum, so they come off first. The report goes last, with everything found.',
+        segundos: 10,
+        elementos: [
+          { id: 'informar', nombre: 'Report what you found to Mission Control' },
+          { id: 'aspirar', nombre: 'Vacuum the air vents and filter screens' },
+          { id: 'recoger', nombre: 'Pick the lost items off the vent screens' },
+          { id: 'limpiar', nombre: 'Wipe handrails and tables with disinfectant wipes' },
+        ],
+        ordenes: [['recoger', 'aspirar', 'limpiar', 'informar'], ['limpiar', 'recoger', 'aspirar', 'informar'], ['recoger', 'limpiar', 'aspirar', 'informar']],
+        error: 'Pick the lost items off the screens before you vacuum, and report to Mission Control last.',
+      },
+      { id: 'aspirado', tipo: 'mantener', titulo: 'Vacuum the vents', instruccion: 'Hold while you vacuum the vent screens.', porque: 'Clean screens let the air flow to the CO2 Scrubber and keep the cabin air moving.', segundos: 5, boton: 'Hold to vacuum' },
+    ],
+  }),
+
+  menu: crearDeber(DEBER_BY_ID.menu, {
+    titulo: 'Menu and shelf life',
+    estacion: 'comedor',
+    resumen: 'Plan the menu and check which food lots are close to their date.',
+    intro:
+      'Space food is packed on Earth months before launch. The ISS shelf-stable food lasts about 2 to 3 years, and food for Mars will need 5. The crew picks meals from a standard menu plus some favorites, and eats the oldest food first so nothing passes its date.',
+    pasos: [
+      {
+        id: 'menu',
+        tipo: 'elegir',
+        titulo: 'Plan the menu',
+        instruccion: 'Pick the meals for the next days.',
+        porque: 'Eating the same thing every day gets boring, and bored people eat less. A varied menu keeps the crew eating well.',
+        segundos: 8,
+        opciones: () => [
+          { id: 'variado', texto: 'Mix the standard menu with a few favorite foods', calidad: 1, consecuencia: 'Meals stay varied and the crew eats well.' },
+          { id: 'favorito', texto: 'Only the favorite dishes, every day', calidad: 0.5, consecuencia: 'The favorites run out and the crew gets tired of the same food.' },
+          { id: 'rapido', texto: 'Whatever is quickest to prepare', calidad: 0.6, consecuencia: 'It saves time, but meals become repetitive.' },
+        ],
+      },
+      {
+        id: 'fechas',
+        tipo: 'comprobar',
+        titulo: 'Check the shelf life',
+        instruccion: 'Look at the days left before each food lot passes its date.',
+        porque: 'A lot that is close to its date has to be eaten first, or it gets thrown away.',
+        segundos: 10,
+        lectura: (r) => {
+          const lotes = lotesComida(r)
+          const cerca = lotes.find((l) => l.dias < DIAS_AVISO_COMIDA)
+          return {
+            forma: 'barras',
+            titulo: 'Days left before each lot passes its date',
+            unidad: 'days',
+            eje: 'food lot',
+            puntos: lotes.length ? lotes.map((l) => ({ x: l.nombre, y: Math.max(0, Math.round(l.dias)) })) : [{ x: 'None', y: 0 }],
+            limite: DIAS_AVISO_COMIDA,
+            limiteTexto: `Eat first under ${DIAS_AVISO_COMIDA} days`,
+            pregunta: 'Is any lot close to its date?',
+            correcto: cerca ? 'falla' : 'pasa',
+            explicacion: cerca ? `${cerca.nombre} is close to its date. Move it to the front.` : `Every lot has more than ${DIAS_AVISO_COMIDA} days left.`,
+            botones: ['All fine', 'One is close'],
+            resaltar: cerca?.nombre,
+          }
+        },
+      },
+      {
+        id: 'rotar',
+        tipo: 'elegir',
+        titulo: 'Arrange the galley',
+        instruccion: 'How do you arrange the food lots?',
+        porque: 'Whatever is at the front gets eaten first.',
+        segundos: 6,
+        opciones: () => [
+          { id: 'adelante', texto: 'Put the lot with the fewest days left at the front', calidad: 1, consecuencia: 'The oldest food is eaten before its date.' },
+          { id: 'igual', texto: 'Leave the lots where they are', calidad: 0.4, consecuencia: 'An old lot may stay at the back and pass its date.' },
+        ],
+      },
+    ],
+  }),
+
+  basura: crearDeber(DEBER_BY_ID.basura, {
+    titulo: 'Trash',
+    estacion: 'almacen',
+    resumen: 'Bag, compact and stow the trash before it smells.',
+    intro:
+      'A long mission makes about 1 kg of trash per person per day. On the ISS the crew compacts it by hand into bags. The bags ride a cargo ship that burns up on reentry. Wet trash such as food leftovers goes in sealed bags, because it smells and grows microbes.',
+    pasos: [
+      {
+        id: 'empacar',
+        tipo: 'secuencia',
+        titulo: 'Pack the trash',
+        instruccion: 'Tap the steps in the order you do them.',
+        porque: 'Wet trash is sealed first so it does not soak the rest. The bag is logged so the crew knows how much space is left.',
+        segundos: 10,
+        elementos: [
+          { id: 'estibar', nombre: 'Stow the bag in the trash area' },
+          { id: 'compactar', nombre: 'Compact the bag by hand' },
+          { id: 'humeda', nombre: 'Seal the wet trash in an odor-proof bag' },
+          { id: 'registrar', nombre: 'Log the bag in the inventory' },
+        ],
+        ordenes: [['humeda', 'compactar', 'registrar', 'estibar'], ['humeda', 'compactar', 'estibar', 'registrar']],
+        error: 'Seal the wet trash first, then compact the bag. Log it and stow it last.',
+      },
+      {
+        id: 'volumen',
+        tipo: 'comprobar',
+        titulo: 'Check the trash area',
+        instruccion: 'Look at how much loose trash is in the cabin.',
+        porque: 'Loose trash smells and grows microbes in a closed cabin.',
+        segundos: 8,
+        lectura: (r) => {
+          const kgBasura = r1(r.logistica?.basura ?? 0)
+          const lim = limiteBasura(r)
+          return {
+            forma: 'barras',
+            titulo: 'Loose trash in the cabin',
+            unidad: 'kg',
+            eje: 'trash',
+            puntos: [{ x: 'Loose trash', y: kgBasura }],
+            limite: lim,
+            limiteTexto: `Smells above ${lim} kg`,
+            pregunta: 'Is the trash over the limit?',
+            correcto: kgBasura > lim ? 'falla' : 'pasa',
+            explicacion: kgBasura > lim ? 'It is over the limit. The cabin smells and microbes grow.' : 'It is under the limit. Bag it now before it gets there.',
+            botones: ['Under the limit', 'Over the limit'],
+          }
+        },
+      },
+      { id: 'compactar', tipo: 'mantener', titulo: 'Compact the bags', instruccion: 'Hold while you press the air out of the bags.', porque: 'Compacted bags take less of the small stowage space.', segundos: 4, boton: 'Hold to compact' },
     ],
   }),
 }

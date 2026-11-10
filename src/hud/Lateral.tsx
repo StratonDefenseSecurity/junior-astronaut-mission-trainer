@@ -7,6 +7,7 @@ import { api } from '../red'
 import { useStore } from '../store'
 import { MarcaIA, diasRestantes, diasTexto, enMarte, roles, useAhora } from './comun'
 import { MisMisiones } from './Personal'
+import { Hoy } from './Rutina'
 
 function consejo(sala: RoomState, yo: Player): string {
   const sup = enMarte(sala)
@@ -223,11 +224,13 @@ export function Lateral({ sala, yo }: { sala: RoomState; yo: Player }) {
     <div className="panel lateral">
       <div className="tabs">
         <button className={pestana === 'mision' ? 'active' : ''} onClick={() => setPestana('mision')}>Mission</button>
+        <button className={pestana === 'hoy' ? 'active' : ''} onClick={() => setPestana('hoy')}>Today</button>
         <button className={pestana === 'propuestas' ? 'active' : ''} onClick={() => setPestana('propuestas')}>Proposals{pendientes ? ` (${pendientes})` : ''}</button>
         <button className={pestana === 'asistente' ? 'active' : ''} onClick={() => setPestana('asistente')}>Assistant</button>
       </div>
       <div className="contenido">
         {pestana === 'mision' && <Mision sala={sala} yo={yo} />}
+        {pestana === 'hoy' && <Hoy sala={sala} />}
         {pestana === 'propuestas' && <Propuestas sala={sala} yo={yo} />}
         {pestana === 'asistente' && <Asistente sala={sala} />}
       </div>

@@ -19,6 +19,8 @@ import { procPorId } from '../../shared/procedimientos.js'
 import { entregarRadio, enviarRadio, hacia, hayEmergencia, limitar, log, rendimiento, sis, tripulacion } from '../base.js'
 import { diasRestantes, retardoTexto } from '../../shared/medidores.js'
 import { DOLENCIAS, UMBRAL_AVERIA, despacharCola, lanzarEmergencia } from '../emergencies.js'
+import { bloqueDe, esHoraDeDormir } from '../../shared/horario.js'
+import { consumiblesTraje, minutosHastaVolver } from '../../shared/eva.js'
 import { desgasteDeber, dosisDeber, pasoDeberes, riesgoMedicoDeber } from '../deberes.js'
 import { ahora, azar, movidos } from '../reloj.js'
 import { actualizarAmbiente, enSuperficie, eventosSolaresPendientes, fraccionSolar, registroDelSol, sorteoTormentaPolvo, tasaDeDosis } from './ambiente.js'
@@ -188,7 +190,7 @@ function enTrabajo(room: RoomState, j: Player): boolean {
 }
 
 /**
- * Qué hace cada tripulante ahora. De noche (22:00 a 6:00) el cuerpo duerme si nadie lo mantiene
+ * Qué hace cada tripulante ahora. De noche (21:30 a 6:00, ver shared/horario.ts) el cuerpo duerme si nadie lo mantiene
  * despierto, pero nunca a una persona conectada que se mueve o está en un trabajo, ni a quien
  * acaban de despertar. A una persona conectada se le avisa antes (ver AVISO_SUENO_MS).
  */
@@ -203,7 +205,7 @@ function actividadDe(room: RoomState, j: Player, alerta: boolean): Actividad {
   // Moverse cuenta hasta ×600: más rápido, los 30 s reales de «se movió hace poco» serían días.
   const ocupado = humano && ((room.escala <= ESCALA_TRABAJO && movidos().has(j.id)) || enTrabajo(room, j))
   const desvelado = ahora() < (j.despiertoMs ?? 0) && room.t < (j.despiertoT ?? 0) + LIMITE_VIGILIA_S
-  if ((h >= 22 || h < 6) && !alerta && !ocupado && !desvelado) {
+  if (esHoraDeDormir(h) && !alerta && !ocupado && !desvelado) {
     if (!humano) return 'sueno'
     if (j.suenoAvisoMs === undefined) {
       j.suenoAvisoMs = ahora() + AVISO_SUENO_MS
@@ -215,8 +217,27 @@ function actividadDe(room: RoomState, j: Player, alerta: boolean): Actividad {
     delete j.suenoAvisoT
   }
   if (j.enRefugio) return 'reposo'
-  if (h >= 8 && h < 18) return 'trabajo'
+  // Los bloques de trabajo y las conferencias del horario del día (shared/horario.ts).
+  const tipo = bloqueDe(h).tipo
+  if (tipo === 'trabajo' || tipo === 'conferencia') return 'trabajo'
   return ocupado ? 'trabajo' : 'reposo'
+}
+
+/**
+ * Regla de vuelta: con el plan completo avisa cuando toca darse la vuelta (fin de la ventana de
+ * 6.5 h o consumibles justos para volver con 30 min de reserva); a todos, al llegar a la reserva.
+ */
+function avisosEva(room: RoomState, j: Player) {
+  const eva = j.eva!
+  const c = consumiblesTraje(j)
+  if (eva.plan === 'pareja' && !(eva.avisos & 1) && minutosHastaVolver(room, j) <= 0) {
+    eva.avisos |= 1
+    log(room, `${j.nombre}: time to turn back. ${Math.round(c.min)} minutes of ${c.limitante} left. Walk back now and keep the 30-minute reserve.`, 'alerta')
+  }
+  if (!(eva.avisos & 2) && c.min <= C.EVA_RESERVA_MIN) {
+    eva.avisos |= 2
+    log(room, `${j.nombre}: suit reserve reached. ${Math.round(c.min)} minutes of ${c.limitante} left. Go inside now.`, 'alerta')
+  }
 }
 
 function rescatar(room: RoomState, j: Player, motivo: string) {
@@ -359,7 +380,11 @@ function soporteVital(room: RoomState, dt: number, crew: Player[], superficie: b
         j.trajeO2 += carga
       }
       j.trajeBateria = Math.min(1, j.trajeBateria + dt / (2 * 3600))
+      // El absorbente de CO2 se cambia o se regenera en la esclusa (juego: al ritmo de la batería).
+      if ((j.trajeCO2 ?? 1) < 1) j.trajeCO2 = Math.min(1, (j.trajeCO2 ?? 1) + dt / (2 * 3600))
     }
+    if (j.zona === 'exterior' && j.eva) avisosEva(room, j)
+    else if (j.zona === 'nave' && j.eva && !room.procedimientos?.[`entrada:${j.id}`]) delete j.eva
 
     if (j.incapacitado <= 0 && j.vit.salud > 0) {
       const motivo = j.vit.spo2 < 78 ? 'passed out from lack of oxygen' : j.vit.salud < 12 ? 'collapsed' : j.vit.fatiga >= 99 ? 'ran out of strength from exhaustion' : null
@@ -723,6 +748,7 @@ function redondear(room: RoomState) {
     j.deficitKcal = r2(j.deficitKcal)
     j.trajeO2 = r5(j.trajeO2)
     j.trajeBateria = r5(j.trajeBateria)
+    if (j.trajeCO2 !== undefined) j.trajeCO2 = r5(j.trajeCO2)
   }
 }
 

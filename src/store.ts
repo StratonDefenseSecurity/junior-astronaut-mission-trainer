@@ -3,7 +3,7 @@ import type { ChatMsg, RoomState } from '@shared/types'
 
 export interface Usuario { id: string; nombre: string }
 export interface Toast { id: number; texto: string; tipo: 'error' | 'info' }
-export type Pestana = 'mision' | 'propuestas' | 'asistente'
+export type Pestana = 'mision' | 'hoy' | 'propuestas' | 'asistente'
 
 const leer = (clave: string) => {
   try {

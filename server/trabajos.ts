@@ -3,6 +3,7 @@
 // limpiar los paneles, tomar y analizar muestras y curar a un paciente. Los pasos y su
 // explicación real están en shared/procedimientos.ts; server/procedimientos.ts llama aquí.
 import { C } from '../shared/ciencia.js'
+import { companeroEva, objetivoEva } from '../shared/eva.js'
 import {
   CONDICIONES,
   DCS,
@@ -212,12 +213,16 @@ export function alTerminarTrabajo(room: RoomState, p: Procedimiento, j: Player) 
       alTerminarDeber(room, p, j)
       break
     case 'salida': {
-      if (v[2] === 'cuatro') j.vit.fatiga = limitar(j.vit.fatiga + 10, 0, 100)
-      if ((d.fuga ?? 0) > 0 && q[1] === 0) {
+      // Los pasos: 0 plan, 1 traje, 2 fugas, 3 prerrespiración...
+      if (v[3] === 'cuatro') j.vit.fatiga = limitar(j.vit.fatiga + 10, 0, 100)
+      const plan = String(v[0] ?? 'pareja')
+      const buddy = plan === 'solo' ? null : companeroEva(room, j.id)
+      j.eva = { plan, companero: buddy?.id ?? null, inicio: room.t, objetivo: objetivoEva(room), avisos: 0 }
+      if ((d.fuga ?? 0) > 0 && q[2] === 0) {
         j.trajeFuga = FUGA_TRAJE_KG_H
         log(room, `${j.nombre} went outside with a leaking suit. Its oxygen will run out sooner.`, 'alerta')
       }
-      const riesgo = RIESGO_DCS[String(v[2])] ?? 0
+      const riesgo = RIESGO_DCS[String(v[3])] ?? 0
       if (riesgo > 0 && azar(room) < riesgo && j.dolencia !== DCS) {
         j.vit.salud = limitar(j.vit.salud - 10, 0, 100)
         log(room, `${j.nombre} feels a deep pain in the knees and shoulders: decompression sickness, the bends. The prebreathe was too short.`, 'alerta')
@@ -231,6 +236,7 @@ export function alTerminarTrabajo(room: RoomState, p: Procedimiento, j: Player) 
         s.integridad = Math.max(20, s.integridad - 3)
         log(room, `${j.nombre} brought dust into the habitat. It clogs the filters of the CO2 Scrubber (${Math.round(s.integridad)}%).`, 'alerta')
       }
+      delete j.eva
       if (j.trajeFuga) {
         delete j.trajeFuga
         log(room, `The leak in ${j.nombre}'s suit was found in the airlock and the seal was replaced.`, 'ok')
