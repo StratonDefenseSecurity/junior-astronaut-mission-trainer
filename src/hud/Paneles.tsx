@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useGraficos } from '../graficos'
 import { ASCENSO, llamadaCuenta, proximoEvento } from '@shared/ascenso'
 import { C } from '@shared/ciencia'
+import { animo, pesoKg } from '@shared/comida'
 import { ESCALAS, ESCALA_MAXIMA, ROLES, ROLE_BY_ID, SITE_BY_ID, etiquetaTiempo, formatoHora, type Player, type RoomState } from '@shared/types'
 import { puede } from '../mundo/mapa'
 import { api } from '../red'
@@ -195,7 +196,7 @@ export function MiEstado({ sala, yo }: { sala: RoomState; yo: Player }) {
       <div className="medidores">
         <Dato etiqueta="Health" {...d(M.salud(yo))} barra={{ valor: v.salud }} />
         <Dato etiqueta="Hydration" {...d(M.hidratacion(yo))} barra={{ valor: v.hidratacion }} />
-        <Dato etiqueta="Energy" {...d(M.reservas(yo))} barra={{ valor: v.reservas }} nota="Body reserves, based on what you eat and burn" />
+        <Dato etiqueta="Energy" {...d(M.reservas(yo))} barra={{ valor: v.reservas }} nota={`Body reserves, based on what you eat and burn. Weight ${pesoKg(yo).toFixed(1)} kg. Mood: ${animo(sala, yo).texto}`} />
         <Dato etiqueta="Fatigue" {...d(M.fatiga(yo))} barra={{ valor: v.fatiga }} />
         <Dato etiqueta="Muscle and bone" {...d(M.condicion(yo))} barra={{ valor: v.condicion }} nota="Lost without gravity and exercise" />
         <Dato

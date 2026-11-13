@@ -376,6 +376,8 @@ export interface Player {
   trajeBateria: number
   /** Absorbente de CO2 que le queda al traje, 0 a 1 (sin valor = lleno). */
   trajeCO2?: number
+  /** Luces del traje: focos del casco y linterna de mano (sin valor = apagadas). */
+  luces?: { casco: boolean; mano: boolean }
   /** La salida en curso: plan elegido, compañero, cuándo salió y qué avisos ya se dieron. */
   eva?: { plan: string; companero: string | null; inicio: number; objetivo: string; avisos: number }
   enRefugio: boolean
@@ -482,6 +484,11 @@ export interface Ambiente {
   /** Dosis de fondo actual, mSv por día. */
   radiacion: number
   tormentaSolar: TormentaSolar | null
+  /** Salida y puesta del Sol de hoy según el registro de Curiosity, hora local (solo en Marte). */
+  amanecer?: number
+  atardecer?: number
+  /** Longitud solar (estación) del registro de hoy, grados. */
+  ls?: number
 }
 
 export interface Vuelo {
@@ -511,6 +518,10 @@ export interface Ajustes {
   ejercicio: number
   /** Qué se apaga último cuando falta energía. */
   prioridad: 'vida' | 'calor' | 'ciencia'
+  /** Plan de comidas: extra para quien sale con traje o está enfermo (sin valor = sí). */
+  comidaExtra?: boolean
+  /** Focos exteriores del hábitat encendidos de noche (sin valor = sí). */
+  focosBase?: boolean
 }
 
 export type ProposalType = 'ubicacion' | 'racionComida' | 'racionAgua' | 'equipo' | 'refugio' | 'ejercicio' | 'prioridad' | 'emergencia'
@@ -733,6 +744,19 @@ export interface EfectosMontaje {
   ogaKgDia?: number
   /** kPa de CO2 a los que salta la alarma. */
   alarmaCO2?: number
+  // ---- Obras de la base en operación (ver OBRAS en shared/procedimientos.ts) ----
+  /** 1 si el módulo inflable quedó presurizado y en uso. */
+  modulo?: number
+  /** cm de bolsas de regolito sobre el refugio. */
+  regolitoCm?: number
+  /** Distancia de la plataforma de aterrizaje al hábitat, m, y 1 cuando ya aterrizó el carguero. */
+  pistaM?: number
+  carguero?: number
+  /** Antena de alta ganancia: hacia dónde quedó (grados), error de apuntado y si sigue a la Tierra. */
+  antenaAz?: number
+  antenaEl?: number
+  antenaError?: number
+  antenaSigue?: number
 }
 
 export type CultivoId = 'lechuga' | 'mizuna' | 'rabano' | 'chile'

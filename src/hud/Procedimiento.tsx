@@ -1,7 +1,7 @@
 // Procedimientos por pasos en la estación: cómo se hace en la vida real, la lista de pasos con
 // quién hizo cada uno y la interacción del paso que toca. Cada tipo de paso se hace de verdad:
 // mantener pulsado, tocar en orden, ajustar un valor, elegir o leer un instrumento.
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   activos,
   disponible,
@@ -29,6 +29,23 @@ import { Barra } from './comun'
 
 interface Aviso { tipo: 'ok' | 'warn' | 'bad'; texto: string }
 type Enviar = (valor: unknown) => Promise<void>
+
+/**
+ * Orden en que se muestran los elementos de un paso: barajado, pero el mismo para toda la
+ * tripulación y en cada repintado, porque solo depende de la semilla (la sala, el procedimiento,
+ * cuándo empezó y el paso). Cada id tiene su propia cifra, así que no importa en qué orden lleguen.
+ */
+function barajar<T extends { id: string }>(items: T[], semilla: string): T[] {
+  const cifra = (id: string) => {
+    let h = 2166136261
+    const t = `${semilla}|${id}`
+    for (let i = 0; i < t.length; i++) h = Math.imul(h ^ t.charCodeAt(i), 16777619)
+    h = Math.imul(h ^ (h >>> 15), 2246822507)
+    h = Math.imul(h ^ (h >>> 13), 3266489909)
+    return (h ^ (h >>> 16)) >>> 0
+  }
+  return items.map((it) => ({ it, c: cifra(it.id) })).sort((a, b) => a.c - b.c).map((x) => x.it)
+}
 
 /** Calidad a partir de la cual un paso cuenta como hecho "como un experto". */
 const EXPERTO = 0.8
@@ -130,8 +147,15 @@ function Mantener({ paso, enviar, activo }: { paso: PasoMantener; enviar: Enviar
 
 // ---------- Tocar en orden ----------
 
-function Secuencia({ paso, enviar, activo, avisar }: { paso: PasoSecuencia; enviar: Enviar; activo: boolean; avisar: (a: Aviso) => void }) {
+function Secuencia({ paso, enviar, activo, avisar, semilla }: { paso: PasoSecuencia; enviar: Enviar; activo: boolean; avisar: (a: Aviso) => void; semilla: string }) {
   const [orden, setOrden] = useState<string[]>([])
+  // Cambia el orden en pantalla, no la secuencia correcta. Si al barajar sale justo un orden
+  // válido, se corre uno para que la pantalla no dé la respuesta.
+  const elementos = useMemo(() => {
+    const b = barajar(paso.elementos, semilla)
+    const delata = b.length > 1 && paso.ordenes.some((o) => o.every((id, i) => b[i]?.id === id))
+    return delata ? [...b.slice(1), b[0]] : b
+  }, [paso.elementos, paso.ordenes, semilla])
   const [errores, setErrores] = useState(0)
   useEffect(() => {
     setOrden([])
@@ -151,7 +175,7 @@ function Secuencia({ paso, enviar, activo, avisar }: { paso: PasoSecuencia; envi
   }
   return (
     <div className="proc-secuencia">
-      {paso.elementos.map((el) => {
+      {elementos.map((el) => {
         const n = orden.indexOf(el.id)
         return (
           <button key={el.id} className={`opcion ${n >= 0 ? 'activa' : ''}`} disabled={!activo || n >= 0} onClick={() => tocar(el.id)}>
@@ -199,10 +223,10 @@ function Ajustar({ paso, enviar, activo }: { paso: PasoAjustar; enviar: Enviar; 
 
 // ---------- Elegir ----------
 
-function Elegir({ sala, paso, enviar, activo }: { sala: RoomState; paso: PasoElegir; enviar: Enviar; activo: boolean }) {
+function Elegir({ sala, paso, enviar, activo, semilla }: { sala: RoomState; paso: PasoElegir; enviar: Enviar; activo: boolean; semilla: string }) {
   return (
     <div className="opciones">
-      {paso.opciones(sala).map((o) => (
+      {barajar(paso.opciones(sala), semilla).map((o) => (
         <button key={o.id} className="opcion" disabled={!activo} onClick={() => void enviar(o.id)}>
           <strong>{o.texto}</strong>
         </button>
@@ -278,17 +302,17 @@ function Comprobar({ sala, paso, enviar, activo }: { sala: RoomState; paso: Paso
 
 // ---------- Un procedimiento ----------
 
-function Interaccion(props: { sala: RoomState; paso: Paso; enviar: Enviar; activo: boolean; avisar: (a: Aviso) => void }) {
+function Interaccion(props: { sala: RoomState; paso: Paso; enviar: Enviar; activo: boolean; avisar: (a: Aviso) => void; semilla: string }) {
   const { paso } = props
   switch (paso.tipo) {
     case 'mantener':
       return <Mantener paso={paso} enviar={props.enviar} activo={props.activo} />
     case 'secuencia':
-      return <Secuencia paso={paso} enviar={props.enviar} activo={props.activo} avisar={props.avisar} />
+      return <Secuencia paso={paso} enviar={props.enviar} activo={props.activo} avisar={props.avisar} semilla={props.semilla} />
     case 'ajustar':
       return <Ajustar paso={paso} enviar={props.enviar} activo={props.activo} />
     case 'elegir':
-      return <Elegir sala={props.sala} paso={paso} enviar={props.enviar} activo={props.activo} />
+      return <Elegir sala={props.sala} paso={paso} enviar={props.enviar} activo={props.activo} semilla={props.semilla} />
     case 'comprobar':
       return <Comprobar sala={props.sala} paso={paso} enviar={props.enviar} activo={props.activo} />
   }
@@ -379,7 +403,7 @@ function Tarjeta({ sala, yo, proc, paso, remoto, alTerminar }: { sala: RoomState
         <p className="mini muted">Why: {def.porque}</p>
         {mio ? (
           <>
-            <Interaccion key={`${proc.id}:${paso}`} sala={sala} paso={def} enviar={enviar} activo={activo} avisar={setAviso} />
+            <Interaccion key={`${proc.id}:${paso}`} sala={sala} paso={def} enviar={enviar} activo={activo} avisar={setAviso} semilla={`${sala.codigo}:${proc.id}:${e ? `${e.terminado ? 'n' : ''}${e.inicio}` : 0}:${def.id}`} />
             {motivo && <span className="mini warn">{motivo}</span>}
           </>
         ) : (

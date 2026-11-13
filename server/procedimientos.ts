@@ -10,11 +10,18 @@
 import {
   ALMOHADILLAS,
   CULTIVO_BY_ID,
+  DISTANCIA_PISTA,
   DOSIS_REACTOR,
+  O2_MODULO_KG,
+  OBRAS,
   HUMEDAD_IDEAL,
   HUMEDAD_POR_ML,
   LUZ_HUERTO,
+  ANTENA_LIMITE_GRADOS,
   activos,
+  apunteAntena,
+  errorAntena,
+  tierraEnCielo,
   cultivoDe,
   disponible,
   evaluarPaso,
@@ -26,6 +33,7 @@ import {
   valorDeExperto,
   type Procedimiento,
 } from '../shared/procedimientos.js'
+import { C } from '../shared/ciencia.js'
 import { ROLE_BY_ID, TAREAS_ENSAMBLAJE, type CultivoId, type EstadoProcedimiento, type Player, type Role, type RoomState, type SistemaId, type Zona } from '../shared/types.js'
 import { despertarJugador, jugador, limitar, log, puedeActuar, sis, tripulacion } from './base.js'
 import { anotarFin, anotarPaso } from './aprendizaje.js'
@@ -67,6 +75,13 @@ function noDisponible(room: RoomState, p: Procedimiento): string {
     if (room.ensamblaje.hechas[t.id] || t.paso < room.ensamblaje.paso) return 'That task is already done.'
     return 'It is not time for that task yet.'
   }
+  if ((OBRAS as readonly string[]).includes(p.id)) {
+    if (room.fase !== 'base') return 'This is built once the base is running.'
+    if (room.procedimientos?.[p.id]?.terminado) return 'That is already built.'
+    if (room.ambiente.tormentaSolar || room.ambiente.tormentaPolvo) return 'Wait until the storm is over to work outside.'
+    if (p.id === 'antenaAlta' && room.procedimientos?.antenaAlta?.paso === 1) return 'Earth is below the horizon. Wait until it rises.'
+    return 'Outside work starts in daylight, between 7:00 and 17:00.'
+  }
   if (p.id === 'huerto') {
     if (room.cargamento.huerto < 1) return 'The crew did not bring the garden kit.'
     if (room.huerto.establecido) return 'The garden is already set up.'
@@ -78,6 +93,11 @@ function noDisponible(room: RoomState, p: Procedimiento): string {
 function prepararPaso(room: RoomState, p: Procedimiento, i: number) {
   const def = p.pasos[i]
   const e = room.procedimientos?.[p.id]
+  // La antena se apunta con las efemérides de un instante fijo, para que no se muevan mientras se ajusta.
+  if (p.id === 'antenaAlta' && i === 1 && e && (e.datos ??= {}).tApunte === undefined && tierraEnCielo(room).el >= 5) {
+    e.datos.tApunte = room.t
+    e.datos.horaApunte = room.ambiente.hora
+  }
   if (!def || def.tipo !== 'comprobar' || !e) return
   const d = (e.datos ??= {})
   if (d.semilla !== undefined) return
@@ -87,6 +107,10 @@ function prepararPaso(room: RoomState, p: Procedimiento, i: number) {
     // Un sello mal preparado deja más posibilidades de fuga (modelo del juego).
     const sello = e.calidad[0] ?? 1
     const prob = limitar(0.3 + (1 - sello) * 1.5, 0, 0.9)
+    d.fuga = d.reintento ? 0 : azar(room) < prob ? 1 : 0
+  } else if (p.id === 'inflable') {
+    // Un suelo mal despejado o un inflado de golpe dejan más posibilidades de fuga (modelo del juego).
+    const prob = limitar(0.15 + (1 - (e.calidad[0] ?? 1)) * 0.5 + (1 - (e.calidad[1] ?? 1)) * 0.4, 0, 0.9)
     d.fuga = d.reintento ? 0 : azar(room) < prob ? 1 : 0
   } else if (p.id === 'revisionExt') {
     const duro = (room.avisos.desvio ?? 0) > 0
@@ -107,6 +131,18 @@ function alHacerPaso(room: RoomState, p: Procedimiento, i: number, j: Player, va
     log(room, p.id === 'energia' ? `There were voltage spikes from powering up out of order. The Power Plant is now at ${Math.round(s.integridad)}%.` : `The Oxygen Generator started without water. It is now at ${Math.round(s.integridad)}%.`, 'alerta')
   }
   if (p.id === 'huerto') room.huerto.progreso = Math.round(((i + 1) / p.pasos.length) * 100)
+  // Fuga en el módulo inflable: se busca, se sella y se vuelve a inflar (sin volver a salir).
+  if (p.id === 'inflable' && id === 'fugas' && valor === 'falla') {
+    room.procedimientos![p.id] = { paso: 2, calidad: e.calidad.slice(0, 2), por: e.por.slice(0, 2), valores: (e.valores ?? []).slice(0, 2), inicio: e.inicio, terminado: false, datos: { reintento: 1 } }
+    log(room, `${j.nombre} found a leak in the inflatable module. The seam is sealed and the module inflated again.`, 'alerta')
+    return true
+  }
+  // Señal débil: se vuelve a apuntar con efemérides nuevas.
+  if (p.id === 'antenaAlta' && id === 'senal' && valor === 'falla') {
+    room.procedimientos![p.id] = { paso: 1, calidad: e.calidad.slice(0, 1), por: e.por.slice(0, 1), valores: (e.valores ?? []).slice(0, 1), inicio: e.inicio, terminado: false, datos: {} }
+    log(room, `${j.nombre} found the signal too weak. The dish has to be pointed again.`, 'alerta')
+    return true
+  }
   if (p.id === 'revisionInt' && id === 'caida' && valor === 'falla') {
     // Fuga encontrada: se busca, se limpia el sello y se repite la prueba.
     room.procedimientos![p.id] = { paso: 0, calidad: [], por: [], valores: [], inicio: e.inicio, terminado: false, datos: { reintento: 1 } }
@@ -181,6 +217,56 @@ function alTerminar(room: RoomState, p: Procedimiento, j: Player) {
         }
       }
       break
+    case 'inflable': {
+      // El aire del módulo sale de los tanques: el oxígeno para 21.3 kPa en 16 m³.
+      room.rec.o2 = Math.max(0, room.rec.o2 - O2_MODULO_KG)
+      ef.modulo = 1
+      if ((e.datos?.fuga ?? 0) > 0 && e.calidad[3] === 0) {
+        room.cabina.fuga = Math.max(room.cabina.fuga, 0.03)
+        log(room, 'The leak check was marked as passed, but the module is slowly losing air.', 'alerta')
+      }
+      if (v[4] === 'abrir') for (const x of tripulacion(room)) x.vit.fatiga = limitar(x.vit.fatiga + 3, 0, 100)
+      log(room, `Inflatable module open: ${C.MODULO_M3} m³ more, with private sleeping space. Filling it used ${O2_MODULO_KG} kg of oxygen from the tanks.`, 'ok')
+      break
+    }
+    case 'regolito': {
+      const cm = Math.round(Number(v[2]) * (v[0] === 'rocas' ? 0.85 : 1))
+      ef.regolitoCm = cm
+      const k = Math.min(1, cm / C.REGOLITO_CM_UTIL)
+      // Cada centímetro son bolsas que se llenan con el traje puesto (modelo del juego).
+      j.vit.fatiga = limitar(j.vit.fatiga + Number(v[2]) * 0.6, 0, 100)
+      log(room, `${cm} cm of regolith over the Storm Shelter. Inside it, a solar storm dose drops ${pct(C.REGOLITO_SPE * k)} and cosmic rays ${pct(C.REGOLITO_GCR * k)}.`, k < 0.7 ? 'alerta' : 'ok')
+      break
+    }
+    case 'pista': {
+      const m = DISTANCIA_PISTA[String(v[0])] ?? C.PISTA_SEGURA_M
+      ef.pistaM = m
+      ef.carguero = 1
+      // Lo que lanza el motor al aterrizar: más cerca y con piedras sueltas, más daño (modelo del juego).
+      const sucio = (e.calidad[1] ?? 1) < 0.8 || (e.calidad[2] ?? 1) < 0.8 ? 1.5 : 1
+      const fuerza = (m <= C.APOLLO12_M ? 1 : m < C.PISTA_SEGURA_M ? 0.3 : 0.04) * sucio
+      room.energia.polvo = Math.min(0.9, room.energia.polvo + 0.2 * fuerza)
+      if (fuerza >= 0.5) {
+        ef.solar = r2((ef.solar ?? 1) * 0.95)
+        const t = sis(room, 'termico')
+        t.integridad = Math.max(20, t.integridad - 10)
+      }
+      const fuera = tripulacion(room).filter((x) => x.zona === 'exterior')
+      if (v[3] !== 'dentro') for (const x of fuera) x.vit.salud = Math.max(1, x.vit.salud - 10 * fuerza - 3)
+      room.rec.repuestos += 2
+      log(room, `The cargo lander touched down ${m} m from the base and left 2 spare parts kits.${fuerza >= 0.5 ? ' Its blast sandblasted the solar arrays and the hull.' : fuerza > 0.1 ? ' Fine dust reached the solar arrays.' : ' The base was out of reach of the spray.'}`, fuerza > 0.1 ? 'alerta' : 'ok')
+      break
+    }
+    case 'antenaAlta': {
+      const a = apunteAntena(room)
+      ef.antenaAz = Math.round(a.az)
+      ef.antenaEl = Math.round(a.el)
+      ef.antenaError = errorAntena(room)
+      ef.antenaSigue = v[4] === 'efemerides' ? 1 : 0
+      const ok = ef.antenaSigue === 1 && ef.antenaError <= ANTENA_LIMITE_GRADOS
+      log(room, ok ? 'The high-gain antenna follows Earth. Messages come straight from Earth while it is above the horizon.' : 'The high-gain antenna does not hold Earth in its beam. Messages still wait for an orbiter pass.', ok ? 'ok' : 'alerta')
+      break
+    }
     case 'huerto': {
       const cultivo = (CULTIVO_BY_ID[v[0] as CultivoId] ? v[0] : 'lechuga') as CultivoId
       const humedad = Math.min(100, Number(v[4]) * HUMEDAD_POR_ML)
@@ -263,7 +349,7 @@ function alTerminar(room: RoomState, p: Procedimiento, j: Player) {
   anotarFin(room, j, p.id)
   const media = e.calidad.length ? e.calidad.reduce((a, b) => a + b, 0) / e.calidad.length : 1
   const expertos = e.calidad.filter((q) => q >= 0.8).length
-  if (p.tarea || p.id === 'huerto') log(room, `${p.titulo}: done. ${expertos} of ${p.pasos.length} steps done like an expert.`, media < 0.8 ? 'alerta' : 'ok')
+  if (p.tarea || p.id === 'huerto' || (OBRAS as readonly string[]).includes(p.id)) log(room, `${p.titulo}: done. ${expertos} of ${p.pasos.length} steps done like an expert.`, media < 0.8 ? 'alerta' : 'ok')
   e.terminado = true
   // Los que se repiten vuelven a empezar de cero la próxima vez.
   if (p.recurrente) delete room.procedimientos![p.id]

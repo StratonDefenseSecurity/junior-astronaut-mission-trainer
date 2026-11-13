@@ -21,6 +21,8 @@ import { diasRestantes, retardoTexto } from '../../shared/medidores.js'
 import { DOLENCIAS, UMBRAL_AVERIA, despacharCola, lanzarEmergencia } from '../emergencies.js'
 import { bloqueDe, esHoraDeDormir } from '../../shared/horario.js'
 import { consumiblesTraje, minutosHastaVolver } from '../../shared/eva.js'
+import { extraKcalDia } from '../../shared/comida.js'
+import { cargaLucesKw, cargaTraje, oscuro, riesgoCaidaH } from '../../shared/noche.js'
 import { desgasteDeber, dosisDeber, pasoDeberes, riesgoMedicoDeber } from '../deberes.js'
 import { ahora, azar, movidos } from '../reloj.js'
 import { actualizarAmbiente, enSuperficie, eventosSolaresPendientes, fraccionSolar, registroDelSol, sorteoTormentaPolvo, tasaDeDosis } from './ambiente.js'
@@ -229,7 +231,7 @@ function actividadDe(room: RoomState, j: Player, alerta: boolean): Actividad {
  */
 function avisosEva(room: RoomState, j: Player) {
   const eva = j.eva!
-  const c = consumiblesTraje(j)
+  const c = consumiblesTraje(j, room)
   if (eva.plan === 'pareja' && !(eva.avisos & 1) && minutosHastaVolver(room, j) <= 0) {
     eva.avisos |= 1
     log(room, `${j.nombre}: time to turn back. ${Math.round(c.min)} minutes of ${c.limitante} left. Walk back now and keep the 30-minute reserve.`, 'alerta')
@@ -288,7 +290,10 @@ function energiaYCalor(room: RoomState, dt: number, crew: Player[], superficie: 
   }
   if (funcional('huerto') && room.huerto.progreso > 0) kw.huerto = a.hora >= 6 && a.hora < 20 ? 2 : 0.3
   if (superficie && funcional('isru')) kw.isru = 3
-  const sinCalor = CARGA_BASE_KW + Object.values(kw).reduce((x, y) => x + (y ?? 0), 0)
+  // Luces del hábitat y, de noche, los focos exteriores.
+  const luces = cargaLucesKw(room)
+  const fija = CARGA_BASE_KW + luces.habitat + luces.focos
+  const sinCalor = fija + Object.values(kw).reduce((x, y) => x + (y ?? 0), 0)
   if (funcional('termico')) {
     // El calor que desprenden los equipos y las personas ya calienta la cabina.
     const pasivo = 0.6 * sinCalor + 0.1 * dentro
@@ -296,7 +301,7 @@ function energiaYCalor(room: RoomState, dt: number, crew: Player[], superficie: 
   }
 
   // Con la tensión del bus por debajo de lo debido, los equipos piden más corriente y se pierde más en calor.
-  let consumo = (CARGA_BASE_KW + Object.values(kw).reduce((x, y) => x + (y ?? 0), 0)) * (superficie ? (room.efectos?.perdidaBus ?? 1) : 1)
+  let consumo = (fija + Object.values(kw).reduce((x, y) => x + (y ?? 0), 0)) * (superficie ? (room.efectos?.perdidaBus ?? 1) : 1)
   const cortes: SistemaId[] = []
   if (e.bateria <= 0.001 && generacion < consumo) {
     for (const id of ORDEN_CORTE[room.ajustes.prioridad]) {
@@ -332,6 +337,24 @@ function energiaYCalor(room: RoomState, dt: number, crew: Player[], superficie: 
 
 // ---------- Cuerpos, aire, agua y comida ----------
 
+/**
+ * De noche el suelo no se ve: sin luces se puede caer. Los bots siguen la misma regla que una
+ * persona y encienden los focos del casco cuando oscurece (y los apagan de día, que gastan batería).
+ */
+function caminarDeNoche(room: RoomState, j: Player, dt: number) {
+  if (j.bot) {
+    const noche = oscuro(room)
+    if (Boolean(j.luces?.casco) !== noche) j.luces = { casco: noche, mano: false }
+  }
+  const riesgo = riesgoCaidaH(room, j)
+  if (riesgo <= 0 || j.dolencia || j.incapacitado > 0) return
+  if (azar(room) < 1 - Math.exp((-riesgo * dt) / 3600)) {
+    j.vit.salud = limitar(j.vit.salud - 6, 0, 100)
+    log(room, `${j.nombre} fell in the dark: no lights on. Turn on the helmet lights at night.`, 'alerta')
+    lanzarEmergencia(room, 'medico', { jugadorId: j.id, nombre: j.nombre, dolencia: 'a sprained ankle from a fall in the dark' })
+  }
+}
+
 function soporteVital(room: RoomState, dt: number, crew: Player[], superficie: boolean, alerta: boolean) {
   const c = room.cabina
   const r = room.rec
@@ -359,7 +382,11 @@ function soporteVital(room: RoomState, dt: number, crew: Player[], superficie: b
       aguaDisponible: r.agua / quedan,
       comidaDisponible: r.comida / quedan,
       racionComida: racion,
+      extraKcalDia: extraKcalDia(room, j),
+      factorBateria: j.zona === 'exterior' ? cargaTraje(room, j).total : 1,
       ejercicio: room.ajustes.ejercicio,
+      // El módulo inflable da sitio privado para dormir: se descansa mejor (valor del juego).
+      descanso: superficie && room.efectos?.modulo ? 1.1 : 1,
       // El reactor, si quedó cerca del hábitat, suma su radiación a la del ambiente.
       dosisTasa: tasaDeDosis(room, j.zona, j.enRefugio) * dosisDeber(room) + (superficie ? (room.efectos?.reactorDosis ?? 0) : 0),
       alerta,
@@ -370,6 +397,7 @@ function soporteVital(room: RoomState, dt: number, crew: Player[], superficie: b
     r.agua = Math.max(0, r.agua - cons.agua)
     r.comida = Math.max(0, r.comida - cons.comida)
     if (cons.trajeAgotado) rescatar(room, j, 'ran out of life support in the suit')
+    if (j.zona === 'exterior') caminarDeNoche(room, j, dt)
 
     // Dentro, la esclusa recarga el traje.
     if (j.zona === 'nave' && esclusa) {

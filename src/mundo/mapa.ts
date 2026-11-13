@@ -44,6 +44,10 @@ export const ESTACIONES: Estacion[] = [
   { id: 'carga', zona: 'exterior', nombre: 'Cargo Area', x: 17, z: 10, radio: 1.6 },
   { id: 'antena', zona: 'exterior', nombre: 'Antenna & Hull', x: -12.5, z: -7, radio: 0.7 },
   { id: 'isruExt', zona: 'exterior', nombre: 'Ice Extractor', x: -17, z: 12, radio: 1.3, sistemas: ['isru'] },
+  // Obras de la base en operación (shared/procedimientos.ts, OBRAS).
+  { id: 'modulo', zona: 'exterior', nombre: 'Inflatable Module', x: -5.6, z: 6.2, radio: 0 },
+  { id: 'techoRefugio', zona: 'exterior', nombre: 'Shelter Roof', x: 4.7, z: 4.9, radio: 0 },
+  { id: 'pista', zona: 'exterior', nombre: 'Landing Pad', x: 33, z: 24, radio: 1.2 },
   { id: 'muestra1', zona: 'exterior', nombre: 'Sample Site 1', x: 25, z: 5, radio: 0 },
   { id: 'muestra2', zona: 'exterior', nombre: 'Sample Site 2', x: -23, z: -5, radio: 0 },
   { id: 'muestra3', zona: 'exterior', nombre: 'Sample Site 3', x: 7, z: 27, radio: 0 },
@@ -219,6 +223,10 @@ export function estacionVisible(sala: RoomState, id: string): boolean {
     case 'esclusa':
     case 'esclusaExt':
       return true
+    case 'modulo':
+    case 'techoRefugio':
+    case 'pista':
+      return sala.fase === 'base' || Boolean(sala.procedimientos?.[id === 'modulo' ? 'inflable' : id === 'techoRefugio' ? 'regolito' : 'pista']?.terminado)
     default:
       if (id.startsWith('muestra')) return sala.fase === 'base' && !sala.muestreos.includes(id)
       return true

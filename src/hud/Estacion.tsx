@@ -23,7 +23,10 @@ import { api } from '../red'
 import { useStore } from '../store'
 import { useVoz, voz } from '../voz'
 import { Procedimientos, Trabajo } from './Procedimiento'
+import { BotonGuia, GuiaBase, InfoEnlace, InfoObra, ObrasBase } from './GuiaBase'
 import * as M from '@shared/medidores'
+import { FACTOR_RACION, animo, conExtras, kgSemana, necesidadKcal, pesoKg, planKcal } from '@shared/comida'
+import { FOCOS_KW, LUZ_GUARDIA_KW, LUZ_HABITAT_KW, cargaLucesKw, cargaTraje, oscuro, solDeSala } from '@shared/noche'
 import { Barra, Dato, RolTag, diasRestantes, diasTexto, enMarte, energiaUsada, nivel, roles, tiempoEnEspacio, type Nivel } from './comun'
 
 interface P {
@@ -258,6 +261,9 @@ function Energia({ sala, yo }: P) {
         </p>
         {e.cortes.length > 0 && <div className="help">No power: {e.cortes.map((id) => nombreSistema(id)).join(', ')}.</div>}
       </Seccion>
+      <Seccion titulo="Lights">
+        <LucesBase sala={sala} yo={yo} />
+      </Seccion>
       <Seccion titulo="What to protect if power runs low">
         <Opciones
           actual={sala.ajustes.prioridad}
@@ -275,6 +281,102 @@ function Energia({ sala, yo }: P) {
       <Seccion titulo="Power Plant">
         <Equipo sala={sala} yo={yo} id="energia" aqui={!enMarte(sala)} />
       </Seccion>
+    </>
+  )
+}
+
+/** Luces del hábitat y focos exteriores: lo que cuestan y para qué sirven. */
+function LucesBase({ sala }: P) {
+  const l = cargaLucesKw(sala)
+  const marte = enMarte(sala)
+  const encendidos = sala.ajustes.focosBase !== false
+  return (
+    <>
+      <p className="mini">
+        Habitat lights use {M.kw(l.habitat)} now ({LUZ_HABITAT_KW} kW with the crew awake, {LUZ_GUARDIA_KW} kW while all sleep).
+        {marte ? ` Floodlights use ${M.kw(l.focos)} now.` : ''}
+      </p>
+      {marte && (
+        <>
+          <div className="row" style={{ gap: 6 }}>
+            <button className={`small ${encendidos ? 'primary' : ''}`} aria-pressed={encendidos} onClick={() => api.accion('focosBase', { encender: !encendidos })}>
+              {encendidos ? 'Floodlights on at night' : 'Floodlights off'}
+            </button>
+          </div>
+          <p className="mini muted">
+            The floodlights cost {FOCOS_KW} kW of base power through the night. They light the ground near the habitat, so crew there walk at normal speed and fall half as often. Off, they save about {Math.round(FOCOS_KW * 12)} kWh per night.
+          </p>
+        </>
+      )}
+    </>
+  )
+}
+
+/** Plan de comidas: kcal reales por persona y día, el extra para salidas y enfermos, y lo que la ración le hace al cuerpo. */
+function PlanComidas({ sala, yo }: P) {
+  const manda = puede(sala, yo, ['logistica', 'comandante'])
+  const pendiente = hayPropuesta(sala, 'racionComida')
+  const extras = conExtras(sala)
+  const crew = sala.jugadores.filter((j) => j.rol)
+  const kcal = (n: number) => `${n.toLocaleString('en-US')} kcal`
+  const semana = (kg: number) => (Math.abs(kg) < 0.05 ? 'Keeps weight' : `${kg > 0 ? '+' : ''}${kg.toFixed(1)} kg a week`)
+  const ref = crew[0] ?? yo
+  return (
+    <>
+      <p className="mini">
+        NASA asks for {kcal(C.MENU_KCAL_DIA)} per person per day on average, and {C.EVA_KCAL_H} kcal more for each hour of spacewalk. On the ISS, crews ate only about 80% of what they needed and lost weight.
+      </p>
+      <Opciones
+        actual={sala.ajustes.racionComida}
+        permitido={manda}
+        pendiente={pendiente}
+        onElegir={(nivel_) => api.accion('racionComida', { nivel: nivel_ })}
+        opciones={(['normal', 'ahorro', 'estricto'] as const).map((n) => ({
+          valor: n,
+          nombre: n === 'normal' ? `Full menu · ${kcal(planKcal(sala, ref, n, false))}` : n === 'ahorro' ? `Saving (80%) · ${kcal(planKcal(sala, ref, n, false))}` : `Strict (60%) · ${kcal(planKcal(sala, ref, n, false))}`,
+          nota:
+            n === 'normal'
+              ? `${C.COMIDA_KG_DIA} kg of ISS food per person per day. Weight holds.`
+              : `Food lasts ${Math.round((1 / FACTOR_RACION[n] - 1) * 100)}% longer. ${semana(kgSemana(sala, ref, n, false))} per person. Fatigue builds faster and mood drops.`,
+        }))}
+      />
+      <Opciones
+        actual={extras ? 'si' : 'no'}
+        permitido={manda}
+        pendiente={pendiente}
+        onElegir={(v) => api.accion('racionComida', { nivel: sala.ajustes.racionComida, extras: v === 'si' })}
+        opciones={[
+          { valor: 'si', nombre: 'Extra for EVA and sick crew', nota: `+${C.EVA_KCAL_H} kcal per hour outside, as NASA requires. +10% while sick or injured.` },
+          { valor: 'no', nombre: 'Same for everyone', nota: 'Saves a little food. Spacewalkers and sick crew lose weight faster.' },
+        ]}
+      />
+      <table className="tabla">
+        <thead>
+          <tr><th></th><th>Needs</th><th>Gets</th><th>Weight</th><th>Mood</th></tr>
+        </thead>
+        <tbody>
+          {crew.map((j) => {
+            const necesita = necesidadKcal(j)
+            const recibe = planKcal(sala, j)
+            const kg = kgSemana(sala, j)
+            const fuera = j.zona === 'exterior'
+            const a = animo(sala, j)
+            return (
+              <tr key={j.id}>
+                <td>{j.nombre}{fuera ? ' · EVA' : ''}{j.dolencia || j.incapacitado > 0 ? ' · sick' : ''}</td>
+                <td className="mono">{kcal(necesita)}{fuera ? ` +${C.EVA_KCAL_H}/h` : ''}</td>
+                <td className={`mono ${nivel(recibe < necesita * 0.75, recibe < necesita * 0.97)}`}>{kcal(recibe)}{fuera && extras ? ` +${C.EVA_KCAL_H}/h` : ''}</td>
+                <td className="mono">{pesoKg(j).toFixed(1)} kg<br /><small>{semana(kg)}</small></td>
+                <td className={a.tono}>{a.texto}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+      <p className="mini muted">
+        Each 7,700 kcal missing is about 1 kg of body weight. Losing weight makes fatigue build faster: 6% for each 1% of body weight. In the Minnesota study, months of hunger brought low mood, constant thoughts of food and withdrawal.
+      </p>
+      {!manda && <Reservado a={['logistica', 'comandante']} />}
     </>
   )
 }
@@ -310,18 +412,8 @@ function Almacen({ sala, yo }: P) {
         </table>
         <p className="mini muted">{Math.round(faltan)} mission days to go. In red: what will run out at the current rate.</p>
       </Seccion>
-      <Seccion titulo="Food ration">
-        <Opciones
-          actual={sala.ajustes.racionComida}
-          permitido={manda}
-          pendiente={hayPropuesta(sala, 'racionComida')}
-          onElegir={(nivel_) => api.accion('racionComida', { nivel: nivel_ })}
-          opciones={[
-            { valor: 'normal', nombre: 'Full', nota: `${C.COMIDA_KG_DIA} kg per person per day.` },
-            { valor: 'ahorro', nombre: 'Saving (80%)', nota: 'Lasts 25% longer. Body reserves drop little by little.' },
-            { valor: 'estricto', nombre: 'Strict (60%)', nota: 'Lasts 67% longer. Within weeks it hurts health.' },
-          ]}
-        />
+      <Seccion titulo="Meal plan">
+        <PlanComidas sala={sala} yo={yo} />
       </Seccion>
       <Seccion titulo="Water use">
         <Opciones
@@ -474,6 +566,10 @@ function Laboratorio({ sala, yo }: P) {
           </>
         )}
       </Seccion>
+      <Seccion titulo="Base building">
+        <p className="mini">How a real Mars base is set up, and which phases your crew does.</p>
+        <BotonGuia />
+      </Seccion>
       <Seccion titulo="Soil samples">
         <p className="mini">Analyzed: {sala.mision.muestrasAnalizadas} of {sala.mision.muestrasObjetivo}. You are carrying {yo.muestras} not yet analyzed.</p>
         <Trabajar sala={sala} yo={yo} procId={`analizar:${yo.id}`} />
@@ -537,6 +633,7 @@ function Esclusa({ sala, yo }: P) {
           <Dato etiqueta="Suit battery" valor={bat.texto} tono={bat.tono} barra={{ valor: bat.valor }} />
         </div>
         <p className="mini muted">Pure oxygen at {C.TRAJE_PRESION_KPA} kPa. A full suit lasts 7 to {C.TRAJE_BATERIA_H} hours. Hard work uses it up faster. If it runs out outside, you are rescued but injured.</p>
+        {enMarte(sala) && <PronosticoTraje sala={sala} yo={yo} />}
       </Seccion>
       <Seccion titulo="Go outside">
         {enMarte(sala) ? (
@@ -553,6 +650,21 @@ function Esclusa({ sala, yo }: P) {
         <Equipo sala={sala} yo={yo} id="esclusa" />
       </Seccion>
     </>
+  )
+}
+
+/** Antes de salir: cuánto da la batería afuera ahora, con la calefacción y, si es de noche, los focos. */
+function PronosticoTraje({ sala, yo }: P) {
+  const noche = oscuro(sala)
+  const carga = cargaTraje(sala, { ...yo, luces: { casco: noche, mano: false } })
+  const horas = (C.TRAJE_BATERIA_H / carga.total).toFixed(1)
+  const elev = solDeSala(sala).elevacion
+  return (
+    <p className="mini">
+      {noche ? `It is night outside (Sun ${Math.round(-elev)}° below the horizon). ` : elev < 0 ? 'It is twilight outside. It will be dark soon. ' : ''}
+      At {sala.ambiente.tempExt} °C a full battery lasts about {horas} h{noche ? ' with the heater and the helmet lights on' : carga.calor > 0.005 ? ' with the heater on' : ''}.
+      {noche ? ' Without lights you walk at half speed and may fall.' : ''}
+    </p>
   )
 }
 
@@ -663,9 +775,11 @@ function contenido(id: string, p: P): ReactNode {
     case 'comms':
       return (
         <>
+          <Tarea {...p} estacion="comms" />
           <Deberes {...p} ids={['planificacion', 'navegacion']} />
           <Seccion titulo="Link to Earth">
             <p className="mini">{M.enlace(p.sala.vuelo).texto}. A signal takes {M.retardoTexto(p.sala.vuelo.retardo)} to reach Earth. Every question to Mission Control waits twice that long for its answer.</p>
+            <InfoEnlace sala={p.sala} />
           </Seccion>
         </>
       )
@@ -711,7 +825,19 @@ function contenido(id: string, p: P): ReactNode {
           <Tarea {...p} estacion="antena" />
           <Seccion titulo="Antenna">
             <p className="mini">{M.enlace(p.sala.vuelo).texto}. A message takes {M.retardoTexto(p.sala.vuelo.retardo)} to arrive. That is why the crew decides on its own.</p>
+            <InfoEnlace sala={p.sala} />
             {p.sala.vuelo.enlace === 'conjuncion' && <p className="mini warn">Solar conjunction. The Sun is between Earth and Mars. Messages from Earth wait until the link is back.</p>}
+          </Seccion>
+        </>
+      )
+    case 'modulo':
+    case 'techoRefugio':
+    case 'pista':
+      return (
+        <>
+          <Tarea {...p} estacion={id} />
+          <Seccion titulo={ESTACION_BY_ID[id].nombre}>
+            <InfoObra sala={p.sala} id={id} />
           </Seccion>
         </>
       )
@@ -808,6 +934,7 @@ function Principal({ sala, yo }: P) {
         </div>
       )}
       {sala.fase === 'base' && <div className="help ok">Base activated. Keep it running until you complete all {sala.mision.solesObjetivo} sols.</div>}
+      <ObrasBase sala={sala} yo={yo} />
       {pendientes > 0 && (
         <div className="help">
           {decideComandante
@@ -854,22 +981,23 @@ export function PanelEstacion({ sala, yo }: P) {
   const abrir = useStore((s) => s.abrirEstacion)
   if (!id) return null
   const principal = id === 'principal'
+  const guia = id === 'guia'
   const e = ESTACION_BY_ID[id]
-  if (!e && !principal) return null
+  if (!e && !principal && !guia) return null
   const impedido = yo.incapacitado > 0 ? 'You are out of action.' : yo.enRefugio && id !== 'refugio' ? 'You are in the shelter: you cannot work.' : null
   return (
     <div className="panel estacion">
       <div className="row cabecera">
         {remoto && <button className="small plano" onClick={() => abrir('principal')}>Back to Base Dashboard</button>}
-        <h2 className="grow">{principal ? `Base Dashboard · ${enMarte(sala) ? 'Mars Base' : 'ship'}` : e.nombre}</h2>
+        <h2 className="grow">{principal ? `Base Dashboard · ${enMarte(sala) ? 'Mars Base' : 'ship'}` : guia ? 'Base Building Guide' : e.nombre}</h2>
         <span className="mini muted">{roles(sala.jugadores.filter((j) => j.rol === yo.rol).map((j) => j.rol!))}</span>
         <button className="small" onClick={() => abrir(null)}>Close{principal ? ' (M)' : ' (E)'}</button>
       </div>
-      {impedido && !principal && <div className="help">{impedido}</div>}
-      {remoto && !principal && <div className="help ok">You are viewing this from the Base Dashboard. Here you can check and propose decisions. To repair, install, treat or grow plants, go to {e.nombre}.</div>}
+      {impedido && !principal && !guia && <div className="help">{impedido}</div>}
+      {remoto && !principal && !guia && <div className="help ok">You are viewing this from the Base Dashboard. Here you can check and propose decisions. To repair, install, treat or grow plants, go to {e.nombre}.</div>}
       <div className="cuerpo">
         <Remoto.Provider value={remoto && !principal}>
-          <Aqui.Provider value={id}>{principal ? <Principal sala={sala} yo={yo} /> : contenido(id, { sala, yo })}</Aqui.Provider>
+          <Aqui.Provider value={id}>{principal ? <Principal sala={sala} yo={yo} /> : guia ? <GuiaBase sala={sala} yo={yo} /> : contenido(id, { sala, yo })}</Aqui.Provider>
         </Remoto.Provider>
       </div>
     </div>

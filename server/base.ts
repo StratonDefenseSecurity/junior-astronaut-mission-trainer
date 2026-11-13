@@ -1,4 +1,6 @@
 // Utilidades comunes de la lógica del juego.
+import { C } from '../shared/ciencia.js'
+import { enlaceDirecto, pasoDeRele } from '../shared/procedimientos.js'
 import type { LogEntry, Player, Role, RoomState, SistemaEstado, SistemaId } from '../shared/types.js'
 import { ahora, azar } from './reloj.js'
 
@@ -85,8 +87,16 @@ export function enviarRadio(room: RoomState, texto: string, demora?: number, cha
 export function entregarRadio(room: RoomState) {
   if (!room.radio?.length || room.vuelo.enlace === 'conjuncion') return
   const quedan: NonNullable<RoomState['radio']> = []
+  // En la base, sin la antena de alta ganancia, lo que llega espera al paso de un orbitador de
+  // relevo (nunca más de medio sol). Con ella apuntada, llega directo si la Tierra está a la vista.
+  let directo: boolean | null = null
+  const enEspera = (llega: number) => {
+    if (room.fase !== 'base' || pasoDeRele(room.ambiente.hora) || room.t - llega >= C.SOL_S / 2) return false
+    directo ??= enlaceDirecto(room)
+    return !directo
+  }
   for (const m of room.radio) {
-    if (room.t < m.llega) {
+    if (room.t < m.llega || enEspera(m.llega)) {
       quedan.push(m)
       continue
     }

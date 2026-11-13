@@ -6,6 +6,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { CIUDAD_BY_ID } from '@shared/escenarios'
 import { ROLE_BY_ID, type Player, type RoomState } from '@shared/types'
+import { RADIO_FOCOS_M, factorPasoOscuro, solDeSala } from '@shared/noche'
 import { MarcaIA } from '../hud/comun'
 import { ajenos, api } from '../red'
 import { useStore } from '../store'
@@ -61,6 +62,17 @@ const banderaDe = (j: Player) => {
 }
 
 type Gravedad = 'tierra' | 'marte' | 'cero'
+/**
+ * Luces del traje que se dibujan: fuera, con el cono más visible cuanto más oscuro está.
+ * Solo el personaje propio lleva foco de verdad, para que la escena no cargue con seis luces.
+ */
+function lucesDe(sala: RoomState, j: Player, foco: boolean) {
+  if (j.zona !== 'exterior') return undefined
+  const e = solDeSala(sala).elevacion
+  const haz = 1 - 0.85 * THREE.MathUtils.smoothstep(e, -12, 2)
+  return { casco: Boolean(j.luces?.casco), mano: Boolean(j.luces?.mano), foco, haz }
+}
+
 const gravedadDe = (sala: RoomState): Gravedad => (enMicrogravedad(sala) ? 'cero' : sala.tAterrizaje > 0 ? 'marte' : 'tierra')
 
 /**
@@ -105,6 +117,7 @@ function Jugador({ sala, yo }: { sala: RoomState; yo: Player }) {
   yoRef.current = yo
   const cancelando = useRef(0)
   const ultimoPaso = useRef(0)
+  const teclaLuz = useRef(false)
   const gravedad = gravedadDe(sala)
   const indice = Math.max(0, sala.jugadores.filter((j) => j.rol).findIndex((j) => j.id === yo.id))
 
@@ -115,6 +128,11 @@ function Jugador({ sala, yo }: { sala: RoomState; yo: Player }) {
     const visible = (id: string) => estacionVisible(s, id)
     const sinGravedad = enMicrogravedad(s) && local.zona === 'nave'
     const st = useStore.getState()
+
+    // L enciende o apaga los focos del casco fuera.
+    const l = tecla('KeyL')
+    if (l && !teclaLuz.current && j.zona === 'exterior') void api.accion('luces', { casco: !j.luces?.casco })
+    teclaLuz.current = l
 
     // ---- Entrada ----
     let adelante = (tecla('KeyW') || tecla('ArrowUp') ? 1 : 0) - (tecla('KeyS') || tecla('ArrowDown') ? 1 : 0) + palanca.y
@@ -183,7 +201,7 @@ function Jugador({ sala, yo }: { sala: RoomState; yo: Player }) {
       local.paso += dt
     } else if (fuerza > 0.08) {
       let v = tecla('ShiftLeft') || tecla('ShiftRight') ? 5.6 : 3.4
-      if (local.zona === 'exterior') v *= 0.8
+      if (local.zona === 'exterior') v *= 0.8 * factorPasoOscuro(s, j, Math.hypot(local.x, local.z) < RADIO_FOCOS_M)
       if (j.vit.fatiga > 85) v *= 0.7
       v *= fuerza
       // Los compañeros ocupan sitio: se rodea a quien está delante en vez de atravesarlo.
@@ -275,6 +293,7 @@ function Jugador({ sala, yo }: { sala: RoomState; yo: Player }) {
       tumbado={yo.incapacitado > 0}
       gravedad={yo.zona === 'nave' ? gravedad : 'marte'}
       bandera={banderaDe(yo)}
+      luces={lucesDe(sala, yo, true)}
       pose={() => pose.current}
       etiqueta={<Etiqueta j={yo} propio />}
     />
@@ -380,6 +399,7 @@ function Companero({ sala, j, indice }: { sala: RoomState; j: Player; indice: nu
       tumbado={j.incapacitado > 0}
       gravedad={j.zona === 'nave' ? gravedad : 'marte'}
       bandera={banderaDe(j)}
+      luces={lucesDe(sala, j, false)}
       pose={() => pose.current ?? calcular(0.016)}
       etiqueta={<Etiqueta j={j} propio={false} />}
     />

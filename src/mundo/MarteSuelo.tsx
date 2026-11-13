@@ -9,6 +9,7 @@
 import { useLayoutEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
+import { brilloCrepusculo } from '@shared/noche'
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { useGraficos } from '../graficos'
 import { ESTACIONES } from './mapa'
@@ -298,19 +299,20 @@ export interface ColoresCielo {
 }
 
 /**
- * Colores del cielo según la altura del Sol (seno de la elevación, −1…1) y el polvo (0…1).
- * Día: caramelo; ocaso: halo azul junto al Sol y el resto pardo; noche: casi negro.
+ * Colores del cielo según la altura del Sol (grados) y el polvo (0…1). Día: caramelo. Al ponerse el
+ * Sol, halo azul a su alrededor (lo filmó Curiosity en Gale) y el resto pardo; el polvo alto sigue
+ * iluminado y el resplandor se apaga despacio, hasta unas dos horas después. Luego, casi negro.
  */
 export function coloresCielo(elevacion: number, polvo: number): ColoresCielo {
-  const dia = THREE.MathUtils.smoothstep(elevacion, -0.1, 0.35)
-  const ocaso = Math.max(0, 1 - Math.abs(elevacion + 0.02) / 0.28)
-  const zenit = new THREE.Color('#05050b').lerp(new THREE.Color('#a4744c'), dia).lerp(new THREE.Color('#2b2731'), ocaso * 0.55)
-  const horizonte = new THREE.Color('#0b0a12').lerp(new THREE.Color('#d6a674'), dia).lerp(new THREE.Color('#6c5141'), ocaso * 0.45)
-  const halo = new THREE.Color('#f3e2c8').lerp(new THREE.Color('#87aade'), ocaso)
-  const tormenta = new THREE.Color('#6e3b22').multiplyScalar(0.25 + 0.75 * dia)
+  const dia = THREE.MathUtils.smoothstep(elevacion, 0, 20)
+  const crep = brilloCrepusculo(elevacion)
+  const zenit = new THREE.Color('#05050b').lerp(new THREE.Color('#3b3038'), crep).lerp(new THREE.Color('#a4744c'), dia)
+  const horizonte = new THREE.Color('#0b0a12').lerp(new THREE.Color('#7d5a45'), crep).lerp(new THREE.Color('#d6a674'), dia)
+  const halo = new THREE.Color('#f3e2c8').lerp(new THREE.Color('#87aade'), 1 - dia)
+  const tormenta = new THREE.Color('#6e3b22').multiplyScalar(0.25 + 0.75 * dia).multiplyScalar(Math.max(0.15, crep))
   zenit.lerp(tormenta, polvo * 0.85)
   horizonte.lerp(tormenta, polvo * 0.85)
-  return { zenit, horizonte, halo, fuerza: (elevacion > -0.18 ? 0.55 + ocaso * 0.6 : 0) * (1 - polvo * 0.7), ancho: 5 + ocaso * 12 }
+  return { zenit, horizonte, halo, fuerza: (0.55 + (1 - dia) * 0.6) * Math.pow(crep, 0.6) * (1 - polvo * 0.7), ancho: 5 + (1 - dia) * 12 }
 }
 
 /** Cúpula del cielo centrada en la cámara; se dibuja antes que las estrellas. */

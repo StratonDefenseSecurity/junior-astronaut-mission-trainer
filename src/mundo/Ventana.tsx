@@ -7,6 +7,7 @@
 import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
+import { brilloCrepusculo, solDeSala } from '@shared/noche'
 import { CIUDAD_BY_ID, escenarioDe, fechaDeMision } from '@shared/escenarios'
 import type { Marcador } from './planetas'
 import { SITE_BY_ID, TRANSITO_INICIO_S, type RoomState } from '@shared/types'
@@ -123,9 +124,9 @@ export function Ventana({ sala }: { sala: RoomState }) {
 
 /** Desde el hábitat en Marte: suelo, colinas y el cielo del sitio, de día o de noche. */
 function VistaMarte({ sala, fecha, observador, orientacion }: { sala: RoomState; fecha: Date; observador: Vec3; orientacion: THREE.Quaternion }) {
-  const hora = sala.ambiente.hora
-  // Luz del día: sube al amanecer y baja al atardecer (horario local del sitio).
-  const dia = Math.min(1, Math.max(0, Math.min(hora - 5.5, 19.5 - hora) / 1.2))
+  // Luz del día con el Sol real del sitio y el crepúsculo largo de Marte (el polvo alto sigue brillando).
+  const elev = solDeSala(sala).elevacion
+  const dia = elev >= 0 ? Math.min(1, 0.55 + elev / 20) : 0.55 * brilloCrepusculo(elev)
   const polvo = Math.min(1, sala.ambiente.tau / 4)
   const cupula = useRef<THREE.Mesh>(null)
   useFrame(({ camera }) => {

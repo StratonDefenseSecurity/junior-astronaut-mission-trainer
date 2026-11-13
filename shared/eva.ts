@@ -2,13 +2,14 @@
 // lista de comprobación en el puño del traje, la cuenta atrás de los consumibles (oxígeno,
 // batería y absorbente de CO2) y la regla de volver con reserva. Fuentes en shared/ciencia.ts.
 import { C } from './ciencia.js'
+import { cargaTraje } from './noche.js'
 import type { Player, RoomState } from './types.js'
 
-/** Minutos que le quedan al traje de cada consumible, y el que se acaba antes. */
-export function consumiblesTraje(j: Player) {
+/** Minutos que le quedan al traje de cada consumible, y el que se acaba antes. Con la sala, la batería cuenta luces y calefacción. */
+export function consumiblesTraje(j: Player, room?: RoomState) {
   const o2KgH = C.METABOLISMO_W.eva * C.O2_KG_POR_J * 3600 + 0.004 + (j.trajeFuga ?? 0)
   const o2 = (j.trajeO2 / o2KgH) * 60
-  const bateria = j.trajeBateria * C.TRAJE_BATERIA_H * 60
+  const bateria = (j.trajeBateria * C.TRAJE_BATERIA_H * 60) / (room ? cargaTraje(room, j).total : 1)
   const co2 = (j.trajeCO2 ?? 1) * C.TRAJE_CO2_H * 60
   const min = Math.min(o2, bateria, co2)
   const limitante = min === o2 ? 'oxygen' : min === bateria ? 'battery' : 'CO2 absorbent'
@@ -27,7 +28,7 @@ export const minutosFuera = (room: RoomState, j: Player) => (j.eva ? Math.max(0,
  */
 export function minutosHastaVolver(room: RoomState, j: Player): number {
   const ventana = C.EVA_VENTANA_H * 60 - minutosFuera(room, j)
-  return Math.min(ventana, consumiblesTraje(j).min - MIN_VUELTA)
+  return Math.min(ventana, consumiblesTraje(j, room).min - MIN_VUELTA)
 }
 
 /** Compañero para una salida: alguien que ya esté fuera o saliendo, o si no quien quede dentro al radio. */

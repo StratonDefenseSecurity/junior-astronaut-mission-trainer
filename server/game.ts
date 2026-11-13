@@ -506,6 +506,7 @@ function aplicarPropuesta(room: RoomState, prop: Proposal) {
       break
     case 'racionComida':
       room.ajustes.racionComida = d.nivel as RacionComida
+      if (typeof d.extras === 'boolean') room.ajustes.comidaExtra = d.extras
       break
     case 'racionAgua':
       room.ajustes.racionAgua = d.nivel as RacionAgua
@@ -657,9 +658,9 @@ export function usarRefugio(room: RoomState, id: string, entrar: boolean): strin
 // ---------- Acciones de los roles ----------
 
 const NIVELES_COMIDA: Record<RacionComida, string> = {
-  normal: 'Full ration. The crew keeps its body reserves.',
-  ahorro: 'Ration at 80%. Food lasts 25% longer and body reserves drop little by little.',
-  estricto: 'Ration at 60%. Food lasts 67% longer. Within a few weeks health suffers.',
+  normal: 'Full menu: 3,035 kcal per person per day, the NASA standard. The crew keeps its weight.',
+  ahorro: 'Menu at 80%: 2,428 kcal. Food lasts 25% longer. Each person loses about 0.6 kg per week and gets tired sooner.',
+  estricto: 'Menu at 60%: 1,821 kcal. Food lasts 67% longer. Each person loses about 1.1 kg per week. Within weeks mood and health suffer.',
 }
 const NOMBRE_RACION: Record<RacionComida, string> = { normal: 'full', ahorro: 'saver (80%)', estricto: 'strict (60%)' }
 const PRIORIDADES: Record<string, string> = {
@@ -683,6 +684,22 @@ export function accion(room: RoomState, id: string, tipo: string, d: Record<stri
     if (!dormido && !otro.suenoAvisoMs) return otro.id === id ? 'You are already awake.' : `${otro.nombre} is already awake.`
     despertarJugador(room, otro, ahora())
     if (dormido) log(room, otro.id === id ? `${j.nombre} woke up.` : `${j.nombre} woke ${otro.nombre} up.`)
+    return null
+  }
+  // Luces del traje: cada uno enciende o apaga las suyas, sin pedir permiso.
+  if (tipo === 'luces') {
+    const l = { casco: Boolean(j.luces?.casco), mano: Boolean(j.luces?.mano) }
+    if (typeof d.casco === 'boolean') l.casco = d.casco
+    if (typeof d.mano === 'boolean') l.mano = d.mano
+    j.luces = l
+    return null
+  }
+  // Focos exteriores del hábitat: alumbran la zona de trabajo de noche y gastan energía de la base.
+  if (tipo === 'focosBase') {
+    const encender = Boolean(d.encender)
+    if (encender === (room.ajustes.focosBase !== false)) return encender ? 'The floodlights are already on.' : 'The floodlights are already off.'
+    room.ajustes.focosBase = encender
+    log(room, `${j.nombre} turned the base floodlights ${encender ? 'on for the night' : 'off'}.`)
     return null
   }
   if (tipo === 'terminar') {
@@ -710,9 +727,18 @@ export function accion(room: RoomState, id: string, tipo: string, d: Record<stri
     case 'racionComida': {
       const nivel = String(d.nivel) as RacionComida
       if (!NIVELES_COMIDA[nivel]) return 'Invalid level.'
-      if (nivel === room.ajustes.racionComida) return 'That is already the current ration.'
-      if (pendiente('racionComida')) return 'There is already a pending ration proposal.'
-      return proponer('racionComida', ['logistica', 'comandante'], `Food ration: ${NOMBRE_RACION[nivel]}`, NIVELES_COMIDA[nivel], { nivel })
+      // El plan de comidas también decide si hay extra para salidas y enfermos.
+      const extras = typeof d.extras === 'boolean' ? d.extras : room.ajustes.comidaExtra !== false
+      const cambiaExtras = extras !== (room.ajustes.comidaExtra !== false)
+      if (nivel === room.ajustes.racionComida && !cambiaExtras) return 'That is already the current meal plan.'
+      if (pendiente('racionComida')) return 'There is already a pending meal plan proposal.'
+      const titulo = cambiaExtras ? `Meal plan: ${NOMBRE_RACION[nivel]} menu, ${extras ? 'with' : 'no'} extra for EVA and sick crew` : `Food ration: ${NOMBRE_RACION[nivel]}`
+      const nota = cambiaExtras
+        ? extras
+          ? ' Spacewalkers get 200 kcal more per hour outside and sick crew 10% more.'
+          : ' No extra for spacewalks or illness: those crew members lose weight faster.'
+        : ''
+      return proponer('racionComida', ['logistica', 'comandante'], titulo, NIVELES_COMIDA[nivel] + nota, { nivel, extras })
     }
     case 'racionAgua': {
       const nivel = d.nivel === 'ahorro' ? 'ahorro' : 'normal'

@@ -91,6 +91,69 @@ interface Props {
   bandera?: { colores: string[]; vertical: boolean } | null
   etiqueta?: ReactNode
   escala?: number
+  /** Luces del traje fuera: focos del casco y linterna. `foco` pone luz de verdad (solo el jugador propio); `haz` es lo que se ve el cono (1 de noche). */
+  luces?: { casco: boolean; mano: boolean; foco: boolean; haz: number }
+}
+
+// ---------- Luces del traje: cono visible y foco real ----------
+
+const LARGO_HAZ = 7
+const GEO_HAZ = (() => {
+  // Cono abierto con el vértice en el origen y la boca hacia +Z.
+  const g = new THREE.ConeGeometry(1.5, LARGO_HAZ, 20, 1, true)
+  g.translate(0, -LARGO_HAZ / 2, 0)
+  g.rotateX(-Math.PI / 2)
+  return g
+})()
+const VERT_HAZ = /* glsl */ `
+varying float vL;
+void main() {
+  vL = position.z;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}`
+const FRAG_HAZ = /* glsl */ `
+uniform float uFuerza;
+uniform float uLargo;
+varying float vL;
+void main() {
+  float t = clamp(vL / uLargo, 0.0, 1.0);
+  gl_FragColor = vec4(vec3(1.0, 0.95, 0.84) * uFuerza * pow(1.0 - t, 1.8), 1.0);
+}`
+
+/**
+ * Haz de una luz del traje: un cono aditivo que se desvanece con la distancia y, en el personaje
+ * propio, un foco que alumbra el suelo de verdad. El foco está siempre montado (a 0 si se apaga)
+ * para no recompilar los materiales al encender o apagar.
+ */
+function Haz({ encendida, fuerza, foco, intensidad, escala }: { encendida: boolean; fuerza: number; foco: boolean; intensidad: number; escala: number }) {
+  const mat = useMemo(
+    () =>
+      new THREE.ShaderMaterial({
+        vertexShader: VERT_HAZ,
+        fragmentShader: FRAG_HAZ,
+        uniforms: { uFuerza: { value: 0 }, uLargo: { value: LARGO_HAZ } },
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        side: THREE.DoubleSide,
+      }),
+    [],
+  )
+  const luz = useMemo(() => {
+    const l = new THREE.SpotLight('#fff1dc', 0, 26, 0.45, 0.6, 1.6)
+    l.target.position.set(0, 0, 1)
+    l.add(l.target)
+    return l
+  }, [])
+  mat.uniforms.uFuerza.value = 0.09 * fuerza * escala
+  luz.intensity = encendida ? intensidad : 0
+  useEffect(() => () => mat.dispose(), [mat])
+  return (
+    <>
+      {foco && <primitive object={luz} />}
+      <mesh geometry={GEO_HAZ} material={mat} scale={escala} visible={encendida && fuerza > 0.02} renderOrder={3} frustumCulled={false} />
+    </>
+  )
 }
 
 // ---------- Geometrías compartidas por todos los personajes ----------
@@ -144,7 +207,7 @@ function Ojo({ x, iris, lado, parpado, piel }: { x: number; iris: string; lado: 
   )
 }
 
-export function Astronauta({ traje: trajeEntrada, distintivo, completo, pose, tumbado = false, gravedad = 'tierra', bandera, etiqueta, escala = 1 }: Props) {
+export function Astronauta({ traje: trajeEntrada, distintivo, completo, pose, tumbado = false, gravedad = 'tierra', bandera, etiqueta, escala = 1, luces }: Props) {
   const traje = { ...trajePorDefecto(), ...trajeEntrada }
   const raiz = useRef<THREE.Group>(null)
   const cuerpo = useRef<THREE.Group>(null)
@@ -554,6 +617,16 @@ export function Astronauta({ traje: trajeEntrada, distintivo, completo, pose, tu
                       <mesh geometry={G.cilindro} position={[0, -0.215, 0]} scale={[0.054, 0.024, 0.056]} material={m.rodamiento} />
                       <mesh geometry={G.cilindro} position={[0, -0.235, 0]} scale={[0.05, 0.02, 0.052]} material={m.guante} />
                       <mesh geometry={G.esferaBaja} position={[0, -0.3, 0.01]} scale={[0.045, 0.03, 0.03]} material={m.palma} />
+                      {/* linterna de mano: cuerpo, lente y su haz hacia delante */}
+                      {i === 1 && luces && (
+                        <group position={[0, -0.3, 0.05]} rotation={[0.35, 0, 0]}>
+                          <mesh geometry={G.cilindro} rotation={[Math.PI / 2, 0, 0]} scale={[0.022, 0.13, 0.022]} material={m.mando} />
+                          <mesh geometry={G.disco} position={[0, 0, 0.066]} scale={0.02} material={m.foco} />
+                          <group position={[0, 0, 0.07]}>
+                            <Haz encendida={luces.mano} fuerza={luces.haz} foco={luces.foco} intensidad={22} escala={0.6} />
+                          </group>
+                        </group>
+                      )}
                     </>
                   )}
                   {/* mano: palma y pulgar */}
@@ -613,6 +686,12 @@ export function Astronauta({ traje: trajeEntrada, distintivo, completo, pose, tu
                   </group>
                 ))}
                 <mesh geometry={G.anillo} position={[0, -0.135, 0]} rotation={[Math.PI / 2, 0, 0]} scale={[0.15, 0.15, 0.25]} material={m.rodamiento} />
+                {/* haz de los focos del casco, un poco hacia el suelo */}
+                {luces && (
+                  <group position={[0, 0.05, 0.12]} rotation={[0.3, 0, 0]}>
+                    <Haz encendida={luces.casco} fuerza={luces.haz} foco={luces.foco} intensidad={45} escala={1} />
+                  </group>
+                )}
               </>
             )}
           </group>

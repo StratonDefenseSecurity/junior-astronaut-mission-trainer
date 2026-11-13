@@ -51,5 +51,6 @@
     "typescript": "^5.6.3",
     "vite": "^5.4.11",
     "wrangler": "^4.150.0"
-  }
+  },
+  "ai_disclosure": "Source code written with the help of an AI coding assistant (Claude, Anthropic) following the team design; no AI-generated data, images or audio. See README, Use of AI."
 }

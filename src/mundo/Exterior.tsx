@@ -7,11 +7,14 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import type { RoomState } from '@shared/types'
 import { useGraficos } from '../graficos'
 import { escenarioDe, fechaDeMision } from '@shared/escenarios'
+import { brilloCrepusculo, focosEncendidos, latitudSitio, solDeSala, solMarte } from '@shared/noche'
 import { Cielo } from './cielo/Cielo'
 import { vectorHelio } from './cielo/astro'
 import { SITIOS_MARTE, orientacionCieloMarte } from './cieloMarte'
 import { Marca, Rotulo } from './Interior'
 import { ESTACIONES, ESTACION_BY_ID, estacionVisible } from './mapa'
+import { obraHecha } from '@shared/procedimientos'
+import { AntenaApuntada, ObrasExterior } from './Obras'
 import { BordeCrater, CampoRipples, CupulaCielo, Huellas, Rocas, Rodadas, Terreno, cableSuelo, coloresCielo } from './MarteSuelo'
 import { empolvar, texturaFranjas, texturaMLI, texturaPanelSolar, texturaRadiador, texturaRotulo } from './procedural'
 
@@ -31,7 +34,9 @@ const conPolvo = (m: THREE.MeshStandardMaterial | null) => {
  * suitports (puertos donde se acoplan los trajes por la espalda), todo con polvo encima.
  */
 function Habitat({ sala }: { sala: RoomState }) {
-  const noche = sala.ambiente.hora < 6 || sala.ambiente.hora > 19
+  // Las ventanas brillan desde la puesta; los focos de la puerta, si están encendidos y ya no se ve.
+  const noche = solDeSala(sala).elevacion < 0
+  const focos = focosEncendidos(sala)
   const alta = useGraficos((s) => s.calidad) === 'alta'
   const m = useMemo(() => {
     const mli = texturaMLI().clone()
@@ -134,7 +139,7 @@ function Habitat({ sala }: { sala: RoomState }) {
       {/* luz de estado y focos sobre la puerta */}
       <mesh position={[10.95, 2.3, 0]}>
         <boxGeometry args={[0.05, 0.08, 0.5]} />
-        <meshBasicMaterial color={noche ? '#fff1d6' : '#d9d2c4'} />
+        <meshBasicMaterial color={focos ? '#fff1d6' : '#d9d2c4'} />
       </mesh>
       {/* pasamanos a los lados de la puerta */}
       {[-0.85, 0.85].map((z) => (
@@ -164,8 +169,9 @@ function Habitat({ sala }: { sala: RoomState }) {
       <mesh position={[11.95, 0.165, 0]} rotation={[-Math.PI / 2, 0, Math.PI / 2]} material={m.franjas}>
         <planeGeometry args={[2, 0.12]} />
       </mesh>
-      <pointLight position={[12, 3.2, 0]} intensity={noche ? 40 : 0} distance={26} color="#fff1d6" />
-      <pointLight position={[-11, 3.2, 0]} intensity={noche ? 20 : 0} distance={20} color="#fff1d6" />
+      {/* focos exteriores: gastan energía de la base y alumbran la zona de trabajo de noche */}
+      <pointLight position={[12, 3.2, 0]} intensity={focos ? 40 : 0} distance={26} color="#fff1d6" />
+      <pointLight position={[-11, 3.2, 0]} intensity={focos ? 20 : 0} distance={20} color="#fff1d6" />
       {/* cúpula del huerto */}
       {sala.huerto.progreso > 0 && (
         <mesh position={[2, 0, 5.8]}>
@@ -435,45 +441,112 @@ function Estrellas() {
   )
 }
 
-function CieloNocturno({ sala, brillo }: { sala: RoomState; brillo: number }) {
+function CieloNocturno({ sala, brillo, horaSolar }: { sala: RoomState; brillo: number; horaSolar: number }) {
   const fecha = fechaDeMision(escenarioDe(sala.escenario), Math.max(0, sala.t))
   const sitio = SITIOS_MARTE[sala.sitio ?? 'gale'] ?? SITIOS_MARTE.gale
   const minuto = Math.floor(fecha.getTime() / 300_000)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const orientacion = useMemo(() => orientacionCieloMarte(fecha, sitio.lat, sitio.lon, sala.ambiente.hora), [minuto, sitio.lat])
+  const orientacion = useMemo(() => orientacionCieloMarte(fecha, sitio.lat, sitio.lon, horaSolar), [minuto, sitio.lat])
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const observador = useMemo(() => vectorHelio('Marte', fecha), [Math.floor(minuto / 12)])
   return <Cielo fecha={fecha} observador={observador} orientacion={orientacion} brillo={Math.max(0, brillo) * 0.9} atmosfera centelleo={0.05} etiquetas ocultarCuerpos={['Sol']} />
 }
 
+// ---- Fobos y Deimos ----
+const R_MARTE_KM = 3389.5
+/** Rotación sideral de Marte, horas. */
+const ROTACION_MARTE_H = 24.6229
+const LUNAS = [
+  // Radio de la órbita (km), periodo (h), radio medio (km), color y fase de partida (juego).
+  { id: 'fobos', orbita: 9376, periodo: 7.6539, radio: 11.1, color: '#8d857c', fase: 1.1 },
+  { id: 'deimos', orbita: 23463, periodo: 30.312, radio: 6.2, color: '#b3aaa0', fase: 4.0 },
+] as const
+const tmpLuna = new THREE.Vector3()
+
+/**
+ * Fobos y Deimos vistos desde el sitio: órbita ecuatorial con su radio y su periodo reales, desde
+ * la superficie (paralaje incluido). Fobos gira más rápido que Marte, así que sale por el oeste y se
+ * pone por el este; Deimos va despacio de este a oeste. Su fase sale de la dirección del Sol, y la
+ * sombra de Marte los apaga cuando pasan por ella. Dónde están en la órbita no es de efemérides.
+ */
+function Lunas({ t, lat, sol, brillo }: { t: number; lat: number; sol: [number, number, number]; brillo: number }) {
+  const grupo = useRef<THREE.Group>(null)
+  const f = (lat * Math.PI) / 180
+  const lunas = LUNAS.map((l) => {
+    const th = l.fase + ((t / 3600) * 2 * Math.PI) * (1 / l.periodo - 1 / ROTACION_MARTE_H)
+    // Marco que gira con Marte: x al meridiano del sitio, y al este, z al norte.
+    const mx = l.orbita * Math.cos(th)
+    const my = l.orbita * Math.sin(th)
+    const dx = mx - R_MARTE_KM * Math.cos(f)
+    const dz = -R_MARTE_KM * Math.sin(f)
+    const este = my
+    const arriba = dx * Math.cos(f) + dz * Math.sin(f)
+    const norte = -dx * Math.sin(f) + dz * Math.cos(f)
+    const dist = Math.hypot(dx, my, dz)
+    const dir = new THREE.Vector3(este, arriba, -norte).divideScalar(dist)
+    // Sol en el mismo marco, para la fase y la sombra de Marte.
+    const sx = sol[1] * Math.cos(f) + sol[2] * Math.sin(f)
+    const sy = sol[0]
+    const sz = sol[1] * Math.sin(f) - sol[2] * Math.cos(f)
+    const sn = Math.hypot(sx, sy, sz) || 1
+    const proy = (mx * sx + my * sy) / sn
+    const eclipse = proy < 0 && Math.hypot(mx - (proy * sx) / sn, my - (proy * sy) / sn, -(proy * sz) / sn) < R_MARTE_KM
+    const fase = (1 + tmpLuna.set(sol[0], sol[1], sol[2]).normalize().dot(dir.clone().negate())) / 2
+    return { ...l, dir, tam: Math.max(l.id === 'fobos' ? 2.2 : 0.9, (900 * 2 * l.radio) / dist), luz: eclipse ? 0.04 : 0.15 + 0.85 * fase }
+  })
+  useFrame(({ camera }) => grupo.current?.position.copy(camera.position))
+  return (
+    <group ref={grupo}>
+      {lunas.map(
+        (l) =>
+          l.dir.y > -0.02 && (
+            <mesh key={l.id} position={[l.dir.x * 900, l.dir.y * 900, l.dir.z * 900]} scale={l.tam / 2} renderOrder={-1000}>
+              <sphereGeometry args={[1, 12, 8]} />
+              <meshBasicMaterial color={new THREE.Color(l.color).multiplyScalar(l.luz * brillo)} fog={false} depthWrite={false} />
+            </mesh>
+          ),
+      )}
+    </group>
+  )
+}
+
 export function Exterior({ sala, cerca, destacadas }: { sala: RoomState; cerca: string | null; destacadas: string[] }) {
   const a = sala.ambiente
   const alta = useGraficos((s) => s.calidad) === 'alta'
-  // Altura del Sol: 0 de noche, 1 al mediodía.
-  const dia = Math.max(0, Math.sin(((a.hora - 6.6) / 12.4) * Math.PI))
-  const esNoche = a.hora < 6.3 || a.hora > 19.3
+  // El Sol real del sitio: latitud, estación y hora, con el mediodía del registro de Curiosity.
+  const lat = latitudSitio(sala.sitio)
+  const s = solMarte(a, lat)
+  const elev = Math.round(s.elevacion * 4) / 4
+  // Luz directa: el seno de la altura (0 de noche). Crepúsculo: el polvo alto sigue brillando.
+  const dia = Math.max(0, Math.sin((elev * Math.PI) / 180))
+  const crep = brilloCrepusculo(elev)
   const polvo = Math.min(1, Math.max(0, (a.tau - 0.5) / 3.5))
-  const angulo = ((a.hora - 6.6) / 12.4) * Math.PI
   // Cielo de Marte: caramelo de día, halo azul junto al Sol al atardecer (ver MarteSuelo).
-  const colores = useMemo(() => coloresCielo(Math.sin(angulo), polvo), [angulo, polvo])
+  const colores = useMemo(() => coloresCielo(elev, polvo), [elev, polvo])
   const cielo = colores.horizonte
-  const suelo = useMemo(() => mezclar('#3a1a10', '#b4542f', 0.25 + dia * 0.75), [dia])
-  const sol = useMemo<[number, number, number]>(() => [Math.cos(angulo) * 120, Math.max(6, Math.sin(angulo) * 120), -40], [angulo])
+  const suelo = useMemo(() => mezclar('#3a1a10', '#b4542f', 0.12 + crep * 0.13 + dia * 0.75), [dia, crep])
+  const [sx, sy, sz] = s.dir
+  const sol = useMemo<[number, number, number]>(() => [sx * 120, sy * 120, sz * 120], [sx, sy, sz])
+  // La luz no baja de 6 m de altura: con el Sol rasante las sombras serían infinitas.
+  const luzSol = useMemo<[number, number, number]>(() => [sol[0], Math.max(6, sol[1]), sol[2]], [sol])
   const lejos = useMemo(() => suelo.clone().lerp(cielo, 0.62), [suelo, cielo])
   const visibilidad = 190 - polvo * 150
+  // Las estrellas aparecen al oscurecer el crepúsculo; el polvo las tapa.
+  const estrellas = (1 - THREE.MathUtils.smoothstep(elev, -14, -3)) * (1 - polvo * 0.85)
 
   return (
     <group>
       <color attach="background" args={[cielo.getHex()]} />
       <CupulaCielo colores={colores} sol={sol} />
       <fog attach="fog" args={[cielo.getHex(), 18, visibilidad]} />
-      <ambientLight intensity={0.16 + dia * 0.45} color={esNoche ? '#9db4ff' : '#ffe2c8'} />
-      <hemisphereLight args={['#ffd2b0', '#4a1f10', 0.12 + dia * 0.3]} />
-      <directionalLight position={sol} intensity={dia * 1.9 * (1 - polvo * 0.75)} color={dia < 0.25 ? '#ffc999' : '#ffe6cf'} castShadow />
+      <ambientLight intensity={0.06 + 0.1 * crep + dia * 0.45} color={elev < 0 ? '#9db4ff' : '#ffe2c8'} />
+      <hemisphereLight args={['#ffd2b0', '#4a1f10', 0.03 + 0.09 * crep + dia * 0.3]} />
+      <directionalLight position={luzSol} intensity={dia * 1.9 * (1 - polvo * 0.75)} color={dia < 0.25 ? '#ffc999' : '#ffe6cf'} castShadow />
       {/* De noche, el cielo real del sitio: estrellas, planetas y la Tierra como un lucero azulado. */}
-      {(esNoche || dia < 0.15) && <CieloNocturno sala={sala} brillo={(1 - dia / 0.15) * (1 - polvo * 0.85)} />}
+      {estrellas > 0.01 && <CieloNocturno sala={sala} brillo={estrellas} horaSolar={s.horaSolar} />}
+      {estrellas > 0.01 && <Lunas t={sala.t} lat={lat} sol={s.dir} brillo={estrellas} />}
       {/* disco del Sol, pequeño: desde Marte se ve dos tercios del tamaño que tiene desde la Tierra */}
-      {dia > 0.02 && (
+      {elev > -1 && (
         <mesh position={[sol[0] * 2, sol[1] * 2, sol[2] * 2]}>
           <sphereGeometry args={[3.2, 16, 16]} />
           <meshBasicMaterial color="#fff3df" fog={false} />
@@ -490,7 +563,8 @@ export function Exterior({ sala, cerca, destacadas }: { sala: RoomState; cerca: 
       <CampoSolar sala={sala} />
       {estacionVisible(sala, 'plantaExt') && <PlantaEnergia sala={sala} />}
       <Carga sala={sala} />
-      <Antena />
+      {obraHecha(sala, 'antenaAlta') ? <AntenaApuntada sala={sala} /> : <Antena />}
+      <ObrasExterior sala={sala} />
       {estacionVisible(sala, 'isruExt') && <Extractor sala={sala} />}
       {a.tormentaPolvo && <Polvareda fuerza={polvo} />}
       {ESTACIONES.filter((e) => e.zona === 'exterior' && estacionVisible(sala, e.id)).map((e) => (

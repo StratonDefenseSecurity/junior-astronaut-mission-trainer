@@ -582,29 +582,43 @@ export function texturaRodada() {
   }, { repetir: true })
 }
 
-/** Parche de misión: círculo azul con Marte, la órbita y estrellas (diseño del juego). */
+/**
+ * Parche de misión propio del juego: hexágono gris oscuro con el horizonte de Marte y seis
+ * puntos, uno por tripulante. Las reglas de Space Apps no permiten imitar marcas ni diseños de la
+ * NASA, así que no lleva círculo azul, órbita ni vector rojo.
+ */
 export function texturaParche() {
   return lienzo('parche', 128, 128, (c, w) => {
     const m = w / 2
-    c.fillStyle = '#d9d4c3'
-    c.beginPath()
-    c.arc(m, m, m, 0, Math.PI * 2)
+    const hexagono = (r: number) => {
+      c.beginPath()
+      for (let i = 0; i < 6; i++) {
+        const a = Math.PI / 6 + (i * Math.PI) / 3
+        c.lineTo(m + r * Math.cos(a), m + r * Math.sin(a))
+      }
+      c.closePath()
+    }
+    c.fillStyle = '#f2a33a'
+    hexagono(m)
     c.fill()
-    c.fillStyle = '#123a7a'
-    c.beginPath()
-    c.arc(m, m, m - 7, 0, Math.PI * 2)
+    c.fillStyle = '#23262b'
+    hexagono(m - 7)
     c.fill()
-    c.fillStyle = '#c1440e'
+    // Horizonte de Marte en la mitad de abajo.
+    c.save()
+    hexagono(m - 7)
+    c.clip()
+    c.fillStyle = '#b5532a'
     c.beginPath()
-    c.arc(m + 10, m + 10, 26, 0, Math.PI * 2)
+    c.arc(m, w + 40, 92, 0, Math.PI * 2)
     c.fill()
-    c.strokeStyle = '#f5f5f5'
-    c.lineWidth = 3
-    c.beginPath()
-    c.ellipse(m, m, 50, 18, -0.5, 0, Math.PI * 2)
-    c.stroke()
-    c.fillStyle = '#fff'
-    for (const [x, y] of [[34, 36], [52, 26], [92, 40], [30, 82]]) c.fillRect(x, y, 3, 3)
+    c.restore()
+    c.fillStyle = '#f2a33a'
+    for (let i = 0; i < 6; i++) {
+      c.beginPath()
+      c.arc(30 + i * 13.6, 46, 4, 0, Math.PI * 2)
+      c.fill()
+    }
   })
 }
 

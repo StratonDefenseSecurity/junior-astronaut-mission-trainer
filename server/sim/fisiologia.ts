@@ -1,6 +1,7 @@
 // El cuerpo de cada astronauta: respiración, corazón, agua, energía, fatiga, músculo y radiación.
 // Los valores de partida son reales (ver shared/ciencia.ts); las ecuaciones son simplificadas.
 import { C } from '../../shared/ciencia.js'
+import { factorFatigaComida } from '../../shared/comida.js'
 import type { Player } from '../../shared/types.js'
 import { hacia, limitar } from '../base.js'
 
@@ -20,6 +21,12 @@ export interface Contexto {
   comidaDisponible: number
   /** 1 normal, 0.8 ahorro, 0.6 estricto. */
   racionComida: number
+  /** kcal de más al día que le da el plan ahora (salida o enfermedad). */
+  extraKcalDia?: number
+  /** Multiplica el gasto de batería del traje: luces y calefacción (1 = normal). */
+  factorBateria?: number
+  /** Multiplica lo que se recupera durmiendo (el módulo inflable da sitio privado; 1 = normal). */
+  descanso?: number
   /** Horas de ejercicio del plan diario. */
   ejercicio: number
   /** mSv por día que recibe ahora. */
@@ -82,7 +89,7 @@ export function pasoTripulante(j: Player, c: Contexto): Consumo {
   let trajeAgotado = false
   if (fuera) {
     j.trajeO2 = Math.max(0, j.trajeO2 - o2 - (0.004 * c.dt) / 3600)
-    j.trajeBateria = Math.max(0, j.trajeBateria - c.dt / (C.TRAJE_BATERIA_H * 3600))
+    j.trajeBateria = Math.max(0, j.trajeBateria - (c.dt * (c.factorBateria ?? 1)) / (C.TRAJE_BATERIA_H * 3600))
     j.trajeCO2 = Math.max(0, (j.trajeCO2 ?? 1) - c.dt / (C.TRAJE_CO2_H * 3600))
     trajeAgotado = j.trajeO2 <= 0 || j.trajeBateria <= 0 || j.trajeCO2 <= 0
     ppO2 = trajeAgotado ? 6 : C.TRAJE_PRESION_KPA
@@ -121,7 +128,7 @@ export function pasoTripulante(j: Player, c: Contexto): Consumo {
 
   // ---- Comida ----
   const gasto = (W * c.dt) / 4184
-  const racion = (C.COMIDA_KG_DIA * c.racionComida * c.dt) / 86400
+  const racion = ((C.COMIDA_KG_DIA * c.racionComida + (c.extraKcalDia ?? 0) / C.KCAL_POR_KG_COMIDA) * c.dt) / 86400
   // Con ración completa puede comer un poco más para reponerse.
   const extra = c.racionComida >= 1 ? Math.min(j.deficitKcal / C.KCAL_POR_KG_COMIDA, (0.4 * c.dt) / 86400) : 0
   const come = Math.min(racion + extra, Math.max(0, c.comidaDisponible))
@@ -130,10 +137,12 @@ export function pasoTripulante(j: Player, c: Contexto): Consumo {
 
   // ---- Fatiga (puntos por hora) ----
   let df = { sueno: -12.5, reposo: 1.0, trabajo: 3.5, ejercicio: 6, eva: 9 }[j.actividad]
+  if (df < 0) df *= c.descanso ?? 1
   if (df > 0) {
     if (v.spo2 < 94) df *= 1 + (94 - v.spo2) / 20
     if (ppCO2 > C.PPCO2_LIMITE_KPA) df *= 1.5
-    if (v.reservas < 60) df *= 1.3
+    // Con hambre, el cuerpo rinde menos: la fatiga sube más deprisa según el peso perdido.
+    df *= factorFatigaComida(j)
     if (c.superficie) df *= 1 + (100 - v.condicion) / 200
   }
   v.fatiga = limitar(v.fatiga + (df * c.dt) / 3600, 0, 100)

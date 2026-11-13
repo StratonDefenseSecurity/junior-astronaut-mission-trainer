@@ -70,6 +70,10 @@ export function actualizarAmbiente(room: RoomState): { nuevoSol: boolean } {
   a.hora = ((s % C.SOL_S) / C.SOL_S) * 24
   const [tmin, tmax, presion, uv, ls, amanecer, atardecer] = registroDelSol(room, sol)
   const sitio = SITE_BY_ID[room.sitio ?? 'gale'] ?? SITE_BY_ID.gale
+  // Salida y puesta del Sol y estación de hoy: el cliente dibuja con ellas el Sol, el crepúsculo y la noche.
+  a.amanecer = Math.round((amanecer / 60) * 1000) / 1000
+  a.atardecer = Math.round((atardecer / 60) * 1000) / 1000
+  a.ls = Math.round(ls * 10) / 10
   // La máxima llega hacia las 14 h y la mínima poco antes del amanecer.
   const fase = Math.cos(((a.hora - 14) / 24) * 2 * Math.PI)
   const curva = Math.pow((fase + 1) / 2, 1.6)
@@ -184,14 +188,16 @@ export function tasaDeDosis(room: RoomState, zona: Zona, enRefugio: boolean): nu
   let gcr = superficie ? C.GCR_SUPERFICIE_MSV_DIA : room.fase === 'lanzamiento' ? 0.3 : C.GCR_CRUCERO_MSV_DIA
   // Los rayos cósmicos casi no se frenan con blindaje; una pared gruesa quita un poco.
   if (zona === 'nave') gcr *= superficie ? 0.85 : 1
-  if (enRefugio) gcr *= 1 - 0.1 * capas
+  // Bolsas de regolito sobre el refugio: la reducción de NASA TP-3079 hasta 15 cm (20 g/cm²).
+  const regolito = enRefugio ? Math.min(1, (room.efectos?.regolitoCm ?? 0) / C.REGOLITO_CM_UTIL) : 0
+  if (enRefugio) gcr *= (1 - 0.1 * capas) * (1 - C.REGOLITO_GCR * regolito)
   gcr *= escenarioDe(room.escenario).mod.gcr
   let total = gcr
   const ts = room.ambiente.tormentaSolar
   if (ts) {
     // La atmósfera de Marte frena buena parte de las partículas solares.
     const atmosfera = superficie ? 0.15 : 1
-    const factor = zona === 'exterior' ? 1 : enRefugio ? Math.max(0.07, 0.25 - 0.06 * capas) : 0.5
+    const factor = zona === 'exterior' ? 1 : enRefugio ? Math.max(0.07, 0.25 - 0.06 * capas) * (1 - C.REGOLITO_SPE * regolito) : 0.5
     total += ts.tasa * atmosfera * factor
   }
   return total

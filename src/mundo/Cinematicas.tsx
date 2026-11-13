@@ -12,7 +12,7 @@ import { escenarioDe, fechaDeMision } from '@shared/escenarios'
 import { DESCENSO_S, type RoomState } from '@shared/types'
 import { factorMovimiento } from '../accesibilidad'
 import { Cielo } from './cielo/Cielo'
-import { orientacionSuperficie, vectorHelio } from './cielo/astro'
+import { cuerposVisibles, orientacionSuperficie, vectorHelio } from './cielo/astro'
 import { SITIOS_MARTE } from './cieloMarte'
 import { Destello, type Oclusor } from './Destello'
 import { NubesDespegue, ResplandorPlataforma } from './EfectosDespegue'
@@ -180,9 +180,17 @@ export function Lanzamiento({ sala }: { sala: RoomState }) {
   const orientacion = useMemo(() => orientacionSuperficie('Tierra', fecha, LC39B.lat, LC39B.lon), [fecha])
   const sol = useMemo(() => solLocal('tierra', fecha, orientacion), [fecha, orientacion])
   const solEscena = useRef(sol.clone())
-  // Luz del día en la plataforma según la altura del Sol: el despegue puede ser de noche, como el
-  // de Artemis I.
+  // Luz del día en la plataforma según la altura del Sol: el despegue es de noche, a la hora de
+  // Artemis I (la 1:47 a. m. en Florida), así que solo alumbran los focos, el motor y la Luna.
   const dia = THREE.MathUtils.smoothstep(sol.y, -0.1, 0.12)
+  // La Luna en su sitio real para la fecha: de noche da una luz tenue y fría según su fase.
+  const luna = useMemo(() => {
+    const c = cuerposVisibles(fecha, vectorHelio('Tierra', fecha)).Luna
+    const dir = c.direccion.clone().applyQuaternion(orientacion).normalize()
+    return { dir, luz: dir.y > 0 ? c.fraccionIluminada * THREE.MathUtils.smoothstep(dir.y, 0, 0.2) : 0 }
+  }, [fecha, orientacion])
+  const lunaEscena = useRef(luna.dir.clone())
+  const luzLuna = useRef<THREE.DirectionalLight>(null)
   const centroTierra = useRef(new THREE.Vector3(0, -R_PLANETA, 0))
   const oclusores = useMemo<Oclusor[]>(() => [{ centro: centroTierra.current, radio: R_PLANETA }], [])
   // Rumbo real: el eje +X de la plataforma y del cohete apunta hacia donde vuela (este-noreste).
@@ -289,9 +297,11 @@ export function Lanzamiento({ sala }: { sala: RoomState }) {
       co.quaternion.copy(qCohete)
       centroTierra.current.copy(ti.position)
       solEscena.current.copy(sol).applyQuaternion(ti.quaternion)
+      lunaEscena.current.copy(luna.dir).applyQuaternion(ti.quaternion)
     }
     if (plataforma.current) plataforma.current.visible = !acompana
     if (luzSol.current) luzSol.current.position.copy(solEscena.current).multiplyScalar(100)
+    if (luzLuna.current) luzLuna.current.position.copy(lunaEscena.current).multiplyScalar(100)
 
     // Cámara: la elegida por el jugador si se puede usar ahora; si no, la de la cronología.
     const disponibles = camarasDisponibles(t)
@@ -400,7 +410,9 @@ export function Lanzamiento({ sala }: { sala: RoomState }) {
   return (
     <group>
       {/* el Sol en su dirección real; abajo, la luz azulada que devuelve la Tierra */}
-      <directionalLight ref={luzSol} position={sol.clone().multiplyScalar(100).toArray()} intensity={2.6 * Math.max(0.05, THREE.MathUtils.smoothstep(sol.y, -0.08, 0.05))} color="#fff4e6" />
+      {/* sin luz desde debajo del suelo: con el Sol bajo el horizonte no alumbra */}
+      <directionalLight ref={luzSol} position={sol.clone().multiplyScalar(100).toArray()} intensity={2.6 * THREE.MathUtils.smoothstep(sol.y, -0.08, 0.05)} color="#fff4e6" />
+      <directionalLight ref={luzLuna} position={luna.dir.clone().multiplyScalar(100).toArray()} intensity={0.35 * luna.luz * (1 - dia)} color="#b9c8ff" />
       <hemisphereLight args={['#9cc4ff', '#2a4a7a', 0.25 + 0.35 * dia]} />
       <ambientLight intensity={0.1} />
       <CieloDespegue fecha={fecha} orientacion={orientacion} brillo={brilloCielo} />

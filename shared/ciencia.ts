@@ -22,8 +22,14 @@ export const C = {
   AGUA_HIGIENE_KG_DIA: 0.7,
   /** Comida empacada de la ISS, kg por persona y día (BVAD; la revisión de 2022 la sube a 2.39). */
   COMIDA_KG_DIA: 1.83,
-  /** Diseño del juego: 3 000 kcal diarias repartidas en esa masa de comida. */
-  KCAL_POR_KG_COMIDA: 1640,
+  /** Energía media por tripulante y día que debe dar la comida: 3 035 kcal (NASA-STD-3001 Vol. 2 [V2 7003]). */
+  MENU_KCAL_DIA: 3035,
+  /** kcal de más por cada hora de salida con traje (NASA-STD-3001 Vol. 2 [V2 7004]). */
+  EVA_KCAL_H: 200,
+  /** Diseño del juego: las 3 035 kcal del estándar repartidas en los 1.83 kg de comida de la ISS. */
+  KCAL_POR_KG_COMIDA: 3035 / 1.83,
+  /** Déficit de energía por kg de peso perdido: unas 7 700 kcal (Hall 2008, aproximación). */
+  KCAL_POR_KG_PESO: 7700,
   MASA_CORPORAL_KG: 82,
   /** Consumo máximo de oxígeno: 45 mL/kg/min para 82 kg (BVAD). */
   VO2MAX_L_MIN: 3.7,
@@ -90,10 +96,31 @@ export const C = {
   GCR_SUPERFICIE_MSV_DIA: 0.64,
   /** Límite de dosis de carrera de NASA. */
   LIMITE_CARRERA_MSV: 600,
+  /**
+   * Regolito sobre un hábitat en Marte a 0 km (Simonsen y Nealy 1991, NASA TP-3079): casi toda la
+   * reducción está en los primeros 20 g/cm², unos 15 cm a 1.5 g/cm³. Con 20 g/cm², los rayos
+   * cósmicos bajan de 11.9 a 10.0 rem/año (−16%) y la tormenta solar de febrero de 1956, de 9.9 a
+   * 6.3 rem (−36%), en los órganos que forman la sangre.
+   */
+  REGOLITO_CM_UTIL: 15,
+  REGOLITO_GCR: 0.16,
+  REGOLITO_SPE: 0.36,
+
+  // ---- Construcción de la base ----
+  /** Volumen habitable de BEAM en la ISS una vez expandido: 565 pies³ = 16 m³. */
+  MODULO_M3: 16,
+  /** Distancia entre el aterrizaje del Apollo 12 y el Surveyor 3, que quedó picado por el regolito. */
+  APOLLO12_M: 155,
+  /** Estudio de la NASA: los módulos de aterrizaje en Marte a ~1 km entre sí (más cerca, es arriesgado). */
+  PISTA_SEGURA_M: 1000,
+  /** Horas locales en que MRO cruza el ecuador (órbita heliosíncrona, 3 a. m. y 3 p. m.). */
+  HORAS_RELE: [3, 15] as readonly number[],
 
   // ---- Marte (NASA Mars Fact Sheet) ----
   /** Duración de un sol: 24 h 39 min 35 s. */
   SOL_S: 88775,
+  /** Inclinación del eje de Marte: 25.19°. Con ella, sen(declinación del Sol) = sen 25.19° · sen Ls. */
+  OBLICUIDAD_MARTE_GRADOS: 25.19,
   GRAVEDAD_MARTE: 3.73,
   GRAVEDAD_TIERRA: 9.82,
   /** Irradiancia solar en la órbita de Marte y en la de la Tierra, W/m². */
@@ -242,7 +269,7 @@ export const FUENTES: Fuente[] = [
   },
   {
     tema: 'Mars',
-    dato: 'A sol lasts 24 h 39 min 35 s. Gravity is 3.73 m/s². Sunlight delivers 586 W/m², compared with 1,361 on Earth.',
+    dato: 'A sol lasts 24 h 39 min 35 s. Gravity is 3.73 m/s². Sunlight delivers 586 W/m², compared with 1,361 on Earth. The axis is tilted 25.19°, so the Sun climbs higher or lower with the season.',
     fuente: 'NASA, Mars Fact Sheet, NSSDCA.',
     url: 'https://nssdc.gsfc.nasa.gov/planetary/factsheet/marsfact.html',
   },
@@ -720,6 +747,102 @@ export const FUENTES: Fuente[] = [
     fuente: 'Cosinekitty, astronomy-engine (VSOP87 planetary model), checked against NASA JPL Horizons.',
     url: 'https://github.com/cosinekitty/astronomy',
   },
+  {
+    tema: 'How a Mars base is set up',
+    dato: 'In NASA Mars Design Reference Architecture 5.0, cargo is pre-deployed one launch opportunity ahead of the crew, and its systems are checked out before the crew leaves Earth. ISRU makes the ascent propellant (oxygen) and crew consumables from the atmosphere, and nuclear surface power runs it. The crew stays about 500 days.',
+    fuente: 'Drake (ed.), NASA, Mars Design Reference Architecture 5.0 Study, executive summary (December 4, 2008). Full report: NASA-SP-2009-566.',
+    url: 'https://www.nasa.gov/wp-content/uploads/2015/09/373669main_2008-12-04_mars_dra5_executive_summary-presentation.pdf',
+  },
+  {
+    tema: 'Surface power far from the crew',
+    dato: 'A NASA study assumes two 40 kWe fission power units. The first one lands on a cargo lander, makes the return propellant and must be unloaded, deployed and switched on by robots before the crew arrives. Each unit is about 7,000 kg and must run more than 1 km from the habitat. Landers come down about 1 km apart, because landing closer is risky. The crew lander lands after the ascent vehicle is fueled.',
+    fuente: 'Rucker, M. A., NASA, "Surface Power for Mars", FISO presentation (December 2016), from NETS 2015 paper 5074.',
+    url: 'https://ntrs.nasa.gov/citations/20160014032',
+  },
+  {
+    tema: 'Regolith shielding',
+    dato: 'For a habitat on Mars at 0 km, most of the dose reduction from regolith happens in the first 20 g/cm², about 15 cm of soil. With 20 g/cm², cosmic rays drop from 11.9 to 10.0 rem per year and the February 1956 solar storm from 9.9 to 6.3 rem. The study recommends 15 to 20 cm if regolith is used.',
+    fuente: 'Simonsen, L. C. and Nealy, J. E., NASA Langley, Radiation Protection for Human Missions to the Moon and Mars, NASA TP-3079 (1991).',
+    url: 'https://ntrs.nasa.gov/citations/19910008686',
+  },
+  {
+    tema: 'Inflatable habitats',
+    dato: 'NASA TransHab was designed as the living module of a transit ship to Mars: a composite core inside an inflatable shell. At Johnson Space Center a test article held four times its working pressure, and a full-size one was folded and deployed in a vacuum chamber.',
+    fuente: 'de la Fuente, H., Raboin, J., Spexarth, G. and Valle, G., "TransHab: NASA\'s Large-Scale Inflatable Spacecraft", AIAA (2000).',
+    url: 'https://ntrs.nasa.gov/citations/20100042636',
+  },
+  {
+    tema: 'Expanding BEAM on the ISS',
+    dato: 'The first try on May 26, 2016 stopped because the module did not grow. On May 28, Jeff Williams let air in through a valve in short bursts (8 bursts and 44 seconds of air by late morning). Expansion took from 9:04 a.m. to 4:10 p.m. EDT. Eight air tanks then pressurized it in 10 minutes. Leak checks ran for a week before the hatch was opened on June 6. BEAM gives 16 m³ of habitable volume.',
+    fuente: 'NASA Space Station blog, May 2016 posts, and "BEAM Fully Expanded and Pressurized" (May 28, 2016).',
+    url: 'https://www.nasa.gov/blogs/spacestation/2016/05/28/beam-fully-expanded-and-pressurized/',
+  },
+  {
+    tema: 'Landing blast ejecta',
+    dato: 'Apollo 12 landed 155 m from the Surveyor 3 probe. Parts of Surveyor brought back to Earth were pitted by soil that the lunar module engine threw at high speed.',
+    fuente: 'Metzger, P. T., Hintze, P. E., Trigwell, S. and Lane, J. E., "Further Analysis on the Mystery of the Surveyor III Dust Deposits" (NASA KSC, 2012).',
+    url: 'https://ntrs.nasa.gov/citations/20120000029',
+  },
+  {
+    tema: 'Talking to Earth from Mars',
+    dato: 'Perseverance routinely receives commands from Earth with its X-band high-gain antenna, a hexagonal paddle that rotates. It can also send data back, but slowly: 99.9% of science data goes through the UHF antenna to passing orbiters. The MRO orbit crosses the equator at about 3 a.m. and 3 p.m. local solar time.',
+    fuente: 'NASA JPL, Mars 2020 landing press kit, Telecommunications; NASA JPL, "NASA Mars Orbiter Preparing for Mars Landers\' 2016 Arrival" (2014).',
+    url: 'https://www.jpl.nasa.gov/news/press_kits/mars_2020/landing/mission/spacecraft/telecommunications/',
+  },
+  {
+    tema: 'Analog base: CHAPEA',
+    dato: 'NASA CHAPEA crews of four live for a year in Mars Dune Alpha, a 1,700 square foot habitat 3D-printed by ICON at Johnson Space Center in Houston. Mission 1 ran from June 25, 2023 to July 6, 2024.',
+    fuente: 'NASA, Crew Health and Performance Exploration Analog (CHAPEA); NASA, "NASA is Recruiting for Yearlong Simulated Mars Mission" (ICON-built habitat).',
+    url: 'https://www.nasa.gov/humans-in-space/chapea/',
+  },
+  {
+    tema: 'Food energy',
+    dato: 'The food system must give each crew member an average of 3,035 kcal per day. The reference values are 3,041 kcal for men (82.9 kg on average) and 2,344 kcal for women (65.1 kg). Each hour of spacewalk needs 200 kcal more than the normal intake.',
+    fuente: 'NASA-STD-3001 Vol. 2, section 7.1 Food and Nutrition: [V2 7003] Food Caloric Content and [V2 7004] EVA Food Caloric Content.',
+    url: 'https://www.nasa.gov/reference/7-0-habit-ability-functions-vol-2/',
+  },
+  {
+    tema: 'Eating less in space',
+    dato: 'On the International Space Station, crew members ate on average 80% of their recommended energy intake and weighed less on landing day than before the flight.',
+    fuente: 'Smith S.M., Zwart S.R. et al. (2005), The nutritional status of astronauts is altered after long-term space flight aboard the International Space Station, Journal of Nutrition 135(3): 437-443.',
+    url: 'https://doi.org/10.1093/jn/135.3.437',
+  },
+  {
+    tema: 'What hunger does to the body',
+    dato: 'In the Minnesota Starvation Experiment (1944 to 1945), 36 volunteers ate about 1,570 kcal per day for 24 weeks. They lost about 25% of their body weight, their work capacity fell, and they showed depression, constant thoughts of food and social withdrawal.',
+    fuente: 'Kalm L.M., Semba R.D. (2005), They starved so that others be better fed: remembering Ancel Keys and the Minnesota experiment, Journal of Nutrition 135(6): 1347-1352.',
+    url: 'https://doi.org/10.1093/jn/135.6.1347',
+  },
+  {
+    tema: 'Energy and body weight',
+    dato: 'Losing 1 kg of body weight takes an energy deficit of about 7,700 kcal, the classic 3,500 kcal per pound rule. It is an approximation: the real value changes with body fat and over time.',
+    fuente: 'Hall K.D. (2008), What is the required energy deficit per unit weight loss? International Journal of Obesity 32: 573-576.',
+    url: 'https://doi.org/10.1038/sj.ijo.0803720',
+  },
+  {
+    tema: 'Long twilight on Mars',
+    dato: 'Mars Pathfinder found that the sky stays bright for up to two hours after sunset, because dust reaches very high in the atmosphere. Spirit saw the same glow over Gusev Crater in 2005: sunlight kept reflecting off dust high in the air for up to two hours.',
+    fuente: 'NASA/JPL, Mars Pathfinder science results (1997); NASA Astronomy Picture of the Day, Sunset Over Gusev Crater (June 20, 2005).',
+    url: 'https://science.nasa.gov/image-article/apod-2005-june-20-sunset-over-gusev-crater/',
+  },
+  {
+    tema: 'Blue sunset on Mars',
+    dato: 'Curiosity filmed a sunset in Gale Crater on sol 956 (April 15, 2015). Around the Sun the sky turns blue: the very fine dust lets blue light through a little more easily and scatters it close to the direction of the Sun.',
+    fuente: "NASA/JPL, NASA's Curiosity Rover Views Serene Sundown on Mars (May 8, 2015), Mastcam images PIA19400 and PIA19401.",
+    url: 'https://www.jpl.nasa.gov/news/nasas-curiosity-rover-views-serene-sundown-on-mars/',
+  },
+  {
+    tema: 'Phobos and Deimos',
+    dato: 'Phobos circles Mars about 6,000 km above the surface every 7 h 39 min, faster than Mars turns, so from the ground it rises in the west and sets in the east. Deimos is farther out and takes about 30 hours per orbit, so it rises in the east and crosses the sky slowly.',
+    fuente: 'NASA Science, Mars Moons.',
+    url: 'https://science.nasa.gov/mars/moons/',
+  },
+  {
+    tema: 'Suit power and heat',
+    dato: 'The backpack provides electricity for the suit. The fingers get coldest, so spacesuit gloves have heaters that keep them warm while still letting the crew use tools.',
+    fuente: 'NASA, Spacewalk Spacesuit Basics.',
+    url: 'https://www.nasa.gov/feature/spacewalk-spacesuit-basics/',
+  },
 ]
 
 /** Lo que el juego simplifica o inventa para poder jugarse. Se muestra junto a las fuentes. */
@@ -765,6 +888,12 @@ export const SUPUESTOS: string[] = [
   'The assembly procedures follow real practice, but their steps, order and timing are simplified so they can be played. The seconds you have to press and hold are not the real ones.',
   'How well the panels perform based on their orientation is a game model: the cosine of the angle to the noon Sun at the equinox, plus 15% diffuse light.',
   'The dose the reactor adds depending on where it is placed, the damage from overvoltage and the extra power use at low voltage are game values.',
+  'The base works (inflatable module, regolith bags, landing pad and high-gain antenna) open once the base is running and can be done in any order. Their steps are simplified and take a few real seconds. A real crew would spread them over days and use robots for some of them.',
+  'The inflatable module has the volume of BEAM, 16 m³. Filling it takes the oxygen for 21.3 kPa from the tanks, about 4.5 kg; the nitrogen is not tracked. The leak chance, the pressure readings and the 10% faster recovery while sleeping thanks to the private space are game values.',
+  'Regolith bags lower the shelter dose in proportion to their thickness up to 15 cm, using the NASA TP-3079 reductions for 20 g/cm²: 16% for cosmic rays and 36% for a solar storm. Above 15 cm the game adds no more protection. The bags are taken as 1.5 g/cm³ of soil.',
+  'The next cargo lander lands as soon as the pad is ready, and the map is compressed, so the pad is drawn near the base. The dust and damage it throws at each distance are game values. DRA 5.0 plans no resupply: the 2 spare parts kits your crew can take from that lander are a game reward.',
+  'Antenna pointing uses the real direction of Earth seen from Mars on the mission date (astronomy-engine and the IAU rotation axis of Mars). The local hour is the game clock, taken as solar time. Without the high-gain antenna, messages from Earth wait for an orbiter relay pass at about 3:00 or 15:00, and never more than half a sol. The 3° pointing limit and the signal readings are game values.',
+  'The Base Building Guide summarizes NASA studies. Real plans differ from study to study, and none of them has flown yet.',
   'The chance of an airlock leak or a dent in the hull, the 1 mmHg limit in the pressure test and the 1 mm limit for marks on the hull come from the game.',
   'The garden has six pillows, like Veggie, but gives more oxygen and food than a real Veggie: up to 0.7 kg of oxygen per day and between 0.6 and 1.2 kg per pillow per harvest.',
   'How the growing medium dries, how much moisture each mL adds, when mold appears and how it affects plant health are game models. The chile pepper harvest at 110 days is an estimate based on PH-04.',
@@ -777,4 +906,11 @@ export const SUPUESTOS: string[] = [
   'The Quick demo mission compresses only time: it uses the real 150-day fast trajectory, a 3-sol surface stay with 2 samples, and starts each phase at the highest time scale allowed. Every rate, dose, supply and constant stays the same as in a full mission.',
   'The difficulty levels change only game values: Cadet halves the chance of a random breakdown, gives 50% more time to decide in an emergency, sends hints and repeats shortage alerts twice as often. Commander has 60% more random breakdowns, 30% less time to decide and repeats shortage alerts half as often.',
   'The mission score, its six parts and their weights are game design values for learning. They are not a NASA rating. The learning objectives are checked against what happened in your mission.',
+  'The meal plan gives each person the NASA average of 3,035 kcal per day, not a value from their own age, weight and height. The extra 10% for a sick or injured crew member is a game value. The 200 kcal per spacewalk hour is eaten while outside.',
+  'Body weight follows the energy balance at 7,700 kcal per kg. Fatigue building 6% faster for each 1% of weight lost (up to 60%) and the mood labels are game values based on the Minnesota study. They are not a medical model.',
+  'In the game the helmet lights, the hand light and the suit heater all draw from the main suit battery, so their cost shows in one number. Real suits power some of these from their own batteries. The extra draw (helmet lights 15%, hand light 8%, heater 0.4% per degree below -20 °C, a third of that in sunlight) is a game value.',
+  'Walking in the dark without lights halves your speed and gives a 25% chance per hour of a fall. A hand light alone cuts that chance to 30%. The base floodlights light the ground within 22 m of the habitat and halve the chance. The habitat lights (0.15 kW, 0.03 kW while all sleep) and the floodlights (0.4 kW) are game values.',
+  'The height of the Sun comes from the site latitude, the season (Ls) and the hour, with noon halfway between the sunrise and sunset in the Curiosity record. The ground counts as dark with the Sun more than 8° below the horizon. How the twilight glow fades is a game curve that leaves a faint glow for about two hours.',
+  'Phobos and Deimos follow their real distance and orbit period, but their place along the orbit is not taken from an ephemeris.',
+  "Every mission lifts off at 1:47 a.m. Florida time, the clock time of Artemis I, so the launch is at night as it was. The date is the mission's own.",
 ]

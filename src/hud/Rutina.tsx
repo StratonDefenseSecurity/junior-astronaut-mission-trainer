@@ -2,11 +2,12 @@
 // del hábitat, la lista del puño del traje con los consumibles, la hora de volver y el compañero.
 import { C } from '@shared/ciencia'
 import { consumiblesTraje, minutosFuera, minutosHastaVolver } from '@shared/eva'
+import { cargaTraje, oscuro, solDeSala } from '@shared/noche'
 import { DIAS_SEMANA, HORARIO, SABADO, bloqueDe, diaSemana, enMarte, horaTexto } from '@shared/horario'
 import { deberesDeFase } from '@shared/procedimientos'
 import type { Player, RoomState } from '@shared/types'
 import { local } from '../mundo/control'
-import { ajenos } from '../red'
+import { ajenos, api } from '../red'
 
 const minTexto = (m: number) => {
   const v = Math.max(0, Math.round(m))
@@ -44,7 +45,7 @@ export function Hoy({ sala }: { sala: RoomState }) {
 /** Lista del puño del traje: aparece mientras estás fuera. */
 export function ListaPuno({ sala, yo }: { sala: RoomState; yo: Player }) {
   if (yo.zona !== 'exterior') return null
-  const c = consumiblesTraje(yo)
+  const c = consumiblesTraje(yo, sala)
   const eva = yo.eva
   const fuera = minutosFuera(sala, yo)
   const volver = minutosHastaVolver(sala, yo)
@@ -76,7 +77,42 @@ export function ListaPuno({ sala, yo }: { sala: RoomState; yo: Player }) {
       {lejos && <p className="mini">Your buddy is too far. Stay within {C.EVA_COMPANERO_M} m.</p>}
       {reserva && <p className="mini">Reserve reached. Go inside now.</p>}
       {!reserva && volver <= 0 && <p className="mini">Walk back now. Keep the {C.EVA_RESERVA_MIN}-minute reserve.</p>}
+      <LucesTraje sala={sala} yo={yo} bateria={c.bateria} />
       <p className="mini muted">If the suit fails: the backup oxygen pack gives 30 minutes. Go straight to the airlock.</p>
+    </div>
+  )
+}
+
+/** Focos del casco y linterna: encenderlos cuesta batería; de noche, sin ellos, el suelo no se ve. */
+function LucesTraje({ sala, yo, bateria }: { sala: RoomState; yo: Player; bateria: number }) {
+  if (!enMarte(sala)) return null
+  const casco = Boolean(yo.luces?.casco)
+  const mano = Boolean(yo.luces?.mano)
+  const carga = cargaTraje(sala, yo)
+  const noche = oscuro(sala)
+  const elev = solDeSala(sala).elevacion
+  const sinLuces = (bateria * carga.total) / (carga.total - carga.luces)
+  const pct = (x: number) => `${Math.round(x * 100)}%`
+  return (
+    <div className="luces-traje">
+      <strong className="mini">Lights</strong>
+      <p className="mini">
+        {noche ? `Night. The Sun is ${Math.round(-elev)}° below the horizon.` : elev < 0 ? 'Twilight. The dust high up still glows. It gets dark soon.' : 'Daylight.'} It is {sala.ambiente.tempExt} °C.
+      </p>
+      <div className="row" style={{ gap: 6 }}>
+        <button className={`small ${casco ? 'primary' : ''}`} aria-pressed={casco} onClick={() => api.accion('luces', { casco: !casco })}>
+          Helmet lights {casco ? 'on' : 'off'}
+        </button>
+        <button className={`small ${mano ? 'primary' : ''}`} aria-pressed={mano} onClick={() => api.accion('luces', { mano: !mano })}>
+          Hand light {mano ? 'on' : 'off'}
+        </button>
+      </div>
+      <p className="mini muted">
+        Battery use: {pct(carga.total)} of normal. Lights +{pct(carga.luces)}, heater +{pct(carga.calor)}.
+        {carga.luces > 0 ? ` Battery left: ${minTexto(bateria)} with lights, ${minTexto(sinLuces)} without.` : ''} Press L for the helmet lights.
+      </p>
+      {noche && !casco && <p className="mini warn">{mano ? 'The hand light shows only a small patch. You walk slower and may still fall.' : 'It is dark. Without lights you walk at half speed and may fall.'}</p>}
+      {!noche && (casco || mano) && <p className="mini muted">There is enough light now. Your lights only drain the battery.</p>}
     </div>
   )
 }

@@ -497,5 +497,8 @@ button.tema.activo { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(var
 .puno.bad { border-color: var(--bad); }
 .puno ul { margin: 6px 0; padding-left: 18px; }
 .puno li.warn { color: var(--warn); }
+.puno { max-height: calc(100vh - 160px); overflow-y: auto; }
+.puno .luces-traje { border-top: 1px solid rgba(var(--accent-rgb), 0.3); margin-top: 6px; padding-top: 6px; }
+.puno .luces-traje p { margin: 4px 0; }
 .puno li.bad { color: var(--bad); font-weight: 600; }
 .puno p { margin: 4px 0; }

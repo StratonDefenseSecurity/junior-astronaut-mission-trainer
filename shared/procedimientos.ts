@@ -7,6 +7,8 @@
 // tienen su fuente en FUENTES de shared/ciencia.ts; lo que es del juego está en SUPUESTOS.
 import { C } from './ciencia.js'
 import { companeroEva, objetivoEva } from './eva.js'
+import { tierraDesdeMarte } from './astronomia.js'
+import { escenarioDe, fechaDeMision } from './escenarios.js'
 import { SISTEMA_BY_ID, SITE_BY_ID, TAREAS_ENSAMBLAJE, type CultivoId, type Player, type Role, type RoomState, type SistemaId, type Zona } from './types.js'
 
 export type TipoPaso = 'mantener' | 'secuencia' | 'ajustar' | 'elegir' | 'comprobar'
@@ -274,6 +276,415 @@ const dosisReactor: Record<string, number> = { enterrado: 0, lejos: 0.05, cerca:
 export const DOSIS_REACTOR = dosisReactor
 const LUZ: Record<string, number> = { rgb: 1, rb: 0.95, blanca: 0.5 }
 export const LUZ_HUERTO = LUZ
+
+// ---------- Obras de la base en operación ----------
+// Lo que una base real sigue construyendo cuando ya funciona: ampliar el espacio con un módulo
+// inflable, blindar el refugio con regolito, preparar la pista del próximo carguero y apuntar la
+// antena de alta ganancia a la Tierra. Se abren en la fase de base, en cualquier orden, y cada una
+// se hace una vez. Sus consecuencias están en server/procedimientos.ts (alTerminar).
+
+/** Ids de las obras, en el orden en que se muestran. */
+export const OBRAS = ['inflable', 'regolito', 'pista', 'antenaAlta'] as const
+export const obraHecha = (room: RoomState, id: string) => Boolean(room.procedimientos?.[id]?.terminado)
+
+/** Dónde se ve la Tierra desde la base en el instante de misión `t` y a la hora local `hora`. */
+export function tierraEnCielo(room: RoomState, t = room.t, hora = room.ambiente.hora) {
+  return tierraDesdeMarte(fechaDeMision(escenarioDe(room.escenario), Math.max(0, t)), latitudDe(room.sitio), hora)
+}
+/** Efemérides con las que se apunta la antena: las de cuando se empezó a apuntar (o las de ahora). */
+export function apunteAntena(room: RoomState) {
+  const d = room.procedimientos?.antenaAlta?.datos ?? {}
+  return d.tApunte !== undefined ? { ...tierraEnCielo(room, d.tApunte, d.horaApunte), hora: d.horaApunte } : { ...tierraEnCielo(room), hora: room.ambiente.hora }
+}
+/** Ángulo entre dos acimuts, de 0 a 180. */
+const difAz = (a: number, b: number) => Math.abs(((a - b + 540) % 360) - 180)
+/** Error total de apuntado, en grados, con los valores que se dieron (el acimut pesa menos cerca del cenit). */
+export function errorAntena(room: RoomState): number {
+  const v = room.procedimientos?.antenaAlta?.valores ?? []
+  const a = apunteAntena(room)
+  const eAz = difAz(Number(v[1] ?? a.az), a.az) * Math.cos((a.el * Math.PI) / 180)
+  const eEl = Number(v[2] ?? a.el) - a.el
+  return r1(Math.hypot(eAz, eEl))
+}
+/** Hasta este error (grados) la antena engancha la señal: la mitad del haz, en el juego. */
+export const ANTENA_LIMITE_GRADOS = 3
+/** ¿Hay enlace directo con la Tierra? La antena sigue a la Tierra, bien apuntada, y la Tierra está sobre el horizonte. */
+export function enlaceDirecto(room: RoomState): boolean {
+  const ef = room.efectos
+  return Boolean(ef?.antenaSigue && (ef.antenaError ?? 99) <= ANTENA_LIMITE_GRADOS && tierraEnCielo(room).el > 0)
+}
+/** ¿Pasa ahora un orbitador de relevo? MRO cruza el ecuador hacia las 3:00 y las 15:00 locales. */
+export const pasoDeRele = (hora: number) => C.HORAS_RELE.some((h) => Math.abs(hora - h) < 0.5)
+const horaTexto = (h: number) => `${String(Math.floor(h)).padStart(2, '0')}:${String(Math.floor((h % 1) * 60)).padStart(2, '0')}`
+
+/** Oxígeno (kg) para llenar el módulo inflable a la presión parcial de la cabina (gas ideal, 295 K). */
+export const O2_MODULO_KG = r1((C.PPO2_NOMINAL_KPA * 1000 * C.MODULO_M3 * 0.032) / (8.314 * 295))
+
+/** Distancia de la plataforma al hábitat según dónde se marcó, m. */
+export const DISTANCIA_PISTA: Record<string, number> = { cerca: C.APOLLO12_M, medio: 500, lejos: C.PISTA_SEGURA_M }
+
+const obras: Procedimiento[] = [
+  proc({
+    id: 'inflable',
+    titulo: 'Deploy the inflatable module',
+    resumen: `Anchor the folded module, inflate it in short bursts, check it for leaks and open the hatch. It adds ${C.MODULO_M3} m³ of private space.`,
+    intro:
+      'An inflatable module travels folded and grows once it is in place. NASA designed TransHab for a ship to Mars, and its ideas led to BEAM, which was expanded on the ISS in May 2016. The first try stalled because the folded fabric did not move. Two days later Jeff Williams let air in through a valve in bursts of a few seconds, waiting between them, and the expansion took about seven hours. Then came a week of leak checks before anyone went inside.',
+    roles: ['logistica', 'sistemas'],
+    zona: 'nave',
+    estacion: 'esclusa',
+    pasos: [
+      {
+        id: 'anclar',
+        tipo: 'secuencia',
+        titulo: 'Lay out and anchor the module',
+        instruccion: 'The folded module sits next to the habitat. Tap the steps in the order you do them.',
+        porque: 'The fabric must rest on clean ground: a sharp rock under it can cut the outer layers when it grows. The straps hold it down, because once inflated it pushes up with tons of force.',
+        zona: 'exterior',
+        estacion: 'modulo',
+        segundos: 10,
+        elementos: [
+          { id: 'acoplar', nombre: 'Bolt the module ring to the habitat hatch' },
+          { id: 'despejar', nombre: 'Clear rocks from the footprint' },
+          { id: 'anclar', nombre: 'Stake the anchor straps' },
+          { id: 'desplegar', nombre: 'Unpack the folded module on the clear ground' },
+        ],
+        ordenes: [
+          ['despejar', 'desplegar', 'acoplar', 'anclar'],
+          ['despejar', 'desplegar', 'anclar', 'acoplar'],
+        ],
+        error: 'Clear the ground before the module goes on it. It is unpacked before it can be bolted or strapped down.',
+      },
+      {
+        id: 'plan',
+        tipo: 'elegir',
+        titulo: 'Plan the inflation',
+        instruccion: 'The hatch valve lets cabin air into the folded module. How do you inflate it?',
+        porque: 'Folded fabric sticks after months packed. A short burst lets the layers slide and unfold. Then you wait and compare the size and pressure with the expected values before the next burst.',
+        segundos: 8,
+        opciones: () => [
+          { id: 'rafagas', texto: 'Short bursts of a few seconds, waiting and measuring between them', calidad: 1, consecuencia: 'This is how BEAM was expanded in 2016: slowly, checking the size and the pressure each time.' },
+          { id: 'continuo', texto: 'Leave the valve open until it is full', calidad: 0.3, consecuencia: 'The pressure rises before the fabric unfolds. On the first BEAM try in 2016 the module barely grew and the work had to stop.' },
+          { id: 'tanques', texto: 'Fill it straight from the high-pressure air tanks', calidad: 0, repetir: true, consecuencia: 'No. A fast fill strains folds and seams that have not opened yet. The tanks are used only at the end, once the module has its full size.' },
+        ],
+      },
+      {
+        id: 'rafagas',
+        tipo: 'mantener',
+        titulo: 'Inflate in bursts',
+        instruccion: 'Open the valve in short bursts while the module unfolds. Press and hold until it reaches its full size.',
+        porque: `When it has its full size, air tanks bring it to cabin pressure. Filling ${C.MODULO_M3} m³ takes about ${O2_MODULO_KG} kg of oxygen from the tanks, plus nitrogen.`,
+        segundos: 7,
+        boton: 'Hold to inflate',
+      },
+      {
+        id: 'fugas',
+        tipo: 'comprobar',
+        titulo: 'Leak check',
+        instruccion: 'Close the hatch valve and watch the module pressure for a day. Is it airtight?',
+        porque: 'The fabric stretches a little at first, so the pressure dips and then settles. A drop that keeps going means a leak at a seam or at the hatch ring.',
+        segundos: 10,
+        lectura: (room) => {
+          const d = datosDe(room, 'inflable')
+          const fuga = (d.fuga ?? 0) > 0
+          const s = d.semilla ?? 1
+          const puntos = Array.from({ length: 13 }, (_, k) => {
+            const x = k * 2
+            const asiento = 0.25 * (1 - Math.exp(-x / 3))
+            return { x, y: r2(101.3 - asiento - (fuga ? 0.09 * x : 0) + ruido(s, k) * 0.03) }
+          })
+          return {
+            forma: 'linea',
+            titulo: 'Module pressure',
+            unidad: 'kPa',
+            eje: 'hours',
+            puntos,
+            limite: 100.8,
+            limiteTexto: 'Lowest acceptable: 100.8 kPa',
+            pregunta: 'Is the module airtight?',
+            correcto: fuga ? 'falla' : 'pasa',
+            explicacion: fuga ? 'The pressure keeps falling after the fabric settled. There is a leak. Find it, seal it and inflate again.' : 'After the fabric settles, the pressure holds. The small wiggles are sensor noise.',
+          }
+        },
+      },
+      {
+        id: 'entrar',
+        tipo: 'elegir',
+        titulo: 'Open the hatch',
+        instruccion: 'The module held its pressure. How do you open it?',
+        porque: 'Air that sat still in a closed module can hold pockets of CO2 and moisture. A new module is entered after equalizing the pressure, sampling the air and setting up a fan duct.',
+        segundos: 8,
+        opciones: () => [
+          { id: 'muestra', texto: 'Equalize the pressure, sample the air, then open and set up a fan duct', calidad: 1, consecuencia: 'The air is checked and mixed with the cabin air before anyone works inside.' },
+          { id: 'abrir', texto: 'Open it and start moving the bunks in', calidad: 0.4, consecuencia: 'It works, but nobody checked the air. Stale air pockets give headaches until a fan mixes them.' },
+        ],
+      },
+    ],
+  }),
+
+  proc({
+    id: 'regolito',
+    titulo: 'Shield the shelter with regolith',
+    resumen: 'Fill bags with Martian soil and stack them on the hull over the Storm Shelter. It lowers the dose there.',
+    intro:
+      'Soil is the cheapest shielding on Mars: it is already there. A NASA Langley study found that most of the gain comes from the first 20 g/cm², about 15 cm of regolith. With that layer, the dose from a large solar storm drops by about a third, and the cosmic ray dose by about a sixth. Thicker layers help much less.',
+    roles: ['logistica', 'piloto'],
+    zona: 'exterior',
+    estacion: 'techoRefugio',
+    pasos: [
+      {
+        id: 'suelo',
+        tipo: 'elegir',
+        titulo: 'Pick the soil',
+        instruccion: 'Where do you scoop the regolith for the bags?',
+        porque: 'Fine, loose soil packs tight and leaves no gaps. Sharp rocks tear the bag fabric, and gaps let radiation through.',
+        segundos: 8,
+        opciones: () => [
+          { id: 'fino', texto: 'Loose fine soil, sieved of rocks', calidad: 1, consecuencia: 'The bags pack tight, with no gaps.' },
+          { id: 'rocas', texto: 'Rocky soil, which is quicker to scoop', calidad: 0.5, consecuencia: 'Sharp edges tear some bags and leave gaps. The layer protects less than its thickness suggests.' },
+        ],
+      },
+      {
+        id: 'llenar',
+        tipo: 'secuencia',
+        titulo: 'Fill a bag',
+        instruccion: 'Tap the steps in the order you do them for each bag.',
+        porque: 'A bag filled about three quarters full, closed and then tamped in place makes a flat brick that does not slide off the curved hull.',
+        segundos: 10,
+        elementos: [
+          { id: 'apisonar', nombre: 'Tamp it flat' },
+          { id: 'cerrar', nombre: 'Fold the top and close it' },
+          { id: 'llenar', nombre: 'Fill it about three quarters full' },
+          { id: 'colocar', nombre: 'Lay it on the hull, seam down' },
+        ],
+        ordenes: [['llenar', 'cerrar', 'colocar', 'apisonar']],
+        error: 'Fill it, close it, lay it in place and tamp it last. A bag tamped before it is laid shifts when you move it.',
+      },
+      {
+        id: 'espesor',
+        tipo: 'ajustar',
+        titulo: 'Choose the thickness',
+        instruccion: 'How thick is the layer of bags over the shelter?',
+        porque: 'Each centimeter costs hours of work in the suit. Most of the protection is in the first 15 cm (20 g/cm²). After that, each extra bag adds very little.',
+        segundos: 8,
+        min: 0,
+        max: 40,
+        paso: 1,
+        unidad: 'cm',
+        inicial: 5,
+        objetivo: () => C.REGOLITO_CM_UTIL,
+        evaluar: (_room, v) => {
+          const util = C.REGOLITO_CM_UTIL
+          const calidad = r2(v < util ? v / util : v <= 20 ? 1 : Math.max(0.6, 1 - (v - 20) / 40))
+          const k = Math.min(1, v / util)
+          return {
+            calidad,
+            mensaje:
+              v < util
+                ? `${v} cm cuts about ${pct(C.REGOLITO_SPE * k)} of a solar storm dose in the shelter. 15 cm would cut ${pct(C.REGOLITO_SPE)}.`
+                : v <= 20
+                  ? `${v} cm. Most of the protection regolith can give is there.`
+                  : `${v} cm takes many more hours outside for almost no extra protection.`,
+          }
+        },
+      },
+      {
+        id: 'apilar',
+        tipo: 'mantener',
+        titulo: 'Stack the bags',
+        instruccion: 'Lay the bags in rows over the shelter, with the joints staggered. Press and hold while you stack.',
+        porque: 'If the joints of two rows line up, there is a straight gap through the layer. Staggered like bricks, every path crosses soil.',
+        segundos: 6,
+        boton: 'Hold to stack',
+      },
+    ],
+  }),
+
+  proc({
+    id: 'pista',
+    titulo: 'Prepare the landing pad',
+    resumen: 'Pick a safe spot for the next cargo lander, clear it, mark it and give the go for landing.',
+    intro:
+      'A rocket engine near the ground blasts soil and rocks outward at high speed. Apollo 12 landed 155 m from the Surveyor 3 probe, and parts of Surveyor brought back to Earth were pitted by that spray. NASA studies of Mars bases land the vehicles about 1 km apart and keep the power units more than 1 km from the habitat.',
+    roles: ['piloto', 'logistica'],
+    zona: 'exterior',
+    estacion: 'pista',
+    pasos: [
+      {
+        id: 'distancia',
+        tipo: 'elegir',
+        titulo: 'Pick the spot',
+        instruccion: 'How far from the habitat do you mark the pad?',
+        porque: 'The farther the pad, the less soil reaches the base. The cost is a longer drive to unload the cargo.',
+        segundos: 8,
+        opciones: () => [
+          { id: 'cerca', texto: `${C.APOLLO12_M} m away, to unload quickly`, calidad: 0.1, consecuencia: 'About as close as Apollo 12 landed to Surveyor 3. The spray will reach the solar arrays and the hull.' },
+          { id: 'medio', texto: '500 m away', calidad: 0.6, consecuencia: 'Most of the spray falls short, but fine dust still reaches the panels.' },
+          { id: 'lejos', texto: '1 km away, as NASA studies plan', calidad: 1, consecuencia: 'The base is out of reach of the spray.' },
+        ],
+      },
+      {
+        id: 'marcar',
+        tipo: 'secuencia',
+        titulo: 'Clear and mark the pad',
+        instruccion: 'Tap the jobs in the order you do them.',
+        porque: 'Loose rocks become bullets under the engine. The beacons go on last, on the cleared circle, so the lander guidance sees exactly where it is safe.',
+        segundos: 10,
+        elementos: [
+          { id: 'balizas', nombre: 'Set radio beacons at the edge of the circle' },
+          { id: 'rocas', nombre: 'Move the loose rocks out of the circle' },
+          { id: 'medir', nombre: 'Check that the ground is flat and firm' },
+          { id: 'informar', nombre: 'Send the pad position to Mission Control' },
+        ],
+        ordenes: [
+          ['medir', 'rocas', 'balizas', 'informar'],
+          ['rocas', 'medir', 'balizas', 'informar'],
+        ],
+        error: 'Check the ground and clear it first, set the beacons on the clean circle, and report the position last.',
+      },
+      {
+        id: 'rastrillar',
+        tipo: 'mantener',
+        titulo: 'Rake the circle',
+        instruccion: 'Rake small stones out of the landing circle. Press and hold while you rake.',
+        porque: 'Even small stones are thrown hard by the engine. A clean circle sends out less.',
+        segundos: 6,
+        boton: 'Hold to rake',
+      },
+      {
+        id: 'aterrizaje',
+        tipo: 'elegir',
+        titulo: 'Go for landing',
+        instruccion: 'The cargo lander is in orbit and waits for your go. What do you tell the crew?',
+        porque: 'During a landing nobody is near the pad. The crew stays inside, where the hull stops anything the engine throws.',
+        roles: ['piloto', 'comandante'],
+        zona: 'nave',
+        estacion: 'comms',
+        segundos: 8,
+        opciones: () => [
+          { id: 'dentro', texto: 'Everyone inside the habitat until the engines stop', calidad: 1, consecuencia: 'Nobody is outside when the spray comes.' },
+          { id: 'guiar', texto: 'One person waits at the pad to guide it in', calidad: 0, repetir: true, consecuencia: 'No. The engine throws soil and stones at high speed. The beacons guide it, and nobody waits at the pad.' },
+          { id: 'nada', texto: 'Let it land without telling anyone', calidad: 0.2, consecuencia: 'Anyone who is outside gets hit by the spray.' },
+        ],
+      },
+    ],
+  }),
+
+  proc({
+    id: 'antenaAlta',
+    titulo: 'Point the high-gain antenna',
+    resumen: 'Mount the dish, point it at Earth with the ephemeris and lock on the signal. Then messages no longer wait for an orbiter.',
+    intro:
+      'Rovers on Mars send almost all their data through orbiters that fly over a few times a sol. To talk with Earth directly they use a steerable X-band high-gain antenna, which receives the daily commands. The dish has to point where Earth is in the sky right now, and keep following it as Mars turns.',
+    roles: ['sistemas', 'piloto'],
+    zona: 'nave',
+    estacion: 'comms',
+    pasos: [
+      {
+        id: 'mastil',
+        tipo: 'secuencia',
+        titulo: 'Set up the mast',
+        instruccion: 'Tap the steps in the order you do them.',
+        porque: 'If the base of the mast is not level, every angle you set later is off. The launch locks come off only once the dish is on the gimbal.',
+        zona: 'exterior',
+        estacion: 'antena',
+        segundos: 10,
+        elementos: [
+          { id: 'seguros', nombre: 'Remove the launch locks of the gimbal' },
+          { id: 'montar', nombre: 'Mount the dish on the gimbal' },
+          { id: 'nivelar', nombre: 'Level the mast base' },
+          { id: 'cable', nombre: 'Connect the cable to the habitat' },
+        ],
+        ordenes: [
+          ['nivelar', 'montar', 'seguros', 'cable'],
+          ['nivelar', 'montar', 'cable', 'seguros'],
+          ['nivelar', 'cable', 'montar', 'seguros'],
+        ],
+        error: 'Level the base first. The dish goes on the gimbal before the locks come off.',
+      },
+      {
+        id: 'acimut',
+        tipo: 'ajustar',
+        titulo: 'Set the azimuth',
+        instruccion: (room) => {
+          const a = apunteAntena(room)
+          return `Ephemeris for ${horaTexto(a.hora)} local time: Earth is at azimuth ${Math.round(a.az) % 360}° (from north, turning east) and ${Math.round(a.el)}° above the horizon. Turn the dish to that azimuth.`
+        },
+        porque: 'Earth never strays far from the Sun in the Martian sky: it is a morning or evening star. Its direction comes from the real positions of the planets on this date.',
+        segundos: 10,
+        min: 0,
+        max: 359,
+        paso: 1,
+        unidad: '°',
+        inicial: 180,
+        objetivo: (room) => Math.round(apunteAntena(room).az) % 360,
+        evaluar: (room, v) => {
+          const e = difAz(v, apunteAntena(room).az)
+          return { calidad: r2(limitar(1 - Math.max(0, e - 1) / 9, 0, 1)), mensaje: e <= 1 ? `${v}°. On Earth's azimuth.` : `${v}° is ${Math.round(e)}° away from Earth's azimuth.` }
+        },
+      },
+      {
+        id: 'elevacion',
+        tipo: 'ajustar',
+        titulo: 'Set the elevation',
+        instruccion: (room) => `Earth is ${Math.round(apunteAntena(room).el)}° above the horizon. Tilt the dish up to it.`,
+        porque: 'The beam of a high-gain dish is only a few degrees wide. A small tilt error is enough to lose most of the signal.',
+        segundos: 8,
+        min: 0,
+        max: 90,
+        paso: 1,
+        unidad: '°',
+        inicial: 30,
+        objetivo: (room) => limitar(Math.round(apunteAntena(room).el), 0, 90),
+        evaluar: (room, v) => {
+          const e = Math.abs(v - apunteAntena(room).el)
+          return { calidad: r2(limitar(1 - Math.max(0, e - 1) / 9, 0, 1)), mensaje: e <= 1 ? `${v}°. On Earth's elevation.` : `${v}° is ${Math.round(e)}° away from Earth's elevation.` }
+        },
+      },
+      {
+        id: 'senal',
+        tipo: 'comprobar',
+        titulo: 'Lock on the signal',
+        instruccion: 'The dish scans a small circle around where you pointed it. Read the signal from Earth.',
+        porque: 'Off the center of the beam the signal falls fast, with the square of the pointing error. Below half power (−3 dB) the link starts losing data.',
+        segundos: 10,
+        lectura: (room) => {
+          const err = errorAntena(room)
+          const s = datosDe(room, 'antenaAlta').semilla ?? 1
+          const perdida = 3 * (err / ANTENA_LIMITE_GRADOS) ** 2
+          const puntos = Array.from({ length: 9 }, (_, k) => ({ x: k * 45, y: r1(-perdida - 0.4 * Math.abs(Math.sin((k * Math.PI) / 4)) + ruido(s, k) * 0.2) }))
+          const bien = err <= ANTENA_LIMITE_GRADOS
+          return {
+            forma: 'linea',
+            titulo: 'Signal from Earth during the scan',
+            unidad: 'dB',
+            eje: 'scan angle (°)',
+            puntos,
+            limite: -3,
+            limiteTexto: 'Half power: −3 dB',
+            pregunta: 'Is the antenna locked on Earth?',
+            correcto: bien ? 'pasa' : 'falla',
+            explicacion: bien ? `The pointing is ${err}° off, inside the beam. The link holds.` : `The pointing is ${err}° off. The signal is too weak, so the dish has to be pointed again.`,
+            botones: ['Locked', 'Too weak'],
+          }
+        },
+      },
+      {
+        id: 'seguir',
+        tipo: 'elegir',
+        titulo: 'Keep it on Earth',
+        instruccion: 'Mars turns, so Earth moves across the sky. How does the dish keep up?',
+        porque: 'The sky turns about 15° per hour. A fixed dish loses Earth in minutes. The gimbal can follow the ephemeris by itself.',
+        segundos: 8,
+        opciones: () => [
+          { id: 'efemerides', texto: 'Turn on ephemeris tracking on the gimbal', calidad: 1, consecuencia: 'The dish follows Earth while it is above the horizon.' },
+          { id: 'mano', texto: 'Re-point it by hand every hour', calidad: 0.3, consecuencia: 'Between corrections Earth leaves the beam. Most of the time there is no direct link.' },
+          { id: 'fijo', texto: 'Leave it where it is', calidad: 0.1, consecuencia: 'In a few minutes Earth leaves the beam and the link is lost.' },
+        ],
+      },
+    ],
+  }),
+]
 
 export const PROCEDIMIENTOS: Procedimiento[] = [
   deTarea('paneles', {
@@ -635,6 +1046,8 @@ export const PROCEDIMIENTOS: Procedimiento[] = [
       },
     ],
   }),
+
+  ...obras,
 
   proc({
     id: 'huerto',
@@ -2524,6 +2937,21 @@ export const procDeTarea = (tareaId: string) => PROCEDIMIENTOS.find((p) => p.tar
 
 const FASES_HUERTO = ['transito', 'llegada', 'ensamblaje', 'base']
 
+/**
+ * Las obras se empiezan de día y con buen tiempo; una vez empezadas se pueden seguir, salvo los
+ * pasos de fuera durante una tormenta. Apuntar la antena espera a que la Tierra esté sobre el horizonte.
+ */
+function obraDisponible(room: RoomState, p: Procedimiento): boolean {
+  const e = room.procedimientos?.[p.id]
+  if (room.fase !== 'base' || e?.terminado) return false
+  const a = room.ambiente
+  const i = pasoActual(room, p)
+  if (p.pasos[i]?.zona === 'exterior' && (a.tormentaSolar || a.tormentaPolvo)) return false
+  if (p.id === 'antenaAlta' && i === 1 && e?.datos?.tApunte === undefined && tierraEnCielo(room).el < 5) return false
+  if (e && e.paso > 0) return true
+  return a.hora > 7 && a.hora < 17 && !a.tormentaSolar && !a.tormentaPolvo
+}
+
 /** ¿Se puede hacer ahora este procedimiento? */
 export function disponible(room: RoomState, p: Procedimiento): boolean {
   if (p.aDemanda) {
@@ -2535,6 +2963,7 @@ export function disponible(room: RoomState, p: Procedimiento): boolean {
     const t = tarea(p.tarea)
     return room.fase === 'ensamblaje' && t.paso === room.ensamblaje.paso && !room.ensamblaje.hechas[t.id]
   }
+  if ((OBRAS as readonly string[]).includes(p.id)) return obraDisponible(room, p)
   const h = room.huerto
   if (!FASES_HUERTO.includes(room.fase)) return false
   if (p.id === 'huerto') return room.cargamento.huerto > 0 && !h.establecido
