@@ -8,7 +8,7 @@
 import { C } from './ciencia.js'
 import { companeroEva, objetivoEva } from './eva.js'
 import { tierraDesdeMarte } from './astronomia.js'
-import { escenarioDe, fechaDeMision } from './escenarios.js'
+import { fechaDeMision } from './escenarios.js'
 import { SISTEMA_BY_ID, SITE_BY_ID, TAREAS_ENSAMBLAJE, type CultivoId, type Player, type Role, type RoomState, type SistemaId, type Zona } from './types.js'
 
 export type TipoPaso = 'mantener' | 'secuencia' | 'ajustar' | 'elegir' | 'comprobar'
@@ -289,7 +289,7 @@ export const obraHecha = (room: RoomState, id: string) => Boolean(room.procedimi
 
 /** Dónde se ve la Tierra desde la base en el instante de misión `t` y a la hora local `hora`. */
 export function tierraEnCielo(room: RoomState, t = room.t, hora = room.ambiente.hora) {
-  return tierraDesdeMarte(fechaDeMision(escenarioDe(room.escenario), Math.max(0, t)), latitudDe(room.sitio), hora)
+  return tierraDesdeMarte(fechaDeMision(room, Math.max(0, t)), latitudDe(room.sitio), hora)
 }
 /** Efemérides con las que se apunta la antena: las de cuando se empezó a apuntar (o las de ahora). */
 export function apunteAntena(room: RoomState) {

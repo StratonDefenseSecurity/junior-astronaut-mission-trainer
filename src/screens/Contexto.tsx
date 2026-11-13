@@ -8,6 +8,7 @@
 import { useEffect, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { C, PRESION_TIERRA_PA, REMS_RESUMEN, minutosDeSenalAlLlegar } from '@shared/ciencia'
 import { escenarioDe, fechaLarga } from '@shared/escenarios'
+import { textoVentana } from '@shared/ventana'
 import { ALTERNATIVAS, analizarCarga, cargaRecomendada, minimoDe } from '@shared/plan'
 import {
   PASOS_CONTEXTO,
@@ -250,6 +251,11 @@ function Objetivo({ sala, yo, alSeguir }: P & { alSeguir: () => void }) {
             </button>
           ))}
         </div>
+        {sala.ventana && (
+          <p className="mini muted">
+            Each route leaves Earth in its own direction, so it sets the hour of the launch window. With this one: {textoVentana(sala.ventana).replace('Launch window: ', '')}.
+          </p>
+        )}
       </div>
 
       <div className="stack">
@@ -458,6 +464,11 @@ export function ContextoScreen() {
               Mission Briefing{sala.nombreMision ? ` · ${sala.nombreMision}` : ''} <span className="mono muted codigo-sala">room {sala.codigo}</span>
             </div>
             <h1>{PASOS_CONTEXTO[actual].titulo}</h1>
+            {sala.ventana && (
+              <p className="mini muted">
+                {textoVentana(sala.ventana)}. Liftoff is at the opening. Weather forecast: {sala.ventana.pronostico}% favorable.
+              </p>
+            )}
           </div>
           <button className="small" onClick={() => api.salir()}>Leave</button>
         </div>

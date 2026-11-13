@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { escenarioDe, fechaCorta, fechaDeMision } from '@shared/escenarios'
+import { fechaCorta, fechaDeMision } from '@shared/escenarios'
 import { ROLE_BY_ID, TRANSITO_INICIO_S, formatoHora, formatoMET, type Role, type RoomState } from '@shared/types'
 import { ahoraServidor } from '../store'
 
@@ -57,7 +57,7 @@ export const enMarte = (sala: RoomState) => sala.tAterrizaje > 0
 
 /** Reloj de la misión: T+ durante el vuelo, sol y hora local en Marte. */
 /** Fecha real (calendario terrestre, UTC) del instante actual de la misión. */
-export const fechaActual = (sala: RoomState) => fechaDeMision(escenarioDe(sala.escenario), Math.max(0, sala.t))
+export const fechaActual = (sala: RoomState) => fechaDeMision(sala, Math.max(0, sala.t))
 
 export function relojMision(sala: RoomState): { principal: string; secundario: string } {
   const fecha = fechaCorta(fechaActual(sala))

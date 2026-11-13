@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useGraficos } from '../graficos'
 import { ASCENSO, llamadaCuenta, proximoEvento } from '@shared/ascenso'
+import { textoVentana } from '@shared/ventana'
 import { C } from '@shared/ciencia'
 import { animo, pesoKg } from '@shared/comida'
 import { ESCALAS, ESCALA_MAXIMA, ROLES, ROLE_BY_ID, SITE_BY_ID, etiquetaTiempo, formatoHora, type Player, type RoomState } from '@shared/types'
@@ -354,12 +355,15 @@ export function Telemetria({ sala, yo }: { sala: RoomState; yo: Player }) {
   const v = sala.vuelo
   const lanzamiento = sala.fase === 'lanzamiento'
   const cuenta = sala.t < 0
+  // Tras un scrub la cuenta queda detenida hasta que el comandante decide.
+  const espera = lanzamiento && sala.subfase === 'espera'
   // Las llamadas reales de la cuenta terminal de Artemis I y el próximo evento del ascenso.
-  const llamada = lanzamiento ? llamadaCuenta(sala.t) : null
+  const llamada = lanzamiento && !espera ? llamadaCuenta(sala.t) : null
   const proximo = lanzamiento && !cuenta ? proximoEvento(sala.t) : null
   return (
     <div className="telemetria">
-      <div className="etapa">{cuenta ? `T−${Math.ceil(-sala.t)} · Liftoff in ${Math.ceil(-sala.t)}` : v.etapa}</div>
+      <div className="etapa">{espera ? `HOLD at T−${Math.ceil(-sala.t)} · Scrubbed` : cuenta ? `T−${Math.ceil(-sala.t)} · Liftoff in ${Math.ceil(-sala.t)}` : v.etapa}</div>
+      {lanzamiento && cuenta && sala.ventana && <VentanaCuenta ventana={sala.ventana} />}
       {llamada && <div className="llamada">“{llamada}”</div>}
       {proximo && !llamada && (
         <div className="llamada muted">
@@ -382,6 +386,23 @@ export function Telemetria({ sala, yo }: { sala: RoomState; yo: Player }) {
           ? 'This is the real climb of Artemis I, launched by the SLS rocket from Pad 39B on November 16, 2022. The acceleration presses you into your seat, and your heart beats faster to keep blood flowing to your head.'
           : 'This is the real descent of Perseverance. The capsule enters at 19,200 km/h and in seven minutes touches down at less than 3 km/h. Earth cannot help: the signal takes too long.'}
       </div>
+    </div>
+  )
+}
+
+/** Ventana del día y resultado del sondeo final, durante la cuenta regresiva. */
+function VentanaCuenta({ ventana: v }: { ventana: NonNullable<RoomState['ventana']> }) {
+  const intento = v.intento > 1 ? ` Attempt ${v.intento}.` : ''
+  const sondeo =
+    v.sondeo === 'go'
+      ? 'Final poll: weather GO, vehicle GO.'
+      : v.sondeo === 'scrub'
+        ? `Scrub: ${v.falla ?? v.noGo[0]}`
+        : `Final poll at T−10. Weather forecast: ${v.pronostico}% favorable.`
+  return (
+    <div className="mini" style={{ marginBottom: 8 }}>
+      <div>{textoVentana(v)}. Liftoff at the opening.{intento}</div>
+      <div className={v.sondeo === 'scrub' ? 'bad' : v.sondeo === 'go' ? 'ok' : 'muted'}>{sondeo}</div>
     </div>
   )
 }

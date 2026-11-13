@@ -7,6 +7,8 @@ import { hayEmergencia, jugador, limitar, log, meterEnRefugio, rid, sis, tripula
 import { factorPlazo } from './aprendizaje.js'
 import { ahora, azar } from './reloj.js'
 import { enSuperficie } from './sim/ambiente.js'
+import { proximasVentanas, reprogramar } from './lanzamiento.js'
+import { horaFlorida, zonaFlorida } from '../shared/ventana.js'
 
 /** Por debajo de esta integridad un equipo deja de funcionar. */
 export const UMBRAL_AVERIA = 15
@@ -439,6 +441,45 @@ export const EMERGENCIAS: Record<string, Definicion> = {
       }
       return 'No changes.'
     },
+  },
+
+  // Scrub en la plataforma (server/lanzamiento.ts): el tiempo o el cohete no cumplen en el sondeo
+  // final. Decide el comandante; si nadie decide, se descansa un día (la última alternativa).
+  scrub: {
+    roles: () => ['comandante'],
+    titulo: () => 'Launch scrub',
+    corto: (_room, d) => (d.causa === 'tecnica' ? 'Launch scrub: a problem on the rocket' : 'Launch scrub: weather'),
+    descripcion: (room, d) => {
+      const [m1, m2] = proximasVentanas(room)
+      return `${d.motivo} The Launch Director scrubs today's attempt. Tomorrow's window opens at ${horaFlorida(m1.abre)} and the next one at ${horaFlorida(m2.abre)} local (${zonaFlorida(m1.abre)}).`
+    },
+    riesgo: () => 'A launch period lasts only a few weeks. Each day of delay moves the whole mission, and a rushed fix can fail again.',
+    fuente: (_room, d) => (d.causa === 'tecnica' ? 'NASA Artemis blog: Artemis I scrubs of August 29 and September 3, 2022' : 'NASA, Artemis I Weather Criteria'),
+    alternativas: (room, d) => {
+      const [m1, m2] = proximasVentanas(room)
+      const tecnica = d.causa === 'tecnica'
+      return [
+        op(
+          'reciclar',
+          'Recycle for the next daily window',
+          `Try again tomorrow. The window opens at ${horaFlorida(m1.abre)} local.`,
+          tecnica ? 'The fix is rushed, so another technical scrub is three times more likely.' : 'The team gets less rest between attempts.',
+          tecnica ? 'riesgosa' : 'buena',
+          tecnica
+            ? 'After a fault, real teams first find the cause. Artemis I waited five days after its first scrub.'
+            : 'Weather changes from day to day and the rocket is healthy, so the next window is the right call.',
+        ),
+        op(
+          'retirada',
+          'Stand down 24 hours',
+          `A full day to fix and check everything. Then try the day after tomorrow at ${horaFlorida(m2.abre)} local.`,
+          'The mission leaves one day later.',
+          tecnica ? 'buena' : 'aceptable',
+          tecnica ? 'Finding the cause before trying again is what real teams do after a fault.' : 'It works, but the rocket was ready and a day of the launch period went by with no gain.',
+        ),
+      ]
+    },
+    aplicar: (room, d, alt) => reprogramar(room, alt === 'reciclar' ? 1 : 2, String(d.causa)),
   },
 
   correccion: {

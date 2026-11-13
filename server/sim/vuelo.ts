@@ -3,7 +3,7 @@
 // aproximado con órdenes de magnitud reales, no una integración orbital.
 import { C } from '../../shared/ciencia.js'
 import { enlaceTierraMarte } from '../../shared/astronomia.js'
-import { escenarioDe, fechaDeMision } from '../../shared/escenarios.js'
+import { fechaDeMision } from '../../shared/escenarios.js'
 import { ASCENSO, altitudAscenso, etapaAscenso, gAscenso, propelenteCentral, velocidadAscenso } from '../../shared/ascenso.js'
 import { EDL, estadoEDL } from '../../shared/edl.js'
 import { TRANSITO_INICIO_S, type RoomState } from '../../shared/types.js'
@@ -49,7 +49,7 @@ function distanciaAlLlegar(room: RoomState): number {
   const clave = `${room.escenario}|${t}`
   let d = llegadas.get(clave)
   if (d === undefined) {
-    d = enlaceTierraMarte(fechaDeMision(escenarioDe(room.escenario), t)).km / 1e6
+    d = enlaceTierraMarte(fechaDeMision(room, t)).km / 1e6
     llegadas.set(clave, d)
   }
   return d
@@ -61,7 +61,7 @@ function distanciaAlLlegar(room: RoomState): number {
  */
 export function telemetriaEnlace(room: RoomState) {
   const v = room.vuelo
-  const { km, elongacion } = enlaceTierraMarte(fechaDeMision(escenarioDe(room.escenario), Math.max(0, room.t)))
+  const { km, elongacion } = enlaceTierraMarte(fechaDeMision(room, Math.max(0, room.t)))
   v.distTierra = Math.round(km / 1e4) / 100
   v.retardo = Math.round(km / C.VELOCIDAD_LUZ_KM_S)
   v.elongacion = Math.round(elongacion * 100) / 100

@@ -6,7 +6,7 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import type { RoomState } from '@shared/types'
 import { useGraficos } from '../graficos'
-import { escenarioDe, fechaDeMision } from '@shared/escenarios'
+import { fechaDeMision } from '@shared/escenarios'
 import { brilloCrepusculo, focosEncendidos, latitudSitio, solDeSala, solMarte } from '@shared/noche'
 import { Cielo } from './cielo/Cielo'
 import { vectorHelio } from './cielo/astro'
@@ -442,7 +442,7 @@ function Estrellas() {
 }
 
 function CieloNocturno({ sala, brillo, horaSolar }: { sala: RoomState; brillo: number; horaSolar: number }) {
-  const fecha = fechaDeMision(escenarioDe(sala.escenario), Math.max(0, sala.t))
+  const fecha = fechaDeMision(sala, Math.max(0, sala.t))
   const sitio = SITIOS_MARTE[sala.sitio ?? 'gale'] ?? SITIOS_MARTE.gale
   const minuto = Math.floor(fecha.getTime() / 300_000)
   // eslint-disable-next-line react-hooks/exhaustive-deps

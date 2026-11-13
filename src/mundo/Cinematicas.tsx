@@ -8,7 +8,9 @@ import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { ASCENSO, altitudAscenso, distanciaAscenso, empujeRS25, empujeSRB, RUMBO_ASCENSO } from '@shared/ascenso'
 import { calorEDL, EDL, estadoEDL, trayectoriaEDL } from '@shared/edl'
-import { escenarioDe, fechaDeMision } from '@shared/escenarios'
+import { despegueDe } from '@shared/escenarios'
+// Complejo de lanzamiento 39B del Centro Espacial Kennedy (Florida), de donde salió Artemis I.
+import { LC39B } from '@shared/ventana'
 import { DESCENSO_S, type RoomState } from '@shared/types'
 import { factorMovimiento } from '../accesibilidad'
 import { Cielo } from './cielo/Cielo'
@@ -20,8 +22,6 @@ import { sonido } from '../sonido'
 import { direccionSolEscena, Marte, Tierra } from './planetas'
 import { CUBIERTA_M, PlataformaLC39B, posicionCohete, U, VehiculoSLS } from './SLS'
 
-/** Complejo de lanzamiento 39B del Centro Espacial Kennedy (Florida), de donde salió Artemis I. */
-const LC39B = { lat: 28.627, lon: -80.621 }
 /** Radio de la Tierra en el lanzamiento (unidades de la escena): 1 unidad = 3.19 km. */
 const R_PLANETA = 2000
 /**
@@ -176,12 +176,15 @@ export function Lanzamiento({ sala }: { sala: RoomState }) {
   const negro = useMemo(() => new THREE.Color('#02040a'), [])
   const azul = useMemo(() => new THREE.Color('#2f62b0'), [])
   const noche = useMemo(() => new THREE.Color('#0b1424'), [])
-  const fecha = useMemo(() => fechaDeMision(escenarioDe(sala.escenario), 0), [sala.escenario])
+  // El despegue es a la apertura de la ventana del día (shared/ventana.ts); tras un scrub, la del
+  // nuevo intento. Con ella cambian el Sol, la Luna y el cielo de la escena.
+  const despegue = despegueDe(sala)
+  const fecha = useMemo(() => new Date(despegue), [despegue])
   const orientacion = useMemo(() => orientacionSuperficie('Tierra', fecha, LC39B.lat, LC39B.lon), [fecha])
   const sol = useMemo(() => solLocal('tierra', fecha, orientacion), [fecha, orientacion])
   const solEscena = useRef(sol.clone())
-  // Luz del día en la plataforma según la altura del Sol: el despegue es de noche, a la hora de
-  // Artemis I (la 1:47 a. m. en Florida), así que solo alumbran los focos, el motor y la Luna.
+  // Luz del día en la plataforma según la altura del Sol a la hora de la ventana: de día alumbra el
+  // Sol; de noche, solo los focos, el motor y la Luna.
   const dia = THREE.MathUtils.smoothstep(sol.y, -0.1, 0.12)
   // La Luna en su sitio real para la fecha: de noche da una luz tenue y fría según su fase.
   const luna = useMemo(() => {
@@ -558,7 +561,8 @@ export function Descenso({ sala }: { sala: RoomState }) {
   const cielo = useRef(new THREE.Color('#02040a'))
   const negro = useMemo(() => new THREE.Color('#02040a'), [])
   const ocre = useMemo(() => new THREE.Color('#c98a62'), [])
-  const fecha = useMemo(() => fechaDeMision(escenarioDe(sala.escenario), sala.tFase), [sala.escenario, sala.tFase])
+  const despegue = despegueDe(sala)
+  const fecha = useMemo(() => new Date(despegue + sala.tFase * 1000), [despegue, sala.tFase])
   const sitio = SITIOS_MARTE[sala.sitio ?? 'gale'] ?? SITIOS_MARTE.gale
   const orientacion = useMemo(() => orientacionSuperficie('Marte', fecha, sitio.lat, sitio.lon), [fecha, sitio.lat, sitio.lon])
   const sol = useMemo(() => solLocal('marte', fecha, orientacion), [fecha, orientacion])

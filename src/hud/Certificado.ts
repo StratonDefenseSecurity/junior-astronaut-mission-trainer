@@ -56,8 +56,8 @@ export function descargarCertificado(sala: RoomState) {
     texto(`MISSION SCORE ${inf.puntos}/100 · ${dif}${sala.demo ? ' · Quick demo' : ''}`, W / 2, 352, 30, '#4fc3f7', '700', 'center')
   }
 
-  const despegue = fechaDeMision(esc, 0)
-  const llegada = sala.tAterrizaje > 0 ? fechaDeMision(esc, sala.tAterrizaje) : null
+  const despegue = fechaDeMision(sala, 0)
+  const llegada = sala.tAterrizaje > 0 ? fechaDeMision(sala, sala.tAterrizaje) : null
   const lineas = [
     `Liftoff: ${fechaLarga(despegue)}`,
     llegada ? `Landing: ${fechaLarga(llegada)} at ${SITE_BY_ID[sala.sitio ?? 'gale'].nombre}` : 'The crew did not reach the surface',

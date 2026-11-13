@@ -28,7 +28,9 @@ import {
 import { responderBot } from '../server/bot.js'
 import { fijarDificultad } from '../server/aprendizaje.js'
 import { pasoProcedimiento, procedimientosPendientes, valorExperto } from '../server/procedimientos.js'
-import { escenarioDe } from '../shared/escenarios.js'
+import { escenarioDe, fechaDeMision } from '../shared/escenarios.js'
+import { agregarBots } from '../server/tripulantes.js'
+import { fijarAhora } from '../server/reloj.js'
 
 const N = Math.min(6, Math.max(2, Number(process.argv[2] ?? 6)))
 const PRESET = process.argv[3] ?? 'equilibrado'
@@ -336,7 +338,49 @@ console.log(`Huerto: ${room.huerto.establecido ? `sí, ${room.huerto.cultivo}, $
 console.log('Últimos registros:')
 for (const l of room.registro.slice(-12)) console.log(`   ${l.tipo === 'alerta' ? '!' : ' '} ${l.texto}`)
 console.log('\nAsistente:', responderBot(room, cmd, '¿cómo vamos?').slice(0, 200))
+probarScrubConBots()
 console.log('SIMULACIÓN TERMINADA')
+
+/**
+ * Scrub con un bot de comandante: una sala de un jugador cuyo primer intento se suspende. El bot
+ * decide, el intento pasa a otro día con su propia ventana y la nave despega igual.
+ */
+function probarScrubConBots() {
+  let t = real + 100_000_000
+  fijarAhora(t)
+  let r: RoomState | null = null
+  for (let i = 0; i < 80 && !r; i++) {
+    const s = crearSala(`SCRUB${i}`, 'h', 'comandante')
+    s.modoJuego = 'solo'
+    s.jugadores.push(nuevoJugador('h', 'Persona'))
+    agregarBots(s)
+    sinError(elegirEscenario(s, 'h', ESCENARIO), 'situación (scrub)')
+    sinError(iniciarMision(s, 'h'), 'iniciar (scrub)')
+    if (s.ventana && (s.ventana.noGo.length || s.ventana.falla)) r = s
+  }
+  exigir(r, 'hay una sala cuyo primer intento se suspende')
+  const sala = r!
+  const v1 = { ...sala.ventana! }
+  exigir(v1.cierra - v1.abre >= 3_600_000 && v1.cierra - v1.abre <= 7_200_000, 'la ventana dura de 1 a 2 horas')
+  // La persona toma un rol que no decide el scrub; los bots, el resto, comandante incluido.
+  sinError(fijarPaso(sala, 'h', 1), 'paso (scrub)')
+  sinError(elegirRol(sala, 'h', 'medico'), 'rol (scrub)')
+  sinError(marcarListo(sala, 'h', true), 'listo (scrub)')
+  for (let s = 0; s < 900 && sala.fase !== 'transito'; s++) {
+    t += 1000
+    avanzar(sala, t, t - 1000)
+  }
+  const scrubs = sala.emergencias.filter((e) => e.tipo === 'scrub')
+  const v = sala.ventana!
+  exigir(sala.fase === 'transito', `tras el scrub la nave despega (fase ${sala.fase})`)
+  exigir(scrubs.length >= 1 && scrubs.length <= 2 && scrubs.every((e) => e.estado === 'resuelta'), `el bot comandante decide cada scrub: ${scrubs.map((e) => `${e.estado} ${e.elegida}`).join(', ')}`)
+  exigir(v.intento === scrubs.length + 1 && v.scrubs[0].dia === v1.dia && v.dia !== v1.dia, `el nuevo intento es otro día: ${v1.dia} y luego ${v.dia}`)
+  const dias = Math.round((v.abre - v1.abre) / 86_400_000)
+  const corrimiento = Math.round((v.abre - v1.abre - dias * 86_400_000) / 60_000)
+  exigir(corrimiento !== 0 && Math.abs(corrimiento) < 60, `la ventana abre un poco antes o después: ${corrimiento} min en ${dias} días`)
+  exigir(fechaDeMision(sala, 0).getTime() === v.abre, 'el despegue y todas las fechas de la misión siguen a la nueva ventana')
+  console.log(`Scrub con bots: ${scrubs.map((e) => e.elegida).join(', ')} · ${v1.dia} a ${v.dia}, ${corrimiento} min · ${v.scrubs.map((x) => x.motivo).join(', ')}`)
+}
 
 /**
  * Prueba los trabajos por pasos sobre una copia de la sala, sin tocar la misión: que como experto

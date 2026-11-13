@@ -27,9 +27,8 @@ const DISTANCIA_GLOBOS = 900
 
 /** Dónde está quien mira por la ventana: la nave, la órbita de Marte o la superficie. */
 export function observadorDe(sala: RoomState): { fecha: Date; observador: Vec3; lugar: 'viaje' | 'orbita' | 'superficie' } {
-  const esc = escenarioDe(sala.escenario)
-  const fecha = fechaDeMision(esc, Math.max(0, sala.t))
-  const salida = fechaDeMision(esc, TRANSITO_INICIO_S)
+  const fecha = fechaDeMision(sala, Math.max(0, sala.t))
+  const salida = fechaDeMision(sala, TRANSITO_INICIO_S)
   const llegada = new Date(salida.getTime() + sala.mision.diasTransito * 86400_000)
   if (sala.tAterrizaje > 0) return { fecha, observador: vectorHelio('Marte', fecha), lugar: 'superficie' }
   if (sala.fase === 'llegada') {

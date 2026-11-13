@@ -52,6 +52,8 @@ import { iniciarDescenso, pasoSimulacion, refrescar, terminar } from './sim/paso
 import { prepararDemo } from './aprendizaje.js'
 import { DEMO } from '../shared/informe.js'
 import { agregarBots, pasoTripulantes } from './tripulantes.js'
+import { calcularVentana } from './lanzamiento.js'
+import { textoVentana } from '../shared/ventana.js'
 
 export { jugador } from './base.js'
 
@@ -167,6 +169,8 @@ function aplicarPerfil(room: RoomState) {
   const agua = room.mision.aguaObjetivo ? ` and extracting ${room.mision.aguaObjetivo} kg of water from the ice` : ''
   room.mision.objetivo = `Reach Mars, ${donde}build the base and keep the crew alive for ${p.soles} sols, analyzing ${room.mision.muestrasObjetivo} soil samples${agua}.`
   room.capacidad = capacidadCarga(tripulantesPlan(room), room.trayectoria)
+  // La ventana depende del viaje elegido: otra trayectoria, otra asíntota de salida.
+  if (room.fase === 'contexto') calcularVentana(room)
 }
 
 // ---------- Sala ----------
@@ -275,6 +279,8 @@ export function iniciarMision(room: RoomState, id: string): string | null {
     ? room.escenarioElegido
     : ESCENARIOS[Math.floor(azar(room) * ESCENARIOS.length)].id
   prepararDemo(room)
+  // Primer intento: el día real de la situación (la ventana se calcula en aplicarPerfil).
+  room.ventana = undefined
   aplicarPerfil(room)
   room.cargamento = cargaRecomendada(room, 1.15)
   room.masa = masaTotal(room.cargamento)
@@ -389,6 +395,7 @@ export function lanzar(room: RoomState, id: string): string | null {
     o.zona = 'nave'
     o.listo = false
   }
+  if (!room.ventana) calcularVentana(room)
   room.fase = 'lanzamiento'
   room.subfase = ''
   room.t = -CUENTA_REGRESIVA_S
@@ -397,12 +404,12 @@ export function lanzar(room: RoomState, id: string): string | null {
   room.reloj = ahora()
   // La fecha real de la situación decide la estación de Marte al llegar y, con ella, qué parte
   // del año medido por Curiosity se usa como clima.
-  const llegada = fechaDeMision(esc, TRANSITO_INICIO_S + room.mision.diasTransito * 86400)
+  const llegada = fechaDeMision(room, TRANSITO_INICIO_S + room.mision.diasTransito * 86400)
   room.indiceClima = indiceClimaParaLs(lsMarte(llegada))
   if (esc.diaClimaEspacial) room.diaLanzamiento = esc.diaClimaEspacial
   room.guion = prepararGuion(room)
   iniciarClimaEspacial(room)
-  log(room, `Launch authorized by ${j.nombre}. Cargo of ${room.masa.toFixed(1)} t, a ${room.mision.diasTransito}-day cruise.`, 'ok')
+  log(room, `Launch authorized by ${j.nombre}. Cargo of ${room.masa.toFixed(1)} t, a ${room.mision.diasTransito}-day cruise. ${textoVentana(room.ventana!)}.`, 'ok')
   refrescar(room)
   return null
 }

@@ -584,6 +584,42 @@ export interface Emergency {
 export interface LogEntry { t: number; fase: Phase; texto: string; tipo: 'info' | 'alerta' | 'ok' | 'radio' }
 export interface ChatMsg { id: string; de: string; texto: string; t: number; bot: boolean }
 
+/**
+ * Ventana de lanzamiento del intento actual: la geometría (shared/ventana.ts) más lo que pasa ese
+ * día en la plataforma (server/lanzamiento.ts). El despegue es a la apertura.
+ */
+export interface VentanaSala {
+  /** Día local en Florida del intento ('AAAA-MM-DD'). */
+  dia: string
+  /** Apertura y cierre (ms UTC). */
+  abre: number
+  cierra: number
+  /** Azimut del despegue (grados desde el norte) y giro lateral necesario (grados, 0 = ninguno). */
+  azimut: number
+  giro: number
+  esperaLarga: boolean
+  /** Asíntota de salida: declinación y ascensión recta (grados) y v-infinito (km/s). */
+  dla: number
+  rla: number
+  vInf: number
+  /** Número de intento: 1 el primero. */
+  intento: number
+  /** Pronóstico: % de que el tiempo permita lanzar. */
+  pronostico: number
+  /** Tiempo en la plataforma a la hora de apertura (modelo del juego). */
+  clima: { vientoKt: number; rayoNm: number | null; yunqueNm: number | null; capaFt: number | null }
+  /** Criterios del tiempo que no se cumplen (en inglés); vacío = el tiempo es GO. */
+  noGo: string[]
+  /** Falla técnica de este intento (en inglés) o null. */
+  falla: string | null
+  /** Resultado del sondeo final de T−10 s; null antes. */
+  sondeo: 'go' | 'scrub' | null
+  /** Intentos suspendidos antes: su día y la causa ('clima' o 'tecnica'). */
+  scrubs: { dia: string; motivo: string }[]
+  /** Se recicló al día siguiente tras una falla técnica: el arreglo fue deprisa. */
+  apurado: boolean
+}
+
 export interface RoomState {
   codigo: string
   /** Sube en 1 con cada acción guardada. Sirve para detectar copias atrasadas. */
@@ -618,6 +654,8 @@ export interface RoomState {
   indiceClima: number
   /** Situación de la misión (ver shared/escenarios.ts). */
   escenario: string
+  /** Ventana de lanzamiento del intento actual (ver shared/ventana.ts y server/lanzamiento.ts). */
+  ventana?: VentanaSala
   /** Lo que eligió quien creó la sala: una situación concreta o 'azar'. */
   escenarioElegido: string
   /** Nombre que la tripulación le pone a su misión. */

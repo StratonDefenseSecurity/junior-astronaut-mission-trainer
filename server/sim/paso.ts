@@ -29,6 +29,7 @@ import { actualizarAmbiente, enSuperficie, eventosSolaresPendientes, fraccionSol
 import { pasoTripulante } from './fisiologia.js'
 import { calcularInforme, factorAverias, factorEscasez, pasoAprendizaje } from '../aprendizaje.js'
 import { pasoHuerto } from './huerto.js'
+import { T_SONDEO, sondeoFinal } from '../lanzamiento.js'
 import { gActual, telemetriaAscenso, telemetriaCrucero, telemetriaDescenso, telemetriaEnlace } from './vuelo.js'
 
 const FACTOR_RACION = { normal: 1, ahorro: 0.8, estricto: 0.6 } as const
@@ -69,7 +70,8 @@ export function escalaEfectiva(room: RoomState): number {
   if (room.fase === 'lobby' || room.fase === 'contexto' || room.fase === 'fin') return 0
   // La cuenta regresiva y los primeros segundos del despegue van en tiempo real, como se viven;
   // el resto del ascenso, a ×10.
-  if (room.fase === 'lanzamiento') return room.t < DESPEGUE_TIEMPO_REAL_S ? 1 : 10
+  // Tras un scrub la cuenta queda detenida hasta que el comandante decide.
+  if (room.fase === 'lanzamiento') return room.subfase === 'espera' ? 0 : room.t < DESPEGUE_TIEMPO_REAL_S ? 1 : 10
   if (room.fase === 'llegada' && room.subfase === 'descenso') return 10
   let e = Math.min(room.escalaDeseada, ESCALA_MAXIMA[room.fase])
   if (hayEmergencia(room)) e = Math.min(e, ESCALA_ALERTA)
@@ -785,6 +787,14 @@ function redondear(room: RoomState) {
 function subpaso(room: RoomState, dt: number) {
   room.t += dt
   if (room.fase === 'lanzamiento') {
+    // Sondeo final: el tiempo y el cohete, con los criterios reales (server/lanzamiento.ts).
+    if (room.t >= T_SONDEO && room.ventana && !room.ventana.sondeo) {
+      const scrub = sondeoFinal(room)
+      if (scrub) {
+        lanzarEmergencia(room, 'scrub', scrub)
+        return
+      }
+    }
     telemetriaAscenso(room)
     if (room.t >= TRANSITO_INICIO_S) entrarTransito(room)
   } else if (room.fase === 'transito') {

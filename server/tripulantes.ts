@@ -402,6 +402,8 @@ function mision(room: RoomState, bots: Player[]) {
       mem(room, j).trabajo = null
       j.estacion = null
     }
+    // En la plataforma solo se decide una cosa: qué hacer tras un scrub.
+    if (room.fase === 'lanzamiento') for (const j of bots) emergencia(room, j, mem(room, j))
     return
   }
   for (const j of bots) {
@@ -518,6 +520,10 @@ function opcion(room: RoomState, em: Emergency): EmergencyAlternative {
     case 'medico':
     case 'mareo':
       id = room.rec.botiquines >= 1 ? 'tratar' : 'reposo'
+      break
+    case 'scrub':
+      // Con el cohete sano se vuelve a intentar mañana; tras una falla, primero se arregla bien.
+      id = em.datos.causa === 'tecnica' ? 'retirada' : 'reciclar'
       break
     case 'escasez':
       if (em.datos.recurso === 'aire' && sis(room, 'oga').integridad <= UMBRAL_AVERIA) id = 'ejercicio'

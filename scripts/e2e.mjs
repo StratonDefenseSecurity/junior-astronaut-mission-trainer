@@ -56,10 +56,14 @@ function comprobar(cond, msg, detalle = '') {
   }
 }
 const esperar = (ms) => new Promise((r) => setTimeout(r, ms))
+/** Hora local en Florida (hora de la plataforma 39B), con la base de husos horarios del sistema. */
+const horaFlorida = (ms) => new Date(ms).toLocaleTimeString('en-GB', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit' })
+const SITUACIONES = ['primeraBase', 'maximoSolar', 'tormentaPolvo', 'hieloUtopia', 'vidaJezero', 'averiaViaje']
 
 console.log(`Servidor: ${base}${corto ? ' (prueba corta)' : ''}`)
 const clave = `prueba-${sufijo}`
 if (process.argv.includes('--solo')) {
+  await pruebaVentanas()
   await pruebaSolo()
   await pruebaRelleno()
   await pruebaDificultad()
@@ -159,6 +163,8 @@ await paso(A, 'iniciar', {}, 'A inicia la misión')
 comprobar(sala.fase === 'contexto' && sala.jugadores.every((j) => j.paso === 0 && !j.rol), 'la contextualización empieza por la situación, sin roles asignados')
 comprobar(sala.escenario === 'primeraBase' && sala.mision.objetivo.length > 0, `la situación asignada es ${sala.escenario}`)
 comprobar(sala.capacidad === 7, `la nave se dimensiona para los 2 de la sala: ${sala.capacidad} t`)
+const v0 = sala.ventana
+comprobar(v0 && v0.dia === '2026-12-05' && v0.cierra - v0.abre >= 3_600_000 && v0.cierra - v0.abre <= 7_200_000, `ventana de lanzamiento del día: abre ${horaFlorida(v0?.abre)} y cierra ${horaFlorida(v0?.cierra)}, hora de Florida`)
 await paso(B, 'paso', { paso: 2 }, 'no se pasa al objetivo sin tener rol', 400)
 await paso(B, 'listo', { listo: true }, 'no se marca listo sin tener rol', 400)
 await paso(A, 'paso', { paso: 1 }, 'A pasa de la situación a los roles')
@@ -176,6 +182,7 @@ comprobar(sala.nombreMision === 'Chaski 1', 'la misión se llama Chaski 1')
 await paso(A, 'perfil', { perfil: 'corta' }, 'A elige misión corta')
 await paso(A, 'trayectoria', { trayectoria: 'rapida' }, 'A elige trayectoria rápida')
 comprobar(sala.mision.diasTransito === 150 && sala.mision.solesObjetivo === 10, 'el plan cambia viaje y estancia')
+comprobar(sala.ventana && sala.ventana.abre !== v0?.abre, `otra trayectoria sale en otra dirección y cambia la ventana: abre ${horaFlorida(sala.ventana?.abre)}`)
 await paso(A, 'paso', { paso: 3 }, 'A pasa a los suministros')
 await paso(A, 'preset', { preset: 'equilibrado' }, 'alternativa de suministros equilibrada')
 // Se recorta primero el blindaje, para que el huerto viaje y se pueda montar en el camino.
@@ -194,13 +201,16 @@ comprobar(typeof e2.d.ahora === 'number' && (e2.d.igual === true || e2.d.sala), 
 const vistaB = await estado(B)
 comprobar(Array.isArray(vistaB.d.pos?.[idA]) && vistaB.d.pos[idA][0] === 1.5, 'B recibe la posición del personaje de A', JSON.stringify(vistaB.d.pos))
 
-console.log('  ... ascenso (unos 65 s)')
+console.log('  ... ascenso (unos 65 s, más si hay scrub)')
 let gMax = 0
 let pulsoMax = 0
-for (let i = 0; i < 90 && sala.fase === 'lanzamiento'; i++) {
+for (let i = 0; i < 150 && sala.fase === 'lanzamiento'; i++) {
   await esperar(1000)
   // Consultan los dos, como harían sus navegadores: quien deja de consultar pasa a ausente.
   await estado(i % 2 ? A : B, { p: [0, 0, 0, 0] })
+  // Si el tiempo o el cohete no cumplen en el sondeo final, el comandante decide.
+  const scrub = sala.emergencias.find((e) => e.estado === 'activa' && e.tipo === 'scrub')
+  if (scrub) await paso(A, 'emergencia', { id: scrub.id, altId: 'reciclar' }, `${scrub.corto}: A recicla para la ventana de mañana`)
   gMax = Math.max(gMax, sala.vuelo.g)
   pulsoMax = Math.max(pulsoMax, sala.jugadores[0].vit.fc)
 }
@@ -450,20 +460,53 @@ if (!corto) {
 
 await llamar('salir', { codigo }, A)
 await llamar('salir', { codigo }, B)
+await pruebaVentanas()
 await pruebaSolo()
 await pruebaRelleno()
 await pruebaDificultad()
 console.log(fallos === 0 ? '\nE2E OK' : `\nE2E CON ${fallos} FALLA(S)`)
 process.exit(fallos === 0 ? 0 : 1)
 
+/** Cada situación tiene su propia ventana: la hora sale de su fecha y de su trayectoria. */
+async function pruebaVentanas() {
+  console.log('\nVentanas de lanzamiento de las seis situaciones')
+  const T = (await llamar('registro', { usuario: `e2e_ven_${sufijo}`, clave })).d.token
+  const horas = []
+  for (const id of SITUACIONES) {
+    let s = (await llamar('crear', { modo: 'comandante', juego: 'solo' }, T)).d.sala
+    const cod = s?.codigo
+    s = (await llamar('escenario', { codigo: cod, v: s?.version, escenario: id }, T)).d.sala ?? s
+    const v = (await llamar('iniciar', { codigo: cod, v: s?.version }, T)).d.sala?.ventana
+    const largo = v ? (v.cierra - v.abre) / 60_000 : 0
+    comprobar(v && largo >= 60 && largo <= 120 && v.pronostico > 0 && v.pronostico <= 100, `${id}: ${v?.dia} abre ${horaFlorida(v?.abre)} y cierra ${horaFlorida(v?.cierra)} (${largo} min), azimut ${v?.azimut}°, pronóstico ${v?.pronostico}%`)
+    horas.push(v ? horaFlorida(v.abre) : null)
+    await llamar('salir', { codigo: cod }, T)
+  }
+  comprobar(horas.every(Boolean) && new Set(horas).size === SITUACIONES.length, `las seis situaciones despegan a horas distintas: ${horas.join(', ')}`)
+}
+
 /** Modo de un jugador: una persona elige su rol y cinco bots hacen el resto de la tripulación. */
 async function pruebaSolo() {
   console.log('\nUn jugador con bots')
   const r = await llamar('registro', { usuario: `e2e_solo_${sufijo}`, clave })
   const T = r.d.token
-  const creada = await llamar('crear', { modo: 'comandante', juego: 'solo' }, T)
-  let s = creada.d.sala
-  const cod = s?.codigo
+  // El tiempo en la plataforma y las fallas salen del código de la sala: se busca una cuyo primer
+  // intento se suspenda, para probar el scrub de punta a punta.
+  let creada = null
+  let s = null
+  let cod = null
+  let buscadas = 0
+  for (; buscadas < 40; buscadas++) {
+    creada = await llamar('crear', { modo: 'comandante', juego: 'solo' }, T)
+    s = creada.d.sala
+    cod = s?.codigo
+    const ini = await llamar('iniciar', { codigo: cod, v: s?.version }, T)
+    const v = ini.d.sala?.ventana
+    if (ini.d.sala) s = ini.d.sala
+    if (v && (v.noGo.length || v.falla)) break
+    await llamar('salir', { codigo: cod }, T)
+  }
+  comprobar(buscadas < 40, `una sala cuyo primer intento se suspende (${buscadas + 1} probadas): ${s?.ventana?.falla ?? s?.ventana?.noGo[0]}`)
   comprobar(creada.status === 200 && s?.modoJuego === 'solo', `sala de un jugador ${cod}`, JSON.stringify(creada.d).slice(0, 200))
   const bots = s.jugadores.filter((j) => j.bot)
   comprobar(bots.length === 5 && new Set(bots.map((b) => b.nombre)).size === 5 && bots.every((b) => b.hogar && b.conectado), `cinco bots con nombre y ciudad: ${bots.map((b) => b.nombre).join(', ')}`)
@@ -484,8 +527,7 @@ async function pruebaSolo() {
   }
   const esBot = (id) => Boolean(s.jugadores.find((j) => j.id === id)?.bot)
 
-  await op('iniciar', {}, 'el anfitrión empieza solo, sin esperar a nadie')
-  comprobar(s.fase === 'contexto', 'contextualización')
+  comprobar(s.fase === 'contexto', 'el anfitrión empieza solo, sin esperar a nadie: contextualización')
   for (let i = 0; i < 8; i++) {
     await esperar(1000)
     await mirar()
@@ -518,12 +560,42 @@ async function pruebaSolo() {
   comprobar(s.jugadores.every((j) => j.listo), 'los bots confirman que están listos')
   await op('lanzar', {}, 'el comandante autoriza el lanzamiento')
   comprobar(s.fase === 'lanzamiento', 'cuenta regresiva')
-  console.log('  ... ascenso (unos 65 s)')
-  for (let i = 0; i < 90 && s.fase === 'lanzamiento'; i++) {
+  console.log('  ... sondeo final, scrub y ascenso (unos 2 minutos)')
+  const nombresBots = new Set(s.jugadores.filter((j) => j.bot).map((j) => j.nombre))
+  let scrubs = 0
+  for (let i = 0; i < 180 && s.fase === 'lanzamiento'; i++) {
     await esperar(1000)
     await mirar({ p: [0, 0, 0, 0] })
+    const em = s.emergencias.find((e) => e.estado === 'activa' && e.tipo === 'scrub')
+    if (!em) continue
+    scrubs++
+    if (scrubs > 1) {
+      await op('emergencia', { id: em.id, altId: 'reciclar' }, `otro scrub (${em.corto}): el comandante recicla`)
+      continue
+    }
+    const antes = { ...s.ventana }
+    const t1 = s.t
+    await esperar(1500)
+    await mirar()
+    comprobar(s.subfase === 'espera' && s.t === t1 && t1 < 0, `HOLD: la cuenta queda detenida en T${Math.round(t1)} tras el sondeo final`)
+    // En el modo de un jugador, un bot aconseja al comandante antes de que decida.
+    const consejo = () => s.chat.some((m) => nombresBots.has(m.de) && m.texto.includes('Launch scrub'))
+    for (let k = 0; k < 15 && !consejo(); k++) {
+      await esperar(1000)
+      await mirar()
+    }
+    comprobar(consejo(), 'un bot aconseja al comandante qué hacer con el scrub')
+    const alt = em.datos.causa === 'tecnica' ? 'retirada' : 'reciclar'
+    await op('emergencia', { id: em.id, altId: alt }, `${em.corto}: el comandante elige ${alt === 'reciclar' ? 'la ventana de mañana' : 'descansar 24 horas'}`)
+    const v = s.ventana
+    const dias = Math.round((v.abre - antes.abre) / 86_400_000)
+    const corrimiento = Math.round((v.abre - antes.abre - dias * 86_400_000) / 60_000)
+    comprobar(v.intento === 2 && v.scrubs.length === 1 && dias === (alt === 'reciclar' ? 1 : 2), `nuevo intento ${dias} día(s) después: ${v.dia}`)
+    comprobar(corrimiento !== 0 && Math.abs(corrimiento) < 60, `la nueva ventana abre un poco antes o después: ${horaFlorida(antes.abre)} y ahora ${horaFlorida(v.abre)} (${corrimiento} min)`)
+    comprobar(s.t < 0 && s.subfase === '' && s.registro.some((l) => /New attempt in/.test(l.texto)), 'la cuenta regresiva vuelve a empezar')
   }
-  comprobar(s.fase === 'transito', 'rumbo a Marte')
+  comprobar(scrubs >= 1 && scrubs <= 2, `scrubs antes de despegar: ${scrubs} (como mucho 2)`)
+  comprobar(s.fase === 'transito' && s.ventana.sondeo === 'go', 'rumbo a Marte tras el sondeo final en GO')
   if (!corto) {
     await op('escala', { valor: 86400 }, 'el comandante acelera el tiempo')
     console.log('  ... viaje con los bots (hasta 2 minutos)')

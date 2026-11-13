@@ -6,6 +6,7 @@
 // Regla de verdad: los "hechos" son datos comprobables; los multiplicadores de `mod` y los
 // objetivos extra son decisiones de diseño del juego y se muestran como supuestos.
 import type { Loadout } from './types.js'
+import { ventanaDelDia } from './ventana.js'
 
 export type EscenarioId = 'primeraBase' | 'maximoSolar' | 'tormentaPolvo' | 'hieloUtopia' | 'vidaJezero' | 'averiaViaje'
 
@@ -28,9 +29,9 @@ export interface Escenario {
   nombre: string
   lema: string
   /**
-   * Fecha de despegue (UTC), en una ventana de lanzamiento real calculada con efemérides. La hora
-   * es la de Artemis I, la 1:47:44 a. m. en Florida (06:47:44 UTC con horario de invierno, 05:47:44
-   * con el de verano): el despegue es de noche, como lo fue el suyo.
+   * Día del despegue ('AAAA-MM-DD', hora de Florida), dentro de un periodo de lanzamiento real
+   * calculado con efemérides. La hora no se fija aquí: es la apertura de la ventana de ese día,
+   * que sale de la asíntota de salida y del giro de la Tierra (shared/ventana.ts).
    */
   lanzamiento: string
   ventana: string
@@ -58,7 +59,7 @@ export const ESCENARIOS: Escenario[] = [
     id: 'primeraBase',
     nombre: 'First Base on Mars',
     lema: 'Be the first people to live on another planet.',
-    lanzamiento: '2026-12-05T06:47:44Z',
+    lanzamiento: '2026-12-05',
     ventana: 'December 2026',
     situacion: [
       'Mission Control chose you for the mission that will build the first crewed base on Mars. You launch in the December 2026 window, when Earth and Mars line up for the trip that uses the least fuel.',
@@ -76,7 +77,7 @@ export const ESCENARIOS: Escenario[] = [
     id: 'maximoSolar',
     nombre: 'Solar Maximum',
     lema: 'A trip at the peak of solar activity.',
-    lanzamiento: '2024-10-25T05:47:44Z',
+    lanzamiento: '2024-10-25',
     ventana: 'October 2024',
     situacion: [
       'This is a simulation of the October 2024 window, with the Sun at the top of its activity cycle. The particle storms you will meet are the ones NASA recorded starting that same day.',
@@ -99,7 +100,7 @@ export const ESCENARIOS: Escenario[] = [
     id: 'tormentaPolvo',
     nombre: 'Dust Storm Season',
     lema: 'You will arrive when dust covers the Martian sky.',
-    lanzamiento: '2031-02-10T06:47:44Z',
+    lanzamiento: '2031-02-10',
     ventana: 'February 2031',
     situacion: [
       'You launch in the February 2031 window and will reach Mars in its dust season: spring and summer in the southern hemisphere, when the planet is closest to the Sun.',
@@ -121,7 +122,7 @@ export const ESCENARIOS: Escenario[] = [
     id: 'hieloUtopia',
     nombre: 'Water Under the Ice',
     lema: 'Get water from Mars for the missions still to come.',
-    lanzamiento: '2029-01-07T06:47:44Z',
+    lanzamiento: '2029-01-07',
     ventana: 'January 2029',
     situacion: [
       'The goal is to show that people can live on Martian water. You will land in Utopia Planitia, where the radar of a NASA spacecraft found buried ice.',
@@ -147,7 +148,7 @@ export const ESCENARIOS: Escenario[] = [
     id: 'vidaJezero',
     nombre: 'Traces of an Ancient Lake',
     lema: 'Look for signs of ancient life where a lake once was.',
-    lanzamiento: '2033-03-19T05:47:44Z',
+    lanzamiento: '2033-03-19',
     ventana: 'March 2033',
     situacion: [
       'About 3.5 billion years ago, Jezero Crater was a lake, with a river that built a delta. Since 2021 the Perseverance rover has been collecting rock samples there.',
@@ -167,7 +168,9 @@ export const ESCENARIOS: Escenario[] = [
     id: 'averiaViaje',
     nombre: 'Trouble On Board',
     lema: 'A serious breakdown halfway there.',
-    lanzamiento: '2026-12-05T06:47:44Z',
+    // Otro día del mismo periodo de lanzamiento que la primera base: el periodo dura semanas y
+    // cada día tiene su propia ventana.
+    lanzamiento: '2026-12-09',
     ventana: 'December 2026',
     situacion: [
       'You launch in the December 2026 window. Halfway through the trip something will fail, and Earth will be too far away to help in time.',
@@ -191,8 +194,22 @@ export const ESCENARIOS: Escenario[] = [
 export const ESCENARIO_BY_ID = Object.fromEntries(ESCENARIOS.map((e) => [e.id, e])) as Record<EscenarioId, Escenario>
 export const escenarioDe = (id: string | undefined): Escenario => ESCENARIO_BY_ID[(id ?? '') as EscenarioId] ?? ESCENARIOS[0]
 
+/** Lo que hace falta de la sala para saber la fecha: la situación, la ventana y el viaje elegido. */
+export interface SalaFecha {
+  escenario: string
+  ventana?: { abre: number } | null
+  mision?: { diasTransito: number }
+}
+
+/**
+ * Instante del despegue (ms UTC): la apertura de la ventana del intento actual. Antes de que el
+ * servidor la prepare, la del primer día de la situación con el viaje elegido (o el estándar).
+ */
+export const despegueDe = (sala: SalaFecha): number =>
+  sala.ventana?.abre ?? ventanaDelDia(escenarioDe(sala.escenario).lanzamiento, sala.mision?.diasTransito ?? 210).abre
+
 /** Fecha real (UTC) que corresponde a un instante de la misión, en segundos desde el despegue. */
-export const fechaDeMision = (escenario: Escenario, t: number) => new Date(Date.parse(escenario.lanzamiento) + t * 1000)
+export const fechaDeMision = (sala: SalaFecha, t: number) => new Date(despegueDe(sala) + t * 1000)
 
 const MESES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 const MESES_CORTOS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']

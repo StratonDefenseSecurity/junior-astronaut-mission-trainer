@@ -843,6 +843,42 @@ export const FUENTES: Fuente[] = [
     fuente: 'NASA, Spacewalk Spacesuit Basics.',
     url: 'https://www.nasa.gov/feature/spacewalk-spacesuit-basics/',
   },
+  {
+    tema: 'Launch windows to Mars',
+    dato: 'A rocket to Mars first reaches a low parking orbit. That orbit has to line up with the direction the ship must leave Earth, and the pad turns with Earth, so it lines up only for a short time each day, at a time that shifts from day to day. Curiosity lifted off at 10:02 a.m. EST on November 26, 2011, right when its window of 1 hour 43 minutes opened.',
+    fuente: "NASA/JPL, NASA Sets Mars Science Laboratory Launch Coverage (updated November 19, 2011); NASA Science, Curiosity's Launch.",
+    url: 'https://www.jpl.nasa.gov/news/nasa-sets-mars-science-laboratory-launch-coverage/',
+  },
+  {
+    tema: 'Perseverance launch window',
+    dato: 'Perseverance lifted off at 7:50 a.m. EDT on July 30, 2020, on an Atlas V from Cape Canaveral. The window changed every day of the launch period: on July 20 it ran from 9:15 to 11:15 a.m. EDT, and on August 11 from 8:55 to 9:25 a.m. EDT.',
+    fuente: 'NASA, NASA, ULA Launch Mars 2020 Perseverance Rover Mission to Red Planet (July 30, 2020); NASA/JPL, Mars 2020 Perseverance Launch Press Kit.',
+    url: 'https://www.jpl.nasa.gov/news/press_kits/mars_2020/launch/mission/',
+  },
+  {
+    tema: 'Pad 39B',
+    dato: 'Launch Complex 39B at Kennedy Space Center, where Artemis I lifted off, is at 28°37′38″ N, 80°37′15″ W. Florida uses Eastern Time: EST in winter and EDT from the second Sunday of March to the first Sunday of November.',
+    fuente: 'Kennedy Space Center Launch Complex 39B (Wikipedia, coordinates); U.S. Energy Policy Act of 2005 (daylight saving time dates).',
+    url: 'https://en.wikipedia.org/wiki/Kennedy_Space_Center_Launch_Complex_39B',
+  },
+  {
+    tema: 'Launch weather rules',
+    dato: 'Artemis I could not lift off with peak winds above 29 to 39 knots (from 132.5 ft to 457.5 ft up). After lightning within 10 nautical miles of the flight path, the team had to wait 30 minutes. It could not launch within 10 nautical miles of a thunderstorm anvil cloud, or through a cloud layer within 5 nautical miles that is more than 4,500 ft thick and reaches freezing temperatures, unless extra checks were met.',
+    fuente: 'NASA, Artemis I Weather Criteria.',
+    url: 'https://www.nasa.gov/missions/artemis/orion/artemis-i-weather-criteria/',
+  },
+  {
+    tema: 'Launch weather forecast',
+    dato: 'Meteorologists of the U.S. Space Force Space Launch Delta 45 forecast the weather for launches from Florida. For Artemis I they gave 90% favorable two days before, and 80% favorable for the two-hour window that opened at 1:04 a.m. EST on November 16, 2022, with thick clouds as the main concern. Lightning rules are the second leading weather cause of launch delays and scrubs at Cape Canaveral.',
+    fuente: 'NASA Artemis blog, Weather Forecast 90% Favorable for Artemis I Launch (November 13, 2022) and Mission Managers Give Go to Proceed Toward Tanking (November 15, 2022); Roeder and McNamara, 45th Weather Squadron, A Survey of the Lightning Launch Commit Criteria (AMS, 2006).',
+    url: 'https://www.nasa.gov/blogs/missions/2022/11/15/mission-managers-give-go-to-proceed-toward-tanking-operations-for-artemis-i/',
+  },
+  {
+    tema: 'Launch scrubs',
+    dato: 'Artemis I was scrubbed twice. On August 29, 2022, the attempt stopped at about 8:34 a.m. EDT: a test to chill the core stage engines to their start temperature failed and the two-hour window ran out. On September 3, 2022, it was called off at about 11:17 a.m. EDT for a liquid hydrogen leak while fueling the core stage. Artemis I flew on November 16, 2022.',
+    fuente: 'NASA Artemis blog, Launch Attempt Scrubbed (August 29, 2022) and Artemis I Launch Attempt Scrubbed (September 3, 2022).',
+    url: 'https://www.nasa.gov/blogs/missions/2022/09/03/artemis-i-launch-attempt-scrubbed/',
+  },
 ]
 
 /** Lo que el juego simplifica o inventa para poder jugarse. Se muestra junto a las fuentes. */
@@ -912,5 +948,10 @@ export const SUPUESTOS: string[] = [
   'Walking in the dark without lights halves your speed and gives a 25% chance per hour of a fall. A hand light alone cuts that chance to 30%. The base floodlights light the ground within 22 m of the habitat and halve the chance. The habitat lights (0.15 kW, 0.03 kW while all sleep) and the floodlights (0.4 kW) are game values.',
   'The height of the Sun comes from the site latitude, the season (Ls) and the hour, with noon halfway between the sunrise and sunset in the Curiosity record. The ground counts as dark with the Sun more than 8° below the horizon. How the twilight glow fades is a game curve that leaves a faint glow for about two hours.',
   'Phobos and Deimos follow their real distance and orbit period, but their place along the orbit is not taken from an ephemeris.',
-  "Every mission lifts off at 1:47 a.m. Florida time, the clock time of Artemis I, so the launch is at night as it was. The date is the mission's own.",
+  'Liftoff is at the opening of the daily launch window. The game computes it from the real trajectory to Mars and the turn of Earth: the direction the ship must leave Earth, and the moment Pad 39B can fly into a parking orbit that contains it. The sunlight in the launch scene and every date in the mission follow that moment.',
+  'Window model values: allowed headings from 89° to 113° (the range the Curiosity and Perseverance windows cover in this same model), a parking orbit 185 km high, a wait in orbit of 40° to 200° of a turn, and a window of 1 to 2 hours. If the ship must leave too far north or south, the game assumes a longer wait in orbit or a sideways turn (a dog-leg). Real windows also depend on the rocket and change length from day to day.',
+  'The weather at the pad comes from a game model with a fixed seed: more wind in winter, more thunderstorms on summer afternoons and thick clouds now and then. It is checked against the real Artemis I rules, simplified: the wind limit is taken at 132.5 ft, and the exceptions for lightning, anvil clouds and thick clouds are not modeled. The forecast percentage comes from the same model.',
+  'A technical scrub has a 10% chance on each attempt, and 30% if the team recycles for the next day right after a technical scrub. The faults are the two that scrubbed Artemis I. These chances are game values.',
+  'The final poll is at T−10 s. After two scrubs the third attempt always lifts off, so the mission never stays on the ground. Standing down 24 hours moves the attempt two days, to the window after the next one.',
+  'Trouble On Board launches on December 9, 2026, a later day of the same launch period as First Base on Mars, so each mission has its own window.',
 ]
