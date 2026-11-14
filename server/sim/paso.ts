@@ -2,6 +2,7 @@
 // el cuerpo de cada tripulante, el desgaste de los equipos y los sucesos.
 import { C } from '../../shared/ciencia.js'
 import { CIUDAD_BY_ID, escenarioDe } from '../../shared/escenarios.js'
+import { DESGASTE_SIN_VIGILANCIA } from '../../shared/solHoy.js'
 import {
   DESCENSO_S,
   ESCALA_ALERTA,
@@ -494,9 +495,13 @@ function soporteVital(room: RoomState, dt: number, crew: Player[], superficie: b
 
 function desgaste(room: RoomState, dt: number, superficie: boolean) {
   const dias = dt / 86400
+  // Costo del refugio: con gente en él y nadie en la cabina, nadie vigila ni ajusta los equipos.
+  const crew = tripulacion(room)
+  const sinVigilancia = crew.some((j) => j.enRefugio) && !crew.some((j) => j.zona === 'nave' && !j.enRefugio && j.incapacitado <= 0)
   for (const s of room.sistemas) {
     if (!s.instalado || !s.operativo) continue
     let tasa = DESGASTE[s.id] * escenarioDe(room.escenario).mod.desgaste * desgasteDeber(room, s.id)
+    if (sinVigilancia) tasa *= DESGASTE_SIN_VIGILANCIA
     if (superficie && room.ambiente.tormentaPolvo && (s.id === 'energia' || s.id === 'isru')) tasa *= 3
     s.integridad = Math.max(0, s.integridad - tasa * dias)
     // Además del desgaste, una avería al azar cada unos 670 días por equipo (valor del juego).
@@ -509,18 +514,26 @@ function sucesos(room: RoomState, dt: number, crew: Player[], superficie: boolea
   const dias = dt / 86400
   const micro = enMicrogravedad(room)
 
-  // Clima espacial: eventos reales de 2024, más o menos frecuentes según la situación.
+  // Clima espacial: eventos reales de 2024, más o menos frecuentes según la situación. Los del
+  // mes en vivo (DONKI) se usan tal cual: son la actividad real, sin ajuste de la situación.
   const actividad = escenarioDe(room.escenario).mod.particulas
   for (const ev of eventosSolaresPendientes(room)) {
-    if (actividad < 1 && azar(room) > actividad) continue
-    if (actividad > 1 && ev.tasa) ev.tasa *= actividad
+    if (ev.tipo === 'aviso') {
+      log(room, ev.texto ?? '', 'radio')
+      continue
+    }
+    if (!ev.vivo) {
+      if (actividad < 1 && azar(room) > actividad) continue
+      if (actividad > 1 && ev.tasa) ev.tasa *= actividad
+    }
+    const origen = ev.vivo ? `the real one on ${ev.fecha} (live NASA DONKI data)` : `like the one on ${ev.fecha} (archived NASA DONKI record)`
     if (ev.tipo === 'fulguracion') {
-      log(room, `Class ${ev.clase} solar flare${ev.region ? ` in active region ${ev.region}` : ''}, like the one on ${ev.fecha}. Possible radio blackout.`, 'alerta')
+      log(room, `Class ${ev.clase} solar flare${ev.region ? ` in active region ${ev.region}` : ''}, ${origen}. Possible radio blackout.`, 'alerta')
     } else if (ev.fuerte) {
-      lanzarEmergencia(room, 'particulas', { id: ev.id, fecha: ev.fecha, tasa: ev.tasa, horas: ev.horas })
+      lanzarEmergencia(room, 'particulas', { id: ev.id, fecha: ev.fecha, tasa: ev.tasa, horas: ev.horas, vivo: Boolean(ev.vivo) })
     } else {
       room.ambiente.tormentaSolar = { id: ev.id, fecha: ev.fecha, tasa: ev.tasa ?? 10, hasta: room.t + (ev.horas ?? 20) * 3600 }
-      log(room, `Minor solar particle storm, like the one on ${ev.fecha}. The dose rises a little for ${ev.horas} hours.`, 'alerta')
+      log(room, `Minor solar particle storm, ${origen}. The dose rises a little for ${ev.horas} hours.`, 'alerta')
     }
   }
   const ts = room.ambiente.tormentaSolar

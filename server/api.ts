@@ -50,6 +50,7 @@ import { enviarRadio, log } from './base.js'
 import { pasoProcedimiento } from './procedimientos.js'
 import { anotarSiTermino, leerRanking, MOSTRADAS } from './ranking.js'
 import { fijarAhora, fijarMovidos } from './reloj.js'
+import { fijarClimaSolar, resumenSolHoy } from './solHoy.js'
 import { agregarBots, fijarRellenoBots, posicionesBots, type Andar } from './tripulantes.js'
 
 export interface Respuesta {
@@ -527,6 +528,8 @@ async function despachar(c: Record<string, unknown>, autorizacion: string | unde
   if (op === 'ingresar') return ingresar(texto(c.usuario, 40), String(c.clave ?? ''))
   if (op === 'invitado') return invitado(texto(c.usuario, 40))
   if (op === 'ranking') return ok({ ranking: (await leerRanking()).slice(0, MOSTRADAS) })
+  // "El Sol ahora": últimos 30 días de DONKI (o el registro de 2024, marcado como archivo).
+  if (op === 'solHoy') return ok({ sol: await resumenSolHoy() })
 
   const usuario = verificar(autorizacion)
   if (!usuario) return fallo(401, 'Invalid session. Please log in again.', { sinSesion: true })
@@ -570,6 +573,11 @@ async function despachar(c: Record<string, unknown>, autorizacion: string | unde
       return m((room) => fijarRellenoBots(room, yo, Boolean(c.valor)))
     case 'dificultad':
       return m((room) => fijarDificultad(room, yo, texto(c.dificultad, 20), Boolean(c.demo)))
+    case 'climaSolar': {
+      const vivo = c.vivo === true
+      const sol = vivo ? await resumenSolHoy() : null
+      return m((room) => fijarClimaSolar(room, yo, vivo, sol))
+    }
     case 'escenario':
       return m((room) => elegirEscenario(room, yo, texto(c.escenario, 20)))
     case 'hogar':

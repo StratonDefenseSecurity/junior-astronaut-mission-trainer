@@ -9,6 +9,7 @@ import { ahora, azar } from './reloj.js'
 import { enSuperficie } from './sim/ambiente.js'
 import { proximasVentanas, reprogramar } from './lanzamiento.js'
 import { horaFlorida, zonaFlorida } from '../shared/ventana.js'
+import { DESGASTE_SIN_VIGILANCIA, horaSol } from '../shared/solHoy.js'
 
 /** Por debajo de esta integridad un equipo deja de funcionar. */
 export const UMBRAL_AVERIA = 15
@@ -186,19 +187,26 @@ export const EMERGENCIAS: Record<string, Definicion> = {
     roles: () => ['medico', 'comandante'],
     titulo: () => 'Solar radiation storm',
     descripcion: (room, d) =>
-      `A storm of particles from the Sun is arriving, the one recorded on ${d.fecha}. ` +
+      `A storm of particles from the Sun is arriving, ${d.vivo ? `the real one recorded on ${d.fecha} (live NASA DONKI data from the last 30 days)` : `like the one recorded on ${d.fecha} (archived NASA DONKI record)`}. ` +
       (enSuperficie(room)
         ? `The atmosphere of Mars stops a good part of it, but outside the habitat the dose rises to about ${Math.round(Number(d.tasa) * 0.15)} mSv per day for ${d.horas} hours.`
         : `In the cabin the dose rises to about ${Math.round(Number(d.tasa) * 0.5)} mSv per day for ${d.horas} hours. The normal level during the cruise is ${C.GCR_CRUCERO_MSV_DIA}.`),
     riesgo: (_room, d) =>
       `For the next ${d.horas} hours anyone outside the shelter gets the extra dose. Radiation adds up over a career, and the limit is ${C.LIMITE_CARRERA_MSV} mSv.`,
-    fuente: (_room, d) => `NASA DONKI, event ${d.id}`,
+    fuente: (room, d) => `NASA DONKI, event ${d.id}, ${d.vivo && room.solVivo ? `live data fetched ${horaSol(room.solVivo.obtenido)}` : 'archived 2024 record'}`,
     alOcurrir: (room, d) => {
       room.ambiente.tormentaSolar = { id: String(d.id), fecha: String(d.fecha), tasa: Number(d.tasa), hasta: room.t + Number(d.horas) * 3600 }
     },
     alternativas: (room, d) => [
-      op('refugio', 'Whole crew to the Storm Shelter', `The storm dose drops to ${reduccionRefugio(room)}%.`, `Nobody works or repairs anything for ${d.horas} hours.`, 'buena', 'Radiation is the main long-term risk, and the shelter is built for this.'),
-      op('parcial', 'Shelter, except the Systems Engineer', 'The rest take cover and the equipment stays watched.', 'The Systems Engineer gets the full cabin dose.', 'aceptable', 'One person takes the dose so the base is not left alone.'),
+      op(
+        'refugio',
+        'Whole crew to the Storm Shelter',
+        `The storm dose drops to ${reduccionRefugio(room)}%.`,
+        `Nobody works or repairs anything for ${d.horas} hours, and with nobody watching them the machines wear ${DESGASTE_SIN_VIGILANCIA}× faster.`,
+        'buena',
+        'Radiation is the main long-term risk, and the shelter is built for this.',
+      ),
+      op('parcial', 'Shelter, except the Systems Engineer', 'The rest take cover and the equipment stays watched, so it wears at the normal rate.', 'The Systems Engineer gets the full cabin dose.', 'aceptable', 'One person takes the dose so the base is not left alone.'),
       op('seguir', 'Keep working', 'Everything keeps running.', 'The whole crew gets the cabin dose.', 'riesgosa', 'The whole crew took radiation that the shelter would have stopped.'),
     ],
     aplicar: (room, _d, alt) => {

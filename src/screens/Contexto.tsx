@@ -25,6 +25,8 @@ import {
   type SupplyId,
 } from '@shared/types'
 import { Barra, MarcaIA, RolTag, nivel } from '../hud/comun'
+import { SitioBase } from '../hud/SitioBase'
+import { SolHoy } from '../hud/SolHoy'
 import { puede } from '../mundo/mapa'
 import { api } from '../red'
 import { useStore } from '../store'
@@ -109,6 +111,7 @@ function Situacion({ sala, alSeguir }: { sala: RoomState; alSeguir: () => void }
         <strong>The challenge of this mission</strong>
         {esc.reto}
       </div>
+      <SitioBase sala={sala} />
       <h3>What every crew traveling to Mars faces</h3>
       <p className="mini muted">You are a crew of {n}. Nobody is waiting for you there and nobody can come to get you. What you carry on the ship is all you will have.</p>
       <div className="situacion">
@@ -120,6 +123,7 @@ function Situacion({ sala, alSeguir }: { sala: RoomState; alSeguir: () => void }
           </div>
         ))}
       </div>
+      <SolHoy sala={sala} />
       <div className="action">
         <strong>What you have to achieve</strong>
         <p className="mini">Reach Mars, build the base, keep the whole crew alive and analyze soil samples. You will decide how many sols you stay and how many samples you analyze later, when you set the objective.</p>

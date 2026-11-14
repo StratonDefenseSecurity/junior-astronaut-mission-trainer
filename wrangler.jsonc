@@ -16,8 +16,13 @@
   },
   // Un Durable Object por sala y otro para las cuentas (ver server/cloudflare.ts).
   "durable_objects": {
-    "bindings": [{ "name": "NODO", "class_name": "Nodo" }]
+    "bindings": [{ "name": "MISION", "class_name": "Mision" }]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Nodo"] }],
+  // v2 borró todos los datos anteriores (salas, ranking y cuentas) el 14/11/2026 para empezar de cero.
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["Nodo"] },
+    { "tag": "v2", "deleted_classes": ["Nodo"] },
+    { "tag": "v3", "new_sqlite_classes": ["Mision"] }
+  ],
   "observability": { "enabled": true }
 }

@@ -2,6 +2,8 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { fechaCorta, fechaDeMision } from '@shared/escenarios'
 import { ROLE_BY_ID, TRANSITO_INICIO_S, formatoHora, formatoMET, type Role, type RoomState } from '@shared/types'
 import { ahoraServidor } from '../store'
+import type { TerminoId } from '@shared/glosario'
+import { Termino } from './Glosario'
 
 export type Nivel = 'ok' | 'warn' | 'bad'
 export const nivel = (malo: boolean, regular: boolean): Nivel => (malo ? 'bad' : regular ? 'warn' : 'ok')
@@ -15,11 +17,11 @@ export function Barra({ valor, max = 100, tono = 'ok' }: { valor: number; max?: 
   )
 }
 
-/** Un dato con su etiqueta, su valor y, si se quiere, una barra y una nota. */
-export function Dato({ etiqueta, valor, tono, barra, nota }: { etiqueta: string; valor: ReactNode; tono?: Nivel; barra?: { valor: number; max?: number }; nota?: string }) {
+/** Un dato con su etiqueta, su valor y, si se quiere, una barra, una nota y el "?" del glosario. */
+export function Dato({ etiqueta, valor, tono, barra, nota, glosario }: { etiqueta: string; valor: ReactNode; tono?: Nivel; barra?: { valor: number; max?: number }; nota?: string; glosario?: TerminoId }) {
   return (
     <div className="dato" title={nota}>
-      <span>{etiqueta}</span>
+      <span>{etiqueta}{glosario && <Termino id={glosario} />}</span>
       <b className={tono ?? ''}>{valor}</b>
       {barra && <Barra valor={barra.valor} max={barra.max} tono={tono ?? 'ok'} />}
     </div>

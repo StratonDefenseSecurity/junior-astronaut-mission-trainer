@@ -2,6 +2,7 @@
 import { DEMO, DIFICULTADES } from '@shared/informe'
 import { TRAYECTORIA_BY_ID, type RoomState } from '@shared/types'
 import { api } from '../red'
+import { SolHoy } from '../hud/SolHoy'
 import '../aprendizaje.css'
 
 export function DificultadLobby({ sala, soyHost }: { sala: RoomState; soyHost: boolean }) {
@@ -24,6 +25,7 @@ export function DificultadLobby({ sala, soyHost }: { sala: RoomState; soyHost: b
           <strong>Quick demo mission.</strong> About 10 to 15 minutes from launch to the end, for judges and classrooms. It uses the {TRAYECTORIA_BY_ID[DEMO.trayectoria].dias}-day fast trajectory, {DEMO.soles} sols on Mars and {DEMO.muestras} samples. Time runs at the highest scale in each phase. All the science numbers stay real.
         </span>
       </label>
+      <SolHoy sala={sala} soyHost={soyHost} />
     </>
   )
 }

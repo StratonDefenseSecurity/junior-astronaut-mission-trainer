@@ -235,6 +235,8 @@ export const api = {
   iniciar: () => llamar('iniciar'),
   rellenarBots: (valor: boolean) => llamar('rellenarBots', { valor }),
   dificultad: (dificultad: string, demo: boolean) => llamar('dificultad', { dificultad, demo }),
+  /** Clima espacial de la misión: el mes real de DONKI (true) o el registro de 2024. */
+  climaSolar: (vivo: boolean) => llamar('climaSolar', { vivo }),
   escenario: (escenario: string) => llamar('escenario', { escenario }),
   hogar: (hogar: string | null) => llamar('hogar', { hogar }),
   nombrarMision: (nombre: string) => llamar('nombre', { nombre }),

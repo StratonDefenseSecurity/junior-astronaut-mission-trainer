@@ -69,6 +69,7 @@ If the responsible role is not connected, any crew member can do the task, so th
 The full list, with links, is in the game (**Sources** button) and in [shared/ciencia.ts](shared/ciencia.ts).
 
 - **Real data built in:** the weather of one Martian year measured by the Curiosity rover (669 sols) and the 2024 space weather events from NASA's DONKI database (54 X-class flares and 29 particle storms). They are regenerated with `python scripts/datos-nasa.py`.
+- **Live and archived NASA data, always labeled:** the lobby and the briefing show *The Sun right now*, the last 30 days of NASA DONKI (CCMC web service, cached one hour, with the time it was fetched). The host can play with that live space weather or with the archived 2024 solar maximum. If the Sun was quiet, the game says so. The debrief compares the crew's radiation with days aboard the ISS using RadLab dosimetry (OSDR), and shows six real OSDR studies about bones, muscles, exercise, radiation, plants and daily rhythms. The briefing shows the real base site with Mars Trek imagery (THEMIS day infrared mosaic).
 - **The sky and the dates:** 5,044 real stars from the Hipparcos catalog (XHIP), the 88 IAU constellations and the Milky Way; the Sun, the Moon and the planets in their real positions for the mission date with astronomy-engine, validated against JPL Horizons. The ship follows a transfer orbit calculated with Lambert's problem, and the launch windows are the real ones.
 - **The season on Mars:** the arrival date sets the Martian season (Ls), and with it the Curiosity record used as the weather.
 - **Constants checked against their source:** oxygen use and CO2, water and food production per person, ISS water recycling, the CO2 limit, the capacity of the ISS scrubber and oxygen generator, radiation during the cruise and on the surface, the career dose limit, Mars data, the EMU suit, the Kilopower reactor.
@@ -124,7 +125,7 @@ server/procedimientos.ts  validates each step and applies its consequences
 server/trabajos.ts    consequences of the crew procedures: airlock, repairs, leaks, samples, treatments
 server/sim/           simulation: step, physiology, environment, flight, garden
 server/datos/         generated NASA data
-server/almacen*.ts    where documents are stored: Durable Object, local files or Vercel Blob
+server/almacen*.ts    where documents are stored: Durable Object or local files
 server/index.ts       local development server (Express)
 src/mundo/            3D scenes, animated character, controls, station map
 src/mundo/cielo/      real sky: stars, constellations, planets, trajectory
@@ -150,12 +151,10 @@ npm run desplegar
 
 The first command is only needed once per computer. The session secret `AUTH_SECRET` is already stored in Cloudflare and deployments do not touch it. For the local emulator it is read from `.dev.vars`, which is not uploaded to git.
 
-The previous Vercel deployment is still in the repository as an alternative (`npm run desplegar:vercel`), but it is no longer the one in use.
 
 ## Known limits
 
 - The Cloudflare free plan allows 100,000 requests per day, both to the Worker and to the Durable Objects, and it resets at 00:00 UTC. With WebSocket checks, each player uses about 400 per hour of play. If they run out on a given day, the game stops responding until the next day.
-- Accounts and rooms created on the Vercel deployment did not move to Cloudflare: you have to sign up again.
 - The whole game is in English.
 - The Assistant answers with rules, not with a language model.
 - Crewmates' movement is updated twice per second and smoothed on screen.
@@ -181,7 +180,10 @@ As the NASA Space Apps rules require, we state where AI tools were used.
 - Earth imagery: NASA Earth Observatory Blue Marble Next Generation, Black Marble 2016 and cloud composite.
 - Moon imagery: NASA Scientific Visualization Studio CGI Moon Kit (LRO LROC color, LOLA elevation).
 - Mars weather: Curiosity REMS daily data (Centro de Astrobiología CSIC-INTA and NASA/JPL).
-- Space weather: NASA DONKI solar flares and solar energetic particle events.
+- Space weather: NASA DONKI solar flares, solar energetic particle events, CMEs and geomagnetic storms, live from the CCMC web service and archived for 2024.
+- Radiation dosimetry: NASA OSDR RadLab, ISS IV-TEPC (Node 3, April to May 2016).
+- Astronaut and plant biology: NASA Open Science Data Repository studies OSD-342, OSD-942, OSD-360, OSD-772, OSD-268 and OSD-253.
+- Base site imagery: NASA Mars Trek, Mars Odyssey THEMIS day infrared controlled mosaic (100 m).
 - Launch profile: NASA Artemis I press kit and NTRS reports; landing profile: NASA/JPL Mars 2020 landing press kit and the MEDLI2 reconstruction (NTRS).
 - Life support, crew health, food, spacewalk and habitat figures: NASA-STD-3001, NASA life support baseline (BVAD), ISS reports and the other NASA documents listed one by one in the game's **Sources** panel.
 

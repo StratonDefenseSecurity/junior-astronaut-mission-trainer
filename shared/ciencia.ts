@@ -879,6 +879,67 @@ export const FUENTES: Fuente[] = [
     fuente: 'NASA Artemis blog, Launch Attempt Scrubbed (August 29, 2022) and Artemis I Launch Attempt Scrubbed (September 3, 2022).',
     url: 'https://www.nasa.gov/blogs/missions/2022/09/03/artemis-i-launch-attempt-scrubbed/',
   },
+  // Estudios del NASA Open Science Data Repository (los mismos de shared/osdr.ts), consultados el 14/11/2026.
+  {
+    tema: 'Muscle and bone loss in space (OSDR)',
+    dato: 'Wild type mice lost significant muscle and bone mass during 33 days in microgravity on the International Space Station (Rodent Research-19, SpaceX-19, December 2019 to January 2020).',
+    fuente: 'NASA Open Science Data Repository, OSD-342: Targeting myostatin/activin A protects against skeletal muscle and bone loss during spaceflight [plasma proteomics].',
+    url: 'https://osdr.nasa.gov/bio/repo/data/studies/OSD-342',
+  },
+  {
+    tema: 'Exercise during bed rest (OSDR)',
+    dato: 'In the NASA 70-day bed rest study, which simulates microgravity on Earth, aerobic and resistance training effectively counteracted the decline in aerobic capacity, muscle mass, strength and endurance of 22 healthy young men.',
+    fuente: 'NASA Open Science Data Repository, OSD-942: Exercise Training Attenuates the Muscle Mitochondria Genomic Response to Bed Rest (microarray data).',
+    url: 'https://osdr.nasa.gov/bio/repo/data/studies/OSD-942',
+  },
+  {
+    tema: 'Low doses of space radiation (OSDR)',
+    dato: 'Leaving the protection of low Earth orbit exposes astronauts to higher cumulative doses of space radiation. Mice received low doses of gamma rays, oxygen ions or iron ions, and their spleens were studied 1, 2 and 4 months later.',
+    fuente: 'NASA Open Science Data Repository, OSD-360: Effects of low dose space radiation exposures on the splenic metabolome.',
+    url: 'https://osdr.nasa.gov/bio/repo/data/studies/OSD-360',
+  },
+  {
+    tema: 'Chile peppers on the ISS (OSDR)',
+    dato: 'Leafy greens grown in the Veggie chamber on the ISS were safe for the astronauts to eat. In the Advanced Plant Habitat, the PH-04 chile peppers (launched on SpaceX-22, June 2021) grew for 137 days, one of the longest continuous plant growth experiments on the ISS, and produced 26 pepper fruit.',
+    fuente: 'NASA Open Science Data Repository, OSD-772: PH-04 Chile Peppers in Space.',
+    url: 'https://osdr.nasa.gov/bio/repo/data/studies/OSD-772',
+  },
+  {
+    tema: 'Veggie lettuce (OSDR)',
+    dato: 'Lettuce grown in the Veggie payload on the ISS (VEG-01B, SpaceX-3, April to May 2014) was harvested and returned to Earth for chemical, microbiological and molecular analysis.',
+    fuente: 'NASA Open Science Data Repository, OSD-268: Microbiological and nutritional analysis of lettuce crops grown on the International Space Station-VEG01B.',
+    url: 'https://osdr.nasa.gov/bio/repo/data/studies/OSD-268',
+  },
+  {
+    tema: 'Daily rhythms in space (OSDR)',
+    dato: 'Rodent Research-7 (SpaceX-15, launched June 29, 2018) studied how the space environment changes the gut microbes of mice and how that affects their immune system, metabolism and circadian (daily) rhythms, with 48-hour video recordings in each habitat.',
+    fuente: 'NASA Open Science Data Repository, OSD-253: Transcriptional analysis of kidneys from mice flown on the RR-7 mission.',
+    url: 'https://osdr.nasa.gov/bio/repo/data/studies/OSD-253',
+  },
+  {
+    tema: 'Base site images (Mars Trek)',
+    dato: 'The pictures of Gale, Jezero and Utopia Planitia come from the THEMIS daytime infrared global mosaic of NASA\'s Mars Odyssey, 100 m per pixel (Mars Trek WMTS layer THEMIS_DayIR_ControlledMosaics_100m_v2_oct2018), downloaded on November 14, 2026. Daytime infrared images emphasize the shape of the ground: slopes facing the Sun are warmer and look brighter.',
+    fuente: 'NASA Mars Trek, layer "MO THEMIS-IR Day, Global Mosaic" (Mars Odyssey, THEMIS).',
+    url: 'https://trek.nasa.gov/mars/',
+  },
+  {
+    tema: 'Space weather now',
+    dato: 'The flares (FLR), solar energetic particle events (SEP), geomagnetic storms (GST, with their Kp index) and coronal mass ejections (CME) of the last 30 days, downloaded from DONKI when the game asks (kept for one hour). The live mode of a mission saves them in the room when the host chooses it.',
+    fuente: 'DONKI web service, Community Coordinated Modeling Center (CCMC), NASA Goddard Space Flight Center. No key. If it does not answer, the NASA API (api.nasa.gov, DEMO_KEY); if neither answers, the archived 2024 record, labeled as archived.',
+    url: 'https://kauai.ccmc.gsfc.nasa.gov/DONKI/WS/',
+  },
+  {
+    tema: 'Radiation on the ISS',
+    dato: 'Absorbed dose rate measured inside the ISS by the IV-TEPC detector, one value per day: 12.53 μGy per hour on average (from 11.83 to 14.99) at location NOD3FD3 from April 8 to May 3, 2016, and 12.46 μGy per hour (from 12.05 to 13.39) at location COL1A2 from February 24 to March 14, 2017. The first gives 0.30 mGy per day, the value the game compares with. Archived data, read on November 14, 2026.',
+    fuente: 'NASA Open Science Data Repository, RadLab portal and Data API (absorbed_dose_rate in μGy/hour).',
+    url: 'https://visualization.osdr.nasa.gov/radlab/api/?instrument=IV-TEPC&absorbed_dose_rate>0&format=tsv',
+  },
+  {
+    tema: 'Radiation quality factor',
+    dato: 'Curiosity\'s RAD measured an average quality factor of 3.82 during the cruise to Mars and 3.05 on the surface (dose equivalent in mSv = absorbed dose in mGy × quality factor).',
+    fuente: 'Hassler et al. (2014), "Mars\' Surface Radiation Environment Measured with the Mars Science Laboratory\'s Curiosity Rover", Science 343.',
+    url: 'https://doi.org/10.1126/science.1244797',
+  },
 ]
 
 /** Lo que el juego simplifica o inventa para poder jugarse. Se muestra junto a las fuentes. */
@@ -954,4 +1015,11 @@ export const SUPUESTOS: string[] = [
   'A technical scrub has a 10% chance on each attempt, and 30% if the team recycles for the next day right after a technical scrub. The faults are the two that scrubbed Artemis I. These chances are game values.',
   'The final poll is at T−10 s. After two scrubs the third attempt always lifts off, so the mission never stays on the ground. Standing down 24 hours moves the attempt two days, to the window after the next one.',
   'Trouble On Board launches on December 9, 2026, a later day of the same launch period as First Base on Mars, so each mission has its own window.',
+  'The Real science notes tell, in simple words, what each NASA OSDR study looked at. Most of them used mice, plants or volunteers, on Earth or on the Space Station. The game body model does not use their numbers.',
+  'The base site pictures are real THEMIS infrared images from Mars Trek, cropped to a square around the base, reduced to 420 pixels and with the contrast stretched. The base point is the one the game uses for its sky: the center of Gale and of Jezero craters (IAU) and 44° N, 80° E in Utopia Planitia, which is a game choice.',
+  'The glossary gives one short, simplified sentence per word, written for young players.',
+  'With live space weather, day k of the downloaded month (counted from its first day) becomes day k of the mission. After those 30 days nobody knows the Sun, so the archived 2024 record takes over. Live events are used as they are, without the change in frequency that each situation applies to the 2024 record. The M and X class flares go to the mission log; the archived record only has X class.',
+  'The risk level of the "The Sun right now" card is a game rule, not a NASA forecast: High if DONKI lists at least one solar particle event in the 30 days, Medium if none but at least one M or X class flare, Low otherwise. If the live service does not answer, the card shows the same 30 days of 2024 and says it is archived.',
+  'Taking shelter has a cost: nobody works, and while somebody is in the shelter with nobody left in the cabin, the machines wear 1.5 times faster because nobody watches or adjusts them. The 1.5 is a game value.',
+  'The comparison with the ISS uses absorbed dose, the quantity RadLab gives: the crew dose in mSv is divided by the quality factor of the cruise (3.82) and by the 0.30 mGy per day the IV-TEPC measured at one place in the ISS in April and May 2016. Doses change with the place in the station, the solar cycle and the shielding, so the number of days is a rough comparison.',
 ]

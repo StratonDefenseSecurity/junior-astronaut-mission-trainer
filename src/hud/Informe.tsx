@@ -6,6 +6,8 @@ import { FUENTES } from '@shared/ciencia'
 import { DIFICULTAD_BY_ID, HABILIDADES, practicaDe } from '@shared/informe'
 import type { RoomState } from '@shared/types'
 import { RolTag } from './comun'
+import { DosisISS } from './DosisISS'
+import { CienciaRealInforme } from './CienciaReal'
 import '../aprendizaje.css'
 
 const FUENTE_POR_TEMA = Object.fromEntries(FUENTES.map((f) => [f.tema, f]))
@@ -92,6 +94,7 @@ export function Informe({ sala }: { sala: RoomState }) {
           </div>
         ))}
       </div>
+      <DosisISS sala={sala} />
 
       <h3>Learning objectives</h3>
       <ul className="informe-objetivos">
@@ -101,6 +104,7 @@ export function Informe({ sala }: { sala: RoomState }) {
           </li>
         ))}
       </ul>
+      <CienciaRealInforme />
       <p className="mini muted">The score and its weights are game values for learning, not a NASA rating.</p>
     </div>
   )

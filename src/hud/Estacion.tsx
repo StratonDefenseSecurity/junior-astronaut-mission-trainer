@@ -24,6 +24,8 @@ import { useStore } from '../store'
 import { useVoz, voz } from '../voz'
 import { Procedimientos, Trabajo } from './Procedimiento'
 import { BotonGuia, GuiaBase, InfoEnlace, InfoObra, ObrasBase } from './GuiaBase'
+import { NotaOsdr } from './CienciaReal'
+import { Termino } from './Glosario'
 import * as M from '@shared/medidores'
 import { FACTOR_RACION, animo, conExtras, kgSemana, necesidadKcal, pesoKg, planKcal } from '@shared/comida'
 import { FOCOS_KW, LUZ_GUARDIA_KW, LUZ_HABITAT_KW, cargaLucesKw, cargaTraje, oscuro, solDeSala } from '@shared/noche'
@@ -218,7 +220,7 @@ function SoporteVital({ sala, yo }: P) {
       <Seccion titulo="Cabin air">
         <div className="rejilla">
           <Dato etiqueta="Cabin O₂" valor={o2.texto} tono={o2.tono} barra={{ valor: c.ppO2, max: C.PPO2_NOMINAL_KPA }} nota={`Normal is ${C.PPO2_NOMINAL_KPA} kPa`} />
-          <Dato etiqueta="Cabin CO₂" valor={co2.texto} tono={co2.tono} barra={{ valor: co2.valor, max: M.CO2_PELIGRO_MMHG }} nota={`NASA limit: ${M.CO2_LIMITE_MMHG} mmHg`} />
+          <Dato etiqueta="Cabin CO₂" glosario="depurador" valor={co2.texto} tono={co2.tono} barra={{ valor: co2.valor, max: M.CO2_PELIGRO_MMHG }} nota={`NASA limit: ${M.CO2_LIMITE_MMHG} mmHg`} />
           <Dato etiqueta="Cabin temperature" valor={temp.texto} tono={temp.tono} />
         </div>
         <p className="mini muted">The crew uses about {(sala.jugadores.filter((j) => j.rol).length * 0.84).toFixed(1)} kg of oxygen a day and breathes out almost the same mass of CO₂.</p>
@@ -363,7 +365,7 @@ function PlanComidas({ sala, yo }: P) {
             const a = animo(sala, j)
             return (
               <tr key={j.id}>
-                <td>{j.nombre}{fuera ? ' · EVA' : ''}{j.dolencia || j.incapacitado > 0 ? ' · sick' : ''}</td>
+                <td>{j.nombre}{fuera ? <> · EVA<Termino id="eva" /></> : ''}{j.dolencia || j.incapacitado > 0 ? ' · sick' : ''}</td>
                 <td className="mono">{kcal(necesita)}{fuera ? ` +${C.EVA_KCAL_H}/h` : ''}</td>
                 <td className={`mono ${nivel(recibe < necesita * 0.75, recibe < necesita * 0.97)}`}>{kcal(recibe)}{fuera && extras ? ` +${C.EVA_KCAL_H}/h` : ''}</td>
                 <td className="mono">{pesoKg(j).toFixed(1)} kg<br /><small>{semana(kg)}</small></td>
@@ -565,6 +567,8 @@ function Laboratorio({ sala, yo }: P) {
             {h.establecido && <Equipo sala={sala} yo={yo} id="huerto" />}
           </>
         )}
+        <NotaOsdr id="OSD-772" />
+        <NotaOsdr id="OSD-268" />
       </Seccion>
       <Seccion titulo="Base building">
         <p className="mini">How a real Mars base is set up, and which phases your crew does.</p>
@@ -585,6 +589,8 @@ function Gimnasio({ yo }: P) {
     <Seccion titulo="Gym">
       <p className="mini">Without gravity you lose muscle and bone. Your condition is {Math.round(yo.vit.condicion)}%. A session lasts one mission hour. It rebuilds condition faster, but raises your pulse, thirst and fatigue.</p>
       <button className={activo ? 'small danger' : 'small primary'} onClick={() => api.actividad(activo ? null : 'ejercicio')}>{activo ? 'Stop exercising' : 'Exercise'}</button>
+      <NotaOsdr id="OSD-342" />
+      <NotaOsdr id="OSD-942" />
     </Seccion>
   )
 }
@@ -595,6 +601,7 @@ function Literas({ yo }: P) {
     <Seccion titulo="Bunks">
       <p className="mini">Your fatigue is {M.fatiga(yo).texto}. Sleep lowers it by about 12 points per hour. From 22:00 to 6:00, if you stand still and are not doing a task, you get a warning and then your character falls asleep. Moving or pressing Wake up gets you up.</p>
       <button className={activo ? 'small danger' : 'small primary'} onClick={() => (activo ? api.despertar() : api.actividad('sueno'))}>{activo ? 'Wake up' : 'Sleep'}</button>
+      <NotaOsdr id="OSD-253" />
     </Seccion>
   )
 }
@@ -615,6 +622,7 @@ function Refugio({ sala, yo }: P) {
         <span className="mini warn">Shelter order in effect. The Flight Surgeon or the Mission Commander can propose to lift it at the Medical Bay. Leave only for urgent work: you get the cabin dose.</span>
       )}
         <button className={yo.enRefugio ? 'small danger' : 'small primary'} disabled={remoto} title={remoto ? IR_HASTA_AQUI : undefined} onClick={() => api.refugio(!yo.enRefugio)}>{yo.enRefugio ? (obligado ? 'Leave for urgent work' : 'Leave the shelter') : 'Enter the shelter'}</button>
+      <NotaOsdr id="OSD-360" />
     </Seccion>
   )
 }

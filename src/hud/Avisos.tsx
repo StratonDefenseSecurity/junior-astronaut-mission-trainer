@@ -12,6 +12,7 @@ import { useStore } from '../store'
 import { RolTag, useAhora } from './comun'
 import { descargarCertificado } from './Certificado'
 import { Informe } from './Informe'
+import { GlosarioLista } from './Glosario'
 
 /**
  * Mensajes del centro de control y de casa. Aparecen un momento sobre el juego, como una
@@ -271,6 +272,8 @@ export function Fuentes() {
             <li key={s}>{s}</li>
           ))}
         </ul>
+        <h3 style={{ marginTop: 14 }}>Glossary: words to know</h3>
+        <GlosarioLista />
       </div>
     </div>
   )

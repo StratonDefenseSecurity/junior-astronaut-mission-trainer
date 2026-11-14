@@ -711,8 +711,13 @@ export interface RoomState {
   muestreos: string[]
   /** Días que alcanzan las reservas al ritmo actual (999 = de sobra). */
   autonomia: { agua: number; aire: number; comida: number }
-  /** Índices de los eventos reales de clima espacial ya procesados. */
-  climaEspacial: { fulguracion: number; particulas: number }
+  /**
+   * Índices de los eventos reales de clima espacial ya procesados: los del registro de 2024 y,
+   * con datos en vivo, `vivoF` y `vivoP`; `vivoAviso` cuenta los avisos de inicio y fin ya dados.
+   */
+  climaEspacial: { fulguracion: number; particulas: number; vivoF?: number; vivoP?: number; vivoAviso?: number }
+  /** Clima espacial en vivo de DONKI (últimos 30 días) que eligió el anfitrión; null = registro de 2024. */
+  solVivo?: import('./solHoy.js').ResumenSol | null
 
   /** Último segundo de misión en que se lanzó cada aviso, para no repetirlo. */
   avisos: Record<string, number>

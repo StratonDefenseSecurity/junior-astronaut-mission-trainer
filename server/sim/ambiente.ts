@@ -1,6 +1,8 @@
 // Ambiente exterior: clima de Marte (datos de Curiosity), polvo (modelo propio) y clima
-// espacial (eventos reales de 2024 según DONKI).
+// espacial (eventos reales de 2024 según DONKI o, si el anfitrión lo eligió, los de los últimos
+// 30 días descargados de DONKI al preparar la sala: ver server/solHoy.ts).
 import { C } from '../../shared/ciencia.js'
+import { fechaSol, horaSol, rangoSol } from '../../shared/solHoy.js'
 import { escenarioDe } from '../../shared/escenarios.js'
 import { HORA_ATERRIZAJE, SITE_BY_ID, type RoomState, type Zona } from '../../shared/types.js'
 import { CLIMA_ESPACIAL } from '../datos/climaEspacial.js'
@@ -129,7 +131,10 @@ const diaMision = (room: RoomState) => room.diaLanzamiento + Math.max(0, room.t)
 const diaEvento = (lista: { 0: number }[], k: number) => lista[k % lista.length][0] + DIAS_ANIO * Math.floor(k / lista.length)
 
 export function iniciarClimaEspacial(room: RoomState) {
-  const d = room.diaLanzamiento
+  const vivo = room.solVivo
+  // Con datos en vivo, el registro de 2024 sigue cuando se acaba el mes real.
+  const d = room.diaLanzamiento + (vivo ? vivo.dias : 0)
+  if (vivo) Object.assign(room.climaEspacial, { vivoF: 0, vivoP: 0, vivoAviso: 0 })
   room.climaEspacial.fulguracion = Math.max(0, FULGURACIONES.findIndex((f) => f[0] >= d))
   room.climaEspacial.particulas = Math.max(0, PARTICULAS.findIndex((p) => p[0] >= d))
 }
@@ -141,7 +146,11 @@ const fechaLegible = (iso: string) => {
 }
 
 export interface EventoSolar {
-  tipo: 'fulguracion' | 'particulas'
+  tipo: 'fulguracion' | 'particulas' | 'aviso'
+  /** Del mes real descargado de DONKI (no del registro de 2024). */
+  vivo?: boolean
+  /** Solo en los avisos: lo que se anota en el registro. */
+  texto?: string
   id: string
   fecha: string
   clase?: string
@@ -152,12 +161,60 @@ export interface EventoSolar {
   fuerte?: boolean
 }
 
-/** Devuelve los eventos reales de 2024 que tocan desde el último paso. */
+/** Tasa (mSv/día sin blindaje) y duración de un evento de partículas según sus registros. */
+const tormenta = (registros: number, alta: boolean) => {
+  const n = Math.min(9, registros)
+  return { tasa: (alta ? 8 : 3) + 2.5 * n, horas: 12 + 2 * n, fuerte: n >= 6 }
+}
+
+/** Eventos del mes real (DONKI en vivo): el día k de ese mes es el día k de la misión. */
+function eventosVivos(room: RoomState, salida: EventoSolar[]) {
+  const v = room.solVivo
+  const ce = room.climaEspacial
+  if (!v) return
+  const dias = Math.max(0, room.t) / 86400
+  if (!ce.vivoAviso) {
+    ce.vivoAviso = 1
+    const n = v.particulas.length
+    salida.push({
+      tipo: 'aviso',
+      id: 'inicio',
+      fecha: v.desde,
+      texto:
+        `Space weather: the next ${Math.round(v.dias)} days replay the real Sun of ${rangoSol(v.desde, v.hasta)} (live NASA DONKI data, fetched ${horaSol(v.obtenido)}). ` +
+        (n === 0
+          ? 'The Sun was quiet this month: real data. No solar particle storm was recorded, so the shelter may stay empty until the archived 2024 record takes over.'
+          : `It had ${n} solar particle ${n === 1 ? 'event' : 'events'}.`),
+    })
+  }
+  for (let guarda = 0; guarda < 20 && (ce.vivoF ?? 0) < v.fulguraciones.length && v.fulguraciones[ce.vivoF ?? 0][0] <= dias; guarda++) {
+    const f = v.fulguraciones[ce.vivoF ?? 0]
+    ce.vivoF = (ce.vivoF ?? 0) + 1
+    salida.push({ tipo: 'fulguracion', vivo: true, id: f[3], fecha: fechaSol(f[4]), clase: f[1], region: f[2] || undefined })
+  }
+  for (let guarda = 0; guarda < 20 && (ce.vivoP ?? 0) < v.particulas.length && v.particulas[ce.vivoP ?? 0][0] <= dias; guarda++) {
+    const p = v.particulas[ce.vivoP ?? 0]
+    ce.vivoP = (ce.vivoP ?? 0) + 1
+    salida.push({ tipo: 'particulas', vivo: true, id: p[3], fecha: fechaSol(p[4]), ...tormenta(p[1], p[2]) })
+  }
+  if (ce.vivoAviso === 1 && dias >= v.dias) {
+    ce.vivoAviso = 2
+    salida.push({
+      tipo: 'aviso',
+      id: 'fin',
+      fecha: v.hasta,
+      texto: `The live NASA DONKI month (${rangoSol(v.desde, v.hasta)}) is over. Nobody knows what the Sun will do next, so from now on the game replays the archived 2024 record of the solar maximum.`,
+    })
+  }
+}
+
+/** Devuelve los eventos reales (del mes en vivo y del registro de 2024) que tocan desde el último paso. */
 export function eventosSolaresPendientes(room: RoomState): EventoSolar[] {
   if (room.t < 0) return []
   const hoy = diaMision(room)
   const salida: EventoSolar[] = []
   const ce = room.climaEspacial
+  eventosVivos(room, salida)
   for (let guarda = 0; guarda < 20 && diaEvento(FULGURACIONES, ce.fulguracion) <= hoy; guarda++) {
     const f = FULGURACIONES[ce.fulguracion % FULGURACIONES.length]
     ce.fulguracion += 1
@@ -168,15 +225,7 @@ export function eventosSolaresPendientes(room: RoomState): EventoSolar[] {
   for (let guarda = 0; guarda < 20 && diaEvento(PARTICULAS, ce.particulas) <= hoy; guarda++) {
     const p = PARTICULAS[ce.particulas % PARTICULAS.length]
     ce.particulas += 1
-    const registros = Math.min(9, p[1])
-    salida.push({
-      tipo: 'particulas',
-      id: p[3],
-      fecha: fechaLegible(p[4]),
-      tasa: (p[2] ? 8 : 3) + 2.5 * registros,
-      horas: 12 + 2 * registros,
-      fuerte: registros >= 6,
-    })
+    salida.push({ tipo: 'particulas', id: p[3], fecha: fechaLegible(p[4]), ...tormenta(p[1], p[2]) })
   }
   return salida
 }

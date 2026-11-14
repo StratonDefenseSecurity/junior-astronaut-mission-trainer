@@ -6,8 +6,6 @@ server/data
 .wrangler
 .dev.vars*
 
-# Vercel (despliegue anterior)
-.vercel
 .env*
 
 # ayuda de desarrollo

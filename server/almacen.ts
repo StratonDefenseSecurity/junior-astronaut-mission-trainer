@@ -7,7 +7,7 @@
 // Dónde se guardan los documentos depende de dónde corre el servidor:
 // - En Cloudflare, en el almacenamiento del Durable Object de cada sala (server/cloudflare.ts).
 // - En local, en archivos dentro de server/data (server/almacen-archivos.ts).
-// - En Vercel, en Vercel Blob (server/almacen-vercel.ts).
+
 // Este archivo no importa ninguno de ellos para poder empaquetarse en cualquier plataforma.
 import { AsyncLocalStorage } from 'node:async_hooks'
 import crypto from 'node:crypto'
@@ -57,7 +57,7 @@ export function almacenMemoria(): Almacen {
 const dePeticion = new AsyncLocalStorage<Almacen>()
 let porDefecto: Almacen | null = null
 
-/** Fija el almacén de todo el proceso (servidor local, función de Vercel). */
+/** Fija el almacén de todo el proceso (servidor local). */
 export function usarAlmacen(a: Almacen) {
   porDefecto = a
 }

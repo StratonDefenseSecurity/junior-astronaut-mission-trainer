@@ -17,7 +17,7 @@ import { codigoAleatorio, fijarSecreto, manejar, usuarioDeToken, type Respuesta 
 import { agregarRanking, fijarDestinoRanking, type EntradaRanking } from './ranking.js'
 
 interface Env {
-  NODO: DurableObjectNamespace<Nodo>
+  MISION: DurableObjectNamespace<Mision>
   ASSETS: Fetcher
   AUTH_SECRET: string
 }
@@ -76,7 +76,7 @@ interface Adjunto {
 const conNumero = (n: unknown, json: string) =>
   typeof n === 'number' && Number.isFinite(n) ? (json.length > 2 ? `{"n":${n},${json.slice(1)}` : `{"n":${n}}`) : json
 
-export class Nodo extends DurableObject<Env> {
+export class Mision extends DurableObject<Env> {
   private readonly almacen: Almacen
 
   constructor(ctx: DurableObjectState, env: Env) {
@@ -84,7 +84,7 @@ export class Nodo extends DurableObject<Env> {
     this.almacen = almacenDurable(ctx.storage)
     fijarSecreto(env.AUTH_SECRET ?? '')
     // Las misiones terminadas van a la clasificación global, que vive en su propio objeto.
-    fijarDestinoRanking((e) => env.NODO.get(env.NODO.idFromName('ranking')).agregarRanking(e))
+    fijarDestinoRanking((e) => env.MISION.get(env.MISION.idFromName('ranking')).agregarRanking(e))
   }
 
   /** Solo en el objeto "ranking": agrega una misión terminada. La llama la sala por RPC. */
@@ -165,7 +165,7 @@ export class Nodo extends DurableObject<Env> {
 const CABECERAS = { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-mt-ws': '1' }
 const responder = (r: Respuesta) => new Response(r.json, { status: r.status, headers: CABECERAS })
 const error = (status: number, texto: string) => responder({ status, json: JSON.stringify({ error: texto }) })
-const nodo = (env: Env, nombre: string) => env.NODO.get(env.NODO.idFromName(nombre))
+const nodo = (env: Env, nombre: string) => env.MISION.get(env.MISION.idFromName(nombre))
 const CODIGO = /^[A-Z0-9]{6}$/
 /** Operaciones que no pertenecen a ninguna sala. */
 const DE_CUENTAS = new Set(['registro', 'ingresar', 'invitado', 'yo'])
@@ -204,7 +204,8 @@ export default {
           return error(503, 'Could not create the room. Try again.')
         }
         const codigo = String(cuerpo.codigo ?? '').trim().toUpperCase()
-        const destino = op === 'ranking' ? 'ranking' : !DE_CUENTAS.has(op) && CODIGO.test(codigo) ? `sala:${codigo}` : 'cuentas'
+        // "El Sol ahora" vive en su propio objeto: una sola descarga de DONKI por hora para todos.
+        const destino = op === 'ranking' ? 'ranking' : op === 'solHoy' ? 'clima' : !DE_CUENTAS.has(op) && CODIGO.test(codigo) ? `sala:${codigo}` : 'cuentas'
         return responder(await nodo(env, destino).operar(cuerpo, autorizacion))
       } catch (e) {
         console.error('[worker]', e)

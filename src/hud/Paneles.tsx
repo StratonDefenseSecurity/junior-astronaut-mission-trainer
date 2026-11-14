@@ -6,6 +6,7 @@ import { useGraficos } from '../graficos'
 import { ASCENSO, llamadaCuenta, proximoEvento } from '@shared/ascenso'
 import { textoVentana } from '@shared/ventana'
 import { C } from '@shared/ciencia'
+import { FUENTE_ISS, textoDiasISS } from '@shared/radlab'
 import { animo, pesoKg } from '@shared/comida'
 import { ESCALAS, ESCALA_MAXIMA, ROLES, ROLE_BY_ID, SITE_BY_ID, etiquetaTiempo, formatoHora, type Player, type RoomState } from '@shared/types'
 import { puede } from '../mundo/mapa'
@@ -13,6 +14,7 @@ import { api } from '../red'
 import { useStore, useYo } from '../store'
 import { sonido, useSonido } from '../sonido'
 import { BotonAccesibilidad } from './Accesibilidad'
+import { Termino } from './Glosario'
 import { ChipConexion } from './Conexion'
 import { BotonesVoz, IndicadorVoz } from './Voz'
 import * as M from '@shared/medidores'
@@ -60,7 +62,7 @@ export function BarraSuperior({ sala }: { sala: RoomState }) {
     <div className="panel superior" ref={barra}>
       <div className="bloque">
         <div className="brand">{FASES[sala.fase]}</div>
-        <div className="reloj">{reloj.principal}</div>
+        <div className="reloj">{reloj.principal}{enMarte(sala) && <Termino id="sol" />}</div>
         <div className="muted mini">{reloj.secundario}</div>
       </div>
 
@@ -117,7 +119,7 @@ export function BarraSuperior({ sala }: { sala: RoomState }) {
           <Enlace sala={sala} />
           <Dato etiqueta="In space" valor={tiempoEnEspacio(sala)} nota="Days and hours since you reached orbit" />
           <Dato etiqueta="Fuel" valor={`${Math.round(sala.rec.propelente)}%`} tono={nivel(sala.rec.propelente < 10, sala.rec.propelente < 30)} nota="Propellant left to correct course and land" />
-          <Dato etiqueta="Energy used" valor={energiaUsada(sala)} nota="Electricity used since liftoff" />
+          <Dato etiqueta="Energy used" valor={energiaUsada(sala)} nota="Electricity used since liftoff" glosario="kwh" />
         </div>
       ) : (
         <div className="bloque datos">
@@ -126,13 +128,13 @@ export function BarraSuperior({ sala }: { sala: RoomState }) {
           <Dato etiqueta="Speed" valor={`${v.velocidad} km/s`} />
           <Dato etiqueta="Acceleration" valor={`${v.g} g`} tono={nivel(v.g > 4, v.g > 2.5)} />
           <Dato etiqueta="Fuel" valor={`${Math.round(sala.rec.propelente)}%`} nota="Propellant in the stage that is firing" />
-          <Dato etiqueta="Energy used" valor={energiaUsada(sala)} nota="Electricity used since liftoff" />
+          <Dato etiqueta="Energy used" valor={energiaUsada(sala)} nota="Electricity used since liftoff" glosario="kwh" />
         </div>
       )}
 
       <div className="bloque datos">
         {enMarte(sala) && <Dato etiqueta="Samples" valor={`${sala.mision.muestrasAnalizadas}/${sala.mision.muestrasObjetivo}`} />}
-        <Dato etiqueta="Space radiation" valor={M.tasaTexto(a.radiacion)} tono={a.tormentaSolar ? 'bad' : undefined} nota="Unshielded dose outside the ship. Your own dose rate is in your status panel." />
+        <Dato etiqueta="Space radiation" glosario="particulas" valor={M.tasaTexto(a.radiacion)} tono={a.tormentaSolar ? 'bad' : undefined} nota="Unshielded dose outside the ship. Your own dose rate is in your status panel." />
       </div>
 
       <div className="grow" />
@@ -199,16 +201,17 @@ export function MiEstado({ sala, yo }: { sala: RoomState; yo: Player }) {
         <Dato etiqueta="Hydration" {...d(M.hidratacion(yo))} barra={{ valor: v.hidratacion }} />
         <Dato etiqueta="Energy" {...d(M.reservas(yo))} barra={{ valor: v.reservas }} nota={`Body reserves, based on what you eat and burn. Weight ${pesoKg(yo).toFixed(1)} kg. Mood: ${animo(sala, yo).texto}`} />
         <Dato etiqueta="Fatigue" {...d(M.fatiga(yo))} barra={{ valor: v.fatiga }} />
-        <Dato etiqueta="Muscle and bone" {...d(M.condicion(yo))} barra={{ valor: v.condicion }} nota="Lost without gravity and exercise" />
+        <Dato etiqueta="Muscle and bone" {...d(M.condicion(yo))} barra={{ valor: v.condicion }} nota="Lost without gravity and exercise" glosario="microgravedad" />
         <Dato
           etiqueta="Your dose"
+          glosario="dosis"
           {...d(M.dosis(yo))}
           barra={{ valor: v.dosis, max: C.LIMITE_CARRERA_MSV }}
-          nota={`Your dose rate now: ${M.tasaTexto(v.dosisTasa)}. NASA career limit: ${C.LIMITE_CARRERA_MSV} mSv`}
+          nota={`Your dose rate now: ${M.tasaTexto(v.dosisTasa)}. NASA career limit: ${C.LIMITE_CARRERA_MSV} mSv. Your dose equals ${textoDiasISS(v.dosis)} aboard the ISS (${FUENTE_ISS})`}
         />
       </div>
       <div className="traje">
-        <span className="mini muted">{fuera ? 'Suit in use' : 'Suit (charging in the airlock)'}</span>
+        <span className="mini muted">{fuera ? 'Suit in use' : 'Suit (charging in the airlock)'}<Termino id={fuera ? 'eva' : 'esclusa'} /></span>
         <div className="row" style={{ gap: 8 }}>
           <div className="grow">
             <div className="mini">Suit O₂ {o2.texto}</div>
@@ -401,7 +404,7 @@ function VentanaCuenta({ ventana: v }: { ventana: NonNullable<RoomState['ventana
         : `Final poll at T−10. Weather forecast: ${v.pronostico}% favorable.`
   return (
     <div className="mini" style={{ marginBottom: 8 }}>
-      <div>{textoVentana(v)}. Liftoff at the opening.{intento}</div>
+      <div>{textoVentana(v)}<Termino id="ventana" />. Liftoff at the opening.{intento}</div>
       <div className={v.sondeo === 'scrub' ? 'bad' : v.sondeo === 'go' ? 'ok' : 'muted'}>{sondeo}</div>
     </div>
   )
